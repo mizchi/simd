@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/core/bench",
+}
+
+options(
+  "native-stub": [ "simd_native.c" ],
+  targets: {
+    "simd_js.mbt": [ "js" ],
+    "simd_native.mbt": [ "native" ],
+    "simd_wasm.mbt": [ "wasm" ],
+    "simd_wasm_gc.mbt": [ "wasm-gc" ],
+  },
+)
