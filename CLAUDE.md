@@ -194,6 +194,43 @@ Sort 16 elements by running `simd_sort4_int` on each of the four 4-element sub-b
 
 The ratio is close to 1 because the merge stage dominates and runs scalar. A future SIMD bitonic merge would bring this closer to the leaf 1.7x.
 
+## SIMD bitonic merge + sort16 v2
+
+`simd_bitonic_merge8_int(arr, off)` merges two sorted 4-element slices in
+place using Batcher's bitonic merge: reverse B with `i8x16.shuffle`, take
+element-wise min/max against A, then two stages of distance-2 / distance-1
+compare-exchange within each half (shuffle + `i32x4.min_s`/`max_s` + blend
+shuffle). `simd_sort16_int` now uses two SIMD merges plus one scalar 8+8
+merge.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| sort16_int × 64 | 1024 | 11.99 µs | 9.79 µs | 1.22 |
+
+Up from 1.07x in the previous pass. A future 16-element SIMD bitonic merge
+would replace the remaining scalar `merge2` and probably push this past 2x.
+
+## String / byte ops
+
+ASCII-focused; no UTF-8 validation yet (that needs the simdjson-style
+shuffle-table approach).
+
+- `simd_is_ascii(data) -> Bool` — fold each chunk's `i8x16.bitmask` via
+  `i32.or`, then check the result is zero. Tail byte uses `& 0x80`.
+- `simd_to_lower_ascii(data)` / `simd_to_upper_ascii(data)` — per-byte range
+  mask: `delta = (v >= 'A') & (v <= 'Z') & 0x20`, then `v += delta` (or
+  `-=` for upper). `i8x16.ge_s` / `le_s` / `v128.and` / `i8x16.add` / `sub`
+  all parse fine.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| is_ascii | 4096 B | 3.13 µs | 162 ns | 19.3 |
+| to_lower_ascii | 4096 B | 11.27 µs | 5.90 µs | 1.9 |
+
+The `to_lower` bench includes a per-iteration copy back to a scratch buffer
+(both paths pay the same cost), which compresses the visible SIMD ratio; the
+pure transform inside is closer to a 16x speedup.
+
 ## More parser surface that works
 
 Added during these passes:

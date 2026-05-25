@@ -426,6 +426,21 @@ pub fn simd_gather(
 }
 
 ///|
+pub fn simd_is_ascii(data : FixedArray[Byte]) -> Bool {
+  scalar_is_ascii(data)
+}
+
+///|
+pub fn simd_to_lower_ascii(data : FixedArray[Byte]) -> Unit {
+  scalar_to_lower_ascii(data)
+}
+
+///|
+pub fn simd_to_upper_ascii(data : FixedArray[Byte]) -> Unit {
+  scalar_to_upper_ascii(data)
+}
+
+///|
 pub fn simd_scatter(
   out : FixedArray[Int],
   indices : FixedArray[Int],
@@ -437,6 +452,11 @@ pub fn simd_scatter(
 ///|
 pub fn simd_sort4_int(arr : FixedArray[Int], off : Int) -> Unit {
   scalar_sort4_int(arr, off)
+}
+
+///|
+pub fn simd_bitonic_merge8_int(arr : FixedArray[Int], off : Int) -> Unit {
+  scalar_bitonic_merge8_int(arr, off)
 }
 
 ///|

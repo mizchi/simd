@@ -323,6 +323,44 @@ pub fn scalar_div(
   }
 }
 
+// --- string ops (H) ---
+
+///|
+/// True iff every byte in `data` is < 0x80 (pure ASCII).
+pub fn scalar_is_ascii(data : FixedArray[Byte]) -> Bool {
+  let len = data.length()
+  for i in 0..<len {
+    if (data[i].to_int() & 0x80) != 0 {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// In-place ASCII A-Z → a-z conversion. Non-ASCII bytes pass through.
+pub fn scalar_to_lower_ascii(data : FixedArray[Byte]) -> Unit {
+  let len = data.length()
+  for i in 0..<len {
+    let c = data[i].to_int()
+    if c >= 0x41 && c <= 0x5A {
+      data[i] = (c + 0x20).to_byte()
+    }
+  }
+}
+
+///|
+/// In-place ASCII a-z → A-Z conversion. Non-ASCII bytes pass through.
+pub fn scalar_to_upper_ascii(data : FixedArray[Byte]) -> Unit {
+  let len = data.length()
+  for i in 0..<len {
+    let c = data[i].to_int()
+    if c >= 0x61 && c <= 0x7A {
+      data[i] = (c - 0x20).to_byte()
+    }
+  }
+}
+
 // --- gather / scatter (G) ---
 
 ///|
@@ -428,6 +466,19 @@ pub fn scalar_merge2_int(
     out[out_off + k] = b[b_off + j]
     j = j + 1
     k = k + 1
+  }
+}
+
+///|
+/// Reference: 4+4 sorted → 8 sorted in place via scalar merge.
+pub fn scalar_bitonic_merge8_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 8 > arr.length() || off < 0 {
+    return
+  }
+  let tmp = FixedArray::make(8, 0)
+  scalar_merge2_int(arr, off, 4, arr, off + 4, 4, tmp, 0)
+  for i in 0..<8 {
+    arr[off + i] = tmp[i]
   }
 }
 

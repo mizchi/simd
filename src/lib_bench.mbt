@@ -387,6 +387,41 @@ test "bench/cumsum_cumprod" (b : @bench.T) {
   b.bench(name="simd_cumprod_1024", fn() { simd_cumprod(small, out) })
 }
 
+// --- string ops ---
+
+///|
+test "bench/is_ascii" (b : @bench.T) {
+  let n = 4096
+  let data = FixedArray::make(n, b'\x00')
+  for i in 0..<n {
+    data[i] = (65 + i % 26).to_byte()
+  }
+  b.bench(name="scalar_is_ascii_4096", fn() { b.keep(scalar_is_ascii(data)) })
+  b.bench(name="simd_is_ascii_4096", fn() { b.keep(simd_is_ascii(data)) })
+}
+
+///|
+test "bench/to_lower_ascii" (b : @bench.T) {
+  let n = 4096
+  let data = FixedArray::make(n, b'\x00')
+  let scratch = FixedArray::make(n, b'\x00')
+  for i in 0..<n {
+    data[i] = (65 + i % 26).to_byte()
+  }
+  b.bench(name="scalar_to_lower_4096", fn() {
+    for i in 0..<n {
+      scratch[i] = data[i]
+    }
+    scalar_to_lower_ascii(scratch)
+  })
+  b.bench(name="simd_to_lower_4096", fn() {
+    for i in 0..<n {
+      scratch[i] = data[i]
+    }
+    simd_to_lower_ascii(scratch)
+  })
+}
+
 // --- sort ---
 
 ///|

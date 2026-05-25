@@ -473,6 +473,80 @@ test "simd_where end-to-end with simd_lt as mask producer" {
   assert_eq(out[4], 50)
 }
 
+// --- string ops (H) ---
+
+///|
+test "simd_is_ascii true" {
+  // "Hello, World! ABCDEFGHIJK" is all ASCII
+  let data = make_byte_array([
+    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 65, 66, 67,
+    68, 69, 70,
+  ])
+  inspect(simd_is_ascii(data), content="true")
+}
+
+///|
+test "simd_is_ascii false (high byte in SIMD chunk)" {
+  let data = make_byte_array([
+    65, 66, 67, 68, 69, 200, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+  ])
+  inspect(simd_is_ascii(data), content="false")
+}
+
+///|
+test "simd_is_ascii false (high byte in tail)" {
+  let data = make_byte_array([
+    65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 200,
+  ])
+  inspect(simd_is_ascii(data), content="false")
+}
+
+///|
+test "simd_to_lower_ascii matches scalar" {
+  let original = [
+    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 76, 68, 33, 32, 65, 66, 67, 68,
+    69, 70,
+  ]
+  let s = make_byte_array(original)
+  let r = make_byte_array(original)
+  simd_to_lower_ascii(s)
+  scalar_to_lower_ascii(r)
+  for i in 0..<s.length() {
+    assert_eq(s[i], r[i])
+  }
+}
+
+///|
+test "simd_to_upper_ascii matches scalar" {
+  let original = [
+    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 76, 68, 33, 32, 97, 98, 99, 100,
+    101, 102,
+  ]
+  let s = make_byte_array(original)
+  let r = make_byte_array(original)
+  simd_to_upper_ascii(s)
+  scalar_to_upper_ascii(r)
+  for i in 0..<s.length() {
+    assert_eq(s[i], r[i])
+  }
+}
+
+///|
+test "simd_to_lower_ascii leaves non-letters alone" {
+  let data = make_byte_array([65, 48, 91, 96, 123, 192, 90, 97])
+  // 'A'(65)→97, '0'(48) unchanged, '['(91) unchanged, '`'(96) unchanged,
+  // '{'(123) unchanged, 0xC0 (>=128) unchanged, 'Z'(90)→122, 'a'(97) unchanged
+  simd_to_lower_ascii(data)
+  assert_eq(data[0], b'\x61')
+  assert_eq(data[1], b'\x30')
+  assert_eq(data[2], b'\x5b')
+  assert_eq(data[3], b'\x60')
+  assert_eq(data[4], b'\x7b')
+  assert_eq(data[5], b'\xc0')
+  assert_eq(data[6], b'\x7a')
+  assert_eq(data[7], b'\x61')
+}
+
 // --- gather / scatter (G) ---
 
 ///|
@@ -601,6 +675,54 @@ test "simd_sort_int general" {
   simd_sort_int(arr)
   for i in 0..<10 {
     assert_eq(arr[i], i)
+  }
+}
+
+///|
+test "simd_bitonic_merge8_int interleaved" {
+  // two sorted halves: [1,3,5,7] and [2,4,6,8]
+  let arr = make_int_array([1, 3, 5, 7, 2, 4, 6, 8])
+  simd_bitonic_merge8_int(arr, 0)
+  for i in 0..<8 {
+    assert_eq(arr[i], i + 1)
+  }
+}
+
+///|
+test "simd_bitonic_merge8_int disjoint" {
+  // first half all smaller
+  let arr = make_int_array([1, 2, 3, 4, 5, 6, 7, 8])
+  simd_bitonic_merge8_int(arr, 0)
+  for i in 0..<8 {
+    assert_eq(arr[i], i + 1)
+  }
+}
+
+///|
+test "simd_bitonic_merge8_int second-half smaller" {
+  let arr = make_int_array([5, 6, 7, 8, 1, 2, 3, 4])
+  simd_bitonic_merge8_int(arr, 0)
+  for i in 0..<8 {
+    assert_eq(arr[i], i + 1)
+  }
+}
+
+///|
+test "simd_bitonic_merge8_int matches scalar (random pairs)" {
+  let cases = [
+    [1, 4, 6, 9, 2, 3, 5, 7],
+    [2, 2, 4, 8, 3, 3, 5, 9],
+    [-5, -3, 0, 7, -10, -2, 1, 11],
+    [10, 20, 30, 40, 5, 15, 25, 35],
+  ]
+  for c in cases {
+    let s = make_int_array(c)
+    let r = make_int_array(c)
+    simd_bitonic_merge8_int(s, 0)
+    scalar_bitonic_merge8_int(r, 0)
+    for i in 0..<8 {
+      assert_eq(s[i], r[i])
+    }
   }
 }
 
