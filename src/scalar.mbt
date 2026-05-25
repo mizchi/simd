@@ -323,6 +323,71 @@ pub fn scalar_div(
   }
 }
 
+// --- UTF-8 validation (I) ---
+
+///|
+/// Structural UTF-8 validation starting at `start`. Verifies that each
+/// leading byte is followed by the right number of `10xxxxxx` continuation
+/// bytes, and rejects 0x80..0xC1 leading bytes and 0xF5..0xFF entirely.
+/// Does NOT reject overlong, surrogate, or > U+10FFFF codepoints — that's
+/// a stricter pass than this one.
+pub fn scalar_validate_utf8_from(
+  data : FixedArray[Byte],
+  start : Int,
+) -> Bool {
+  let n = data.length()
+  let mut i = start
+  while i < n {
+    let b = data[i].to_int()
+    if b < 0x80 {
+      i = i + 1
+    } else if b < 0xC2 {
+      return false
+    } else if b < 0xE0 {
+      if i + 1 >= n {
+        return false
+      }
+      if (data[i + 1].to_int() & 0xC0) != 0x80 {
+        return false
+      }
+      i = i + 2
+    } else if b < 0xF0 {
+      if i + 2 >= n {
+        return false
+      }
+      if (data[i + 1].to_int() & 0xC0) != 0x80 {
+        return false
+      }
+      if (data[i + 2].to_int() & 0xC0) != 0x80 {
+        return false
+      }
+      i = i + 3
+    } else if b < 0xF5 {
+      if i + 3 >= n {
+        return false
+      }
+      if (data[i + 1].to_int() & 0xC0) != 0x80 {
+        return false
+      }
+      if (data[i + 2].to_int() & 0xC0) != 0x80 {
+        return false
+      }
+      if (data[i + 3].to_int() & 0xC0) != 0x80 {
+        return false
+      }
+      i = i + 4
+    } else {
+      return false
+    }
+  }
+  true
+}
+
+///|
+pub fn scalar_validate_utf8(data : FixedArray[Byte]) -> Bool {
+  scalar_validate_utf8_from(data, 0)
+}
+
 // --- string ops (H) ---
 
 ///|
@@ -478,6 +543,19 @@ pub fn scalar_bitonic_merge8_int(arr : FixedArray[Int], off : Int) -> Unit {
   let tmp = FixedArray::make(8, 0)
   scalar_merge2_int(arr, off, 4, arr, off + 4, 4, tmp, 0)
   for i in 0..<8 {
+    arr[off + i] = tmp[i]
+  }
+}
+
+///|
+/// Reference: 8+8 sorted → 16 sorted in place via scalar merge.
+pub fn scalar_bitonic_merge16_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 16 > arr.length() || off < 0 {
+    return
+  }
+  let tmp = FixedArray::make(16, 0)
+  scalar_merge2_int(arr, off, 8, arr, off + 8, 8, tmp, 0)
+  for i in 0..<16 {
     arr[off + i] = tmp[i]
   }
 }

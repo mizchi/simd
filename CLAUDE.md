@@ -194,6 +194,42 @@ Sort 16 elements by running `simd_sort4_int` on each of the four 4-element sub-b
 
 The ratio is close to 1 because the merge stage dominates and runs scalar. A future SIMD bitonic merge would bring this closer to the leaf 1.7x.
 
+## Full SIMD sort16 (no scalar merge left)
+
+Added `simd_bitonic_merge16_int(arr, off)`: 8+8 → 16 SIMD bitonic merge in 4 stages — reverse B halves and lane-wise min/max against A halves (distance 8), distance-4 min/max between v128 pairs in each 8-half, then distance-2 and distance-1 compare-exchange within each of the 4 v128s. `simd_sort16_int` is now fully SIMD: 4 leaf `sort4` + 2 `bitonic_merge8` + 1 `bitonic_merge16`.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| sort16_int × 64 | 1024 | 11.08 µs | 4.25 µs | **2.6** |
+
+Up from 1.22x with the prior partial-scalar variant.
+
+## SIMD-accelerated UTF-8 validation
+
+`simd_validate_utf8(data)` runs an ASCII fast path first
+(`simd_first_non_ascii_chunk_v128`, select-based tracking of the first
+16-byte chunk where `i8x16.bitmask` is non-zero), then hands off to a
+scalar state machine (`scalar_validate_utf8_from`) starting at that
+chunk boundary. The handoff is safe because every chunk before it is
+pure ASCII, so no multi-byte sequence can be in flight.
+
+The scalar pass does *structural* validation only (start byte → expected
+number of `10xxxxxx` continuations, leading byte ranges 0xC2..0xF4). It
+does **not** reject overlong forms, surrogate pairs, or codepoints above
+U+10FFFF — those are a stricter pass that would need shuffle-table
+classifications (simdjson style).
+
+| input | size | scalar | simd | x |
+|---|---|---|---|---|
+| all-ASCII | 4096 B | 3.41 µs | 334 ns | **10.2** |
+| mixed (10% 2-byte) | 4000 B | 3.52 µs | 3.78 µs | 0.93 |
+
+The mixed case loses because the very first 16-byte chunk contains a
+non-ASCII byte, so the SIMD pre-scan finds no skip-able chunks and the
+fast path is pure overhead. The pattern wins when the input is mostly
+ASCII; for non-ASCII-heavy text, skip the wrapper and call
+`scalar_validate_utf8` directly.
+
 ## SIMD bitonic merge + sort16 v2
 
 `simd_bitonic_merge8_int(arr, off)` merges two sorted 4-element slices in

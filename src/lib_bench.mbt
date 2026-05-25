@@ -387,6 +387,47 @@ test "bench/cumsum_cumprod" (b : @bench.T) {
   b.bench(name="simd_cumprod_1024", fn() { simd_cumprod(small, out) })
 }
 
+// --- UTF-8 validation ---
+
+///|
+test "bench/validate_utf8 ASCII" (b : @bench.T) {
+  let n = 4096
+  let data = FixedArray::make(n, b'\x00')
+  for i in 0..<n {
+    data[i] = (65 + i % 26).to_byte()
+  }
+  b.bench(name="scalar_utf8_ascii_4096", fn() {
+    b.keep(scalar_validate_utf8(data))
+  })
+  b.bench(name="simd_utf8_ascii_4096", fn() {
+    b.keep(simd_validate_utf8(data))
+  })
+}
+
+///|
+test "bench/validate_utf8 mixed" (b : @bench.T) {
+  // 90% ASCII, 10% 2-byte UTF-8 (0xC3 0xA9 = é)
+  let n = 4000
+  let data = FixedArray::make(n, b'\x00')
+  let mut i = 0
+  while i < n - 1 {
+    if i % 20 == 0 {
+      data[i] = b'\xc3'
+      data[i + 1] = b'\xa9'
+      i = i + 2
+    } else {
+      data[i] = (65 + i % 26).to_byte()
+      i = i + 1
+    }
+  }
+  b.bench(name="scalar_utf8_mixed_4000", fn() {
+    b.keep(scalar_validate_utf8(data))
+  })
+  b.bench(name="simd_utf8_mixed_4000", fn() {
+    b.keep(simd_validate_utf8(data))
+  })
+}
+
 // --- string ops ---
 
 ///|

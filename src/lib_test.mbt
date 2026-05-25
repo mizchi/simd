@@ -547,6 +547,85 @@ test "simd_to_lower_ascii leaves non-letters alone" {
   assert_eq(data[7], b'\x61')
 }
 
+// --- UTF-8 validation (I) ---
+
+///|
+test "simd_validate_utf8 pure ASCII" {
+  let data = make_byte_array([
+    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 49, 50, 51,
+    52, 53, 54, 55, 56, 57, 48,
+  ])
+  inspect(simd_validate_utf8(data), content="true")
+}
+
+///|
+test "simd_validate_utf8 valid 2-byte (é)" {
+  // 'é' = U+00E9 = 0xC3 0xA9
+  let data = make_byte_array([72, 0xC3, 0xA9, 108, 108, 111])
+  inspect(simd_validate_utf8(data), content="true")
+}
+
+///|
+test "simd_validate_utf8 valid 3-byte (日)" {
+  // '日' = U+65E5 = 0xE6 0x97 0xA5
+  let data = make_byte_array([0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC])
+  inspect(simd_validate_utf8(data), content="true")
+}
+
+///|
+test "simd_validate_utf8 valid 4-byte" {
+  // U+1F600 (grinning face) = 0xF0 0x9F 0x98 0x80
+  let data = make_byte_array([0xF0, 0x9F, 0x98, 0x80])
+  inspect(simd_validate_utf8(data), content="true")
+}
+
+///|
+test "simd_validate_utf8 lone continuation rejected" {
+  let data = make_byte_array([72, 0x80, 108])
+  inspect(simd_validate_utf8(data), content="false")
+}
+
+///|
+test "simd_validate_utf8 truncated multi-byte rejected" {
+  // 0xC3 expects 1 continuation but stream ends
+  let data = make_byte_array([72, 0xC3])
+  inspect(simd_validate_utf8(data), content="false")
+}
+
+///|
+test "simd_validate_utf8 invalid leading byte rejected" {
+  // 0xF8 is in the invalid 0xF5..0xFF range
+  let data = make_byte_array([72, 0xF8, 0x80])
+  inspect(simd_validate_utf8(data), content="false")
+}
+
+///|
+test "simd_validate_utf8 long ASCII then multi-byte" {
+  // 32 ASCII bytes, then a valid 2-byte
+  let vals = Array::makei(32, fn(i) { 65 + i % 26 })
+  let _ = vals.push(0xC3)
+  let _ = vals.push(0xA9)
+  let data = make_byte_array(vals)
+  inspect(simd_validate_utf8(data), content="true")
+}
+
+///|
+test "simd_validate_utf8 long ASCII then invalid" {
+  let vals = Array::makei(32, fn(i) { 65 + i % 26 })
+  let _ = vals.push(0x80) // lone continuation right after ASCII region
+  let data = make_byte_array(vals)
+  inspect(simd_validate_utf8(data), content="false")
+}
+
+///|
+test "simd_validate_utf8 matches scalar on mixed input" {
+  let data = make_byte_array([
+    72, 101, 108, 108, 111, 0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC, 32, 0xC3, 0xA9,
+    33, 0xF0, 0x9F, 0x98, 0x80,
+  ])
+  assert_eq(simd_validate_utf8(data), scalar_validate_utf8(data))
+}
+
 // --- gather / scatter (G) ---
 
 ///|
@@ -721,6 +800,36 @@ test "simd_bitonic_merge8_int matches scalar (random pairs)" {
     simd_bitonic_merge8_int(s, 0)
     scalar_bitonic_merge8_int(r, 0)
     for i in 0..<8 {
+      assert_eq(s[i], r[i])
+    }
+  }
+}
+
+///|
+test "simd_bitonic_merge16_int interleaved" {
+  let arr = make_int_array([
+    1, 3, 5, 7, 9, 11, 13, 15, 2, 4, 6, 8, 10, 12, 14, 16,
+  ])
+  simd_bitonic_merge16_int(arr, 0)
+  for i in 0..<16 {
+    assert_eq(arr[i], i + 1)
+  }
+}
+
+///|
+test "simd_bitonic_merge16_int matches scalar (random pairs)" {
+  let cases = [
+    [1, 5, 9, 13, 17, 21, 25, 29, 2, 6, 10, 14, 18, 22, 26, 30],
+    [-10, -5, 0, 3, 7, 11, 15, 20, -8, -3, 1, 4, 8, 12, 16, 25],
+    [100, 200, 300, 400, 500, 600, 700, 800, 50, 150, 250, 350, 450, 550, 650, 750],
+    [1, 1, 2, 3, 4, 5, 6, 6, 1, 2, 2, 3, 4, 5, 6, 7],
+  ]
+  for c in cases {
+    let s = make_int_array(c)
+    let r = make_int_array(c)
+    simd_bitonic_merge16_int(s, 0)
+    scalar_bitonic_merge16_int(r, 0)
+    for i in 0..<16 {
       assert_eq(s[i], r[i])
     }
   }

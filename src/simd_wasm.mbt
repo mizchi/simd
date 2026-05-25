@@ -733,6 +733,35 @@ pub fn simd_div(
   simd_div_v128(a, b, out, len)
 }
 
+// --- UTF-8 validation (I) ---
+
+///|
+/// Returns the byte offset of the first 16-byte chunk that contains any
+/// non-ASCII byte, or `(len/16)*16` if every aligned chunk is pure ASCII.
+/// Uses select-based tracking to record the first hit without early exit.
+#borrow(data)
+fn simd_first_non_ascii_chunk_v128(
+  data : FixedArray[Byte],
+  len : Int,
+) -> Int =
+  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local i32) local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 local.get 3 local.set 4 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 0 local.get 2 i32.add v128.load i8x16.bitmask local.set 5 local.get 2 local.get 4 local.get 4 local.get 3 i32.eq local.get 5 i32.mul select local.set 4 local.get 2 i32.const 16 i32.add local.set 2 br 0 end end local.get 4)
+
+///|
+/// SIMD-accelerated UTF-8 validation. SIMD fast path skips all-ASCII chunks
+/// via `simd_first_non_ascii_chunk_v128`; the scalar state machine takes
+/// over at the first byte that might be non-ASCII (which is safe because
+/// no multi-byte sequence can cross into that chunk from a prior all-ASCII
+/// chunk).
+pub fn simd_validate_utf8(data : FixedArray[Byte]) -> Bool {
+  let len = data.length()
+  let start = if len >= 16 {
+    simd_first_non_ascii_chunk_v128(data, len)
+  } else {
+    0
+  }
+  scalar_validate_utf8_from(data, start)
+}
+
 // --- string ops (H) ---
 
 ///|
@@ -858,8 +887,27 @@ pub fn simd_bitonic_merge8_int(arr : FixedArray[Int], off : Int) -> Unit {
 }
 
 ///|
-/// Sort 16 elements: 4 SIMD sort4 sub-sorts, then SIMD bitonic merge of each
-/// 4+4 pair into an 8-block, then a single scalar 8+8 → 16 merge.
+/// Bitonic merge of two sorted 8-element slices (arr[off..off+8] and
+/// arr[off+8..off+16]) into one sorted 16-element block, in place. 4 stages:
+///   1) reverse B halves and lane-wise min/max with A halves (distance 8)
+///   2) distance-4 min/max between v128 pairs within each 8-half
+///   3) distance-2 compare-exchange within each v128
+///   4) distance-1 compare-exchange within each v128
+#borrow(arr)
+fn simd_bitonic_merge16_v128(arr : FixedArray[Int], off : Int) -> Unit =
+  #|(func (param i32) (param i32) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) local.get 0 local.get 1 i32.const 2 i32.shl i32.add v128.load local.set 2 local.get 0 local.get 1 i32.const 4 i32.add i32.const 2 i32.shl i32.add v128.load local.set 3 local.get 0 local.get 1 i32.const 8 i32.add i32.const 2 i32.shl i32.add v128.load local.set 4 local.get 0 local.get 1 i32.const 12 i32.add i32.const 2 i32.shl i32.add v128.load local.set 5 local.get 5 local.get 5 i8x16.shuffle 12 13 14 15 8 9 10 11 4 5 6 7 0 1 2 3 local.set 6 local.get 4 local.get 4 i8x16.shuffle 12 13 14 15 8 9 10 11 4 5 6 7 0 1 2 3 local.set 7 local.get 2 local.get 6 i32x4.max_s local.set 8 local.get 2 local.get 6 i32x4.min_s local.set 2 local.get 3 local.get 7 i32x4.max_s local.set 9 local.get 3 local.get 7 i32x4.min_s local.set 3 local.get 2 local.get 3 i32x4.max_s local.set 4 local.get 2 local.get 3 i32x4.min_s local.set 2 local.get 4 local.set 3 local.get 8 local.get 9 i32x4.max_s local.set 4 local.get 8 local.get 9 i32x4.min_s local.set 8 local.get 4 local.set 9 local.get 2 local.get 2 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 4 local.get 2 local.get 4 i32x4.min_s local.set 5 local.get 2 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 2 local.get 3 local.get 3 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 4 local.get 3 local.get 4 i32x4.min_s local.set 5 local.get 3 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 3 local.get 8 local.get 8 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 4 local.get 8 local.get 4 i32x4.min_s local.set 5 local.get 8 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 8 local.get 9 local.get 9 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 4 local.get 9 local.get 4 i32x4.min_s local.set 5 local.get 9 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 9 local.get 2 local.get 2 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 4 local.get 2 local.get 4 i32x4.min_s local.set 5 local.get 2 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 2 local.get 3 local.get 3 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 4 local.get 3 local.get 4 i32x4.min_s local.set 5 local.get 3 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 3 local.get 8 local.get 8 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 4 local.get 8 local.get 4 i32x4.min_s local.set 5 local.get 8 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 8 local.get 9 local.get 9 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 4 local.get 9 local.get 4 i32x4.min_s local.set 5 local.get 9 local.get 4 i32x4.max_s local.set 6 local.get 5 local.get 6 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 9 local.get 0 local.get 1 i32.const 2 i32.shl i32.add local.get 2 v128.store local.get 0 local.get 1 i32.const 4 i32.add i32.const 2 i32.shl i32.add local.get 3 v128.store local.get 0 local.get 1 i32.const 8 i32.add i32.const 2 i32.shl i32.add local.get 8 v128.store local.get 0 local.get 1 i32.const 12 i32.add i32.const 2 i32.shl i32.add local.get 9 v128.store)
+
+///|
+pub fn simd_bitonic_merge16_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 16 > arr.length() || off < 0 {
+    return
+  }
+  simd_bitonic_merge16_v128(arr, off)
+}
+
+///|
+/// Sort 16 elements fully in SIMD: 4 leaf sort4 + 2 bitonic_merge8 (4+4 → 8)
+/// + 1 bitonic_merge16 (8+8 → 16). No scalar merge.
 pub fn simd_sort16_int(arr : FixedArray[Int], off : Int) -> Unit {
   if off + 16 > arr.length() || off < 0 {
     return
@@ -870,11 +918,7 @@ pub fn simd_sort16_int(arr : FixedArray[Int], off : Int) -> Unit {
   simd_sort4_int(arr, off + 12)
   simd_bitonic_merge8_int(arr, off + 0)
   simd_bitonic_merge8_int(arr, off + 8)
-  let tmp = FixedArray::make(16, 0)
-  scalar_merge2_int(arr, off + 0, 8, arr, off + 8, 8, tmp, 0)
-  for i in 0..<16 {
-    arr[off + i] = tmp[i]
-  }
+  simd_bitonic_merge16_int(arr, off)
 }
 
 ///|
