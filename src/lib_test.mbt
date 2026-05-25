@@ -36,30 +36,30 @@ test "scalar_sum with negatives" {
   inspect(scalar_sum(arr), content="12")
 }
 
-// --- simd_sum ---
+// --- sum_i32 ---
 
 ///|
-test "simd_sum empty" {
+test "sum_i32 empty" {
   let arr : FixedArray[Int] = FixedArray::make(0, 0)
-  inspect(simd_sum(arr), content="0")
+  inspect(sum_i32(arr), content="0")
 }
 
 ///|
-test "simd_sum basic" {
+test "sum_i32 basic" {
   let arr = make_int_array([1, 2, 3, 4, 5, 6, 7, 8])
-  inspect(simd_sum(arr), content="36")
+  inspect(sum_i32(arr), content="36")
 }
 
 ///|
-test "simd_sum non-aligned" {
+test "sum_i32 non-aligned" {
   let arr = make_int_array([1, 2, 3, 4, 5])
-  inspect(simd_sum(arr), content="15")
+  inspect(sum_i32(arr), content="15")
 }
 
 ///|
-test "simd_sum matches scalar" {
+test "sum_i32 matches scalar" {
   let arr = make_int_array([10, 20, 30, 40, 50, 60, 70])
-  inspect(simd_sum(arr) == scalar_sum(arr), content="true")
+  inspect(sum_i32(arr) == scalar_sum(arr), content="true")
 }
 
 // --- scalar_dot_product ---
@@ -71,20 +71,20 @@ test "scalar_dot_product basic" {
   inspect(scalar_dot_product(a, b), content="32")
 }
 
-// --- simd_dot_product ---
+// --- dot_i32 ---
 
 ///|
-test "simd_dot_product basic" {
+test "dot_i32 basic" {
   let a = make_int_array([1, 2, 3, 4])
   let b = make_int_array([5, 6, 7, 8])
-  inspect(simd_dot_product(a, b), content="70")
+  inspect(dot_i32(a, b), content="70")
 }
 
 ///|
-test "simd_dot_product non-aligned" {
+test "dot_i32 non-aligned" {
   let a = make_int_array([1, 2, 3, 4, 5])
   let b = make_int_array([2, 3, 4, 5, 6])
-  inspect(simd_dot_product(a, b) == scalar_dot_product(a, b), content="true")
+  inspect(dot_i32(a, b) == scalar_dot_product(a, b), content="true")
 }
 
 // --- scalar_add ---
@@ -99,25 +99,25 @@ test "scalar_add basic" {
   inspect(out[3], content="44")
 }
 
-// --- simd_add ---
+// --- add_i32 ---
 
 ///|
-test "simd_add basic" {
+test "add_i32 basic" {
   let a = make_int_array([1, 2, 3, 4, 5, 6, 7, 8])
   let b = make_int_array([10, 20, 30, 40, 50, 60, 70, 80])
   let out = FixedArray::make(8, 0)
-  simd_add(a, b, out)
+  add_i32(a, b, out)
   inspect(out[0], content="11")
   inspect(out[7], content="88")
 }
 
 ///|
-test "simd_add non-aligned" {
+test "add_i32 non-aligned" {
   let a = make_int_array([1, 2, 3, 4, 5])
   let b = make_int_array([10, 20, 30, 40, 50])
   let out = FixedArray::make(5, 0)
   let expected = FixedArray::make(5, 0)
-  simd_add(a, b, out)
+  add_i32(a, b, out)
   scalar_add(a, b, expected)
   for i in 0..<5 {
     assert_eq(out[i], expected[i])
@@ -139,18 +139,18 @@ test "scalar_adler32 wikipedia" {
   inspect(scalar_adler32(data), content="300286872")
 }
 
-// --- simd_adler32 ---
+// --- adler32_bytes ---
 
 ///|
-test "simd_adler32 matches scalar" {
+test "adler32_bytes matches scalar" {
   let data = make_byte_array([87, 105, 107, 105, 112, 101, 100, 105, 97])
-  inspect(simd_adler32(data) == scalar_adler32(data), content="true")
+  inspect(adler32_bytes(data) == scalar_adler32(data), content="true")
 }
 
 ///|
-test "simd_adler32 empty" {
+test "adler32_bytes empty" {
   let data : FixedArray[Byte] = FixedArray::make(0, b'\x00')
-  inspect(simd_adler32(data), content="1")
+  inspect(adler32_bytes(data), content="1")
 }
 
 // --- min / max / argmin / argmax ---
@@ -170,52 +170,52 @@ test "scalar_argmin/argmax basic" {
 }
 
 ///|
-test "simd_min/max match scalar" {
+test "min_i32/max match scalar" {
   let arr = make_int_array([5, -3, 8, -1, 2, 7, 100, -50, 12, 4, 0, 9])
-  assert_eq(simd_min(arr), scalar_min(arr))
-  assert_eq(simd_max(arr), scalar_max(arr))
+  assert_eq(min_i32(arr), scalar_min(arr))
+  assert_eq(max_i32(arr), scalar_max(arr))
 }
 
 ///|
-test "simd_argmin/argmax match scalar" {
+test "argmin_i32/argmax match scalar" {
   let arr = make_int_array([5, -3, 8, -1, 2, 7, 100, -50, 12, 4, 0, 9])
-  assert_eq(simd_argmin(arr), scalar_argmin(arr))
-  assert_eq(simd_argmax(arr), scalar_argmax(arr))
+  assert_eq(argmin_i32(arr), scalar_argmin(arr))
+  assert_eq(argmax_i32(arr), scalar_argmax(arr))
 }
 
 ///|
-test "simd_min/max non-aligned" {
+test "min_i32/max non-aligned" {
   let arr = make_int_array([1, 2, 3, 4, 5])
-  assert_eq(simd_min(arr), 1)
-  assert_eq(simd_max(arr), 5)
+  assert_eq(min_i32(arr), 1)
+  assert_eq(max_i32(arr), 5)
 }
 
 ///|
-test "simd_argmin/argmax with duplicates picks first" {
+test "argmin_i32/argmax with duplicates picks first" {
   let arr = make_int_array([3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5])
   // first min (1) at index 1, first max (9) at index 5
-  assert_eq(simd_argmin(arr), 1)
-  assert_eq(simd_argmax(arr), 5)
+  assert_eq(argmin_i32(arr), 1)
+  assert_eq(argmax_i32(arr), 5)
 }
 
 ///|
-test "simd_min/max empty" {
+test "min_i32/max empty" {
   let arr : FixedArray[Int] = FixedArray::make(0, 0)
-  inspect(simd_min(arr), content="0")
-  inspect(simd_max(arr), content="0")
-  inspect(simd_argmin(arr), content="-1")
-  inspect(simd_argmax(arr), content="-1")
+  inspect(min_i32(arr), content="0")
+  inspect(max_i32(arr), content="0")
+  inspect(argmin_i32(arr), content="-1")
+  inspect(argmax_i32(arr), content="-1")
 }
 
 // --- saxpy ---
 
 ///|
-test "simd_saxpy matches scalar" {
+test "saxpy_i32 matches scalar" {
   let a = make_int_array([1, 2, 3, 4, 5, 6, 7, 8, 9])
   let b = make_int_array([10, 20, 30, 40, 50, 60, 70, 80, 90])
   let out_simd = FixedArray::make(9, 0)
   let out_scalar = FixedArray::make(9, 0)
-  simd_saxpy(3, a, b, out_simd)
+  saxpy_i32(3, a, b, out_simd)
   scalar_saxpy(3, a, b, out_scalar)
   for i in 0..<9 {
     assert_eq(out_simd[i], out_scalar[i])
@@ -223,11 +223,11 @@ test "simd_saxpy matches scalar" {
 }
 
 ///|
-test "simd_saxpy basic value" {
+test "saxpy_i32 basic value" {
   let a = make_int_array([1, 2, 3, 4])
   let b = make_int_array([10, 20, 30, 40])
   let out = FixedArray::make(4, 0)
-  simd_saxpy(2, a, b, out)
+  saxpy_i32(2, a, b, out)
   // 2*1+10=12, 2*2+20=24, 2*3+30=36, 2*4+40=48
   assert_eq(out[0], 12)
   assert_eq(out[3], 48)
@@ -243,35 +243,35 @@ test "scalar_popcount_bytes basic" {
 }
 
 ///|
-test "simd_popcount_bytes matches scalar" {
+test "popcount_bytes matches scalar" {
   let vals = Array::makei(40, fn(i) { (i * 13 + 7) % 256 })
   let data = make_byte_array(vals)
-  assert_eq(simd_popcount_bytes(data), scalar_popcount_bytes(data))
+  assert_eq(popcount_bytes(data), scalar_popcount_bytes(data))
 }
 
 ///|
-test "simd_popcount_bytes empty" {
+test "popcount_bytes empty" {
   let data : FixedArray[Byte] = FixedArray::make(0, b'\x00')
-  inspect(simd_popcount_bytes(data), content="0")
+  inspect(popcount_bytes(data), content="0")
 }
 
 // --- byte primitives ---
 
 ///|
-test "simd_memcpy_bytes basic" {
+test "memcpy_bytes basic" {
   let src = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
   let dst = FixedArray::make(20, b'\x00')
-  simd_memcpy_bytes(src, 0, dst, 0, 20)
+  memcpy_bytes(src, 0, dst, 0, 20)
   for i in 0..<20 {
     assert_eq(dst[i], src[i])
   }
 }
 
 ///|
-test "simd_memcpy_bytes with offsets" {
+test "memcpy_bytes with offsets" {
   let src = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
   let dst = FixedArray::make(15, b'\xff')
-  simd_memcpy_bytes(src, 2, dst, 3, 6)
+  memcpy_bytes(src, 2, dst, 3, 6)
   // dst[3..9] = src[2..8] = 3,4,5,6,7,8; rest unchanged
   assert_eq(dst[0], b'\xff')
   assert_eq(dst[3], b'\x03')
@@ -280,18 +280,18 @@ test "simd_memcpy_bytes with offsets" {
 }
 
 ///|
-test "simd_memset_bytes basic" {
+test "memset_bytes basic" {
   let dst = FixedArray::make(20, b'\x00')
-  simd_memset_bytes(dst, 0, 20, b'\x5a')
+  memset_bytes(dst, 0, 20, b'\x5a')
   for i in 0..<20 {
     assert_eq(dst[i], b'\x5a')
   }
 }
 
 ///|
-test "simd_memset_bytes partial" {
+test "memset_bytes partial" {
   let dst = FixedArray::make(20, b'\x00')
-  simd_memset_bytes(dst, 5, 10, b'\x42')
+  memset_bytes(dst, 5, 10, b'\x42')
   assert_eq(dst[4], b'\x00')
   assert_eq(dst[5], b'\x42')
   assert_eq(dst[14], b'\x42')
@@ -299,60 +299,60 @@ test "simd_memset_bytes partial" {
 }
 
 ///|
-test "simd_equal_bytes true" {
+test "equal_bytes true" {
   let a = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
   let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
-  inspect(simd_equal_bytes(a, b, 17), content="true")
+  inspect(equal_bytes(a, b, 17), content="true")
 }
 
 ///|
-test "simd_equal_bytes false at tail" {
+test "equal_bytes false at tail" {
   let a = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 99])
   let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
-  inspect(simd_equal_bytes(a, b, 17), content="false")
+  inspect(equal_bytes(a, b, 17), content="false")
 }
 
 ///|
-test "simd_equal_bytes false at first SIMD block" {
+test "equal_bytes false at first SIMD block" {
   let a = make_byte_array([1, 2, 9, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
   let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
-  inspect(simd_equal_bytes(a, b, 17), content="false")
+  inspect(equal_bytes(a, b, 17), content="false")
 }
 
 ///|
-test "simd_find_byte found in SIMD block" {
+test "find_byte found in SIMD block" {
   let data = make_byte_array([0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-  inspect(simd_find_byte(data, b'\x07'), content="5")
+  inspect(find_byte(data, b'\x07'), content="5")
 }
 
 ///|
-test "simd_find_byte found in tail" {
+test "find_byte found in tail" {
   let data = make_byte_array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9])
-  inspect(simd_find_byte(data, b'\x09'), content="16")
+  inspect(find_byte(data, b'\x09'), content="16")
 }
 
 ///|
-test "simd_find_byte not found" {
+test "find_byte not found" {
   let data = make_byte_array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-  inspect(simd_find_byte(data, b'\x07'), content="-1")
+  inspect(find_byte(data, b'\x07'), content="-1")
 }
 
 ///|
-test "simd_count_byte matches scalar" {
+test "count_byte matches scalar" {
   let vals = Array::makei(50, fn(i) { if i % 3 == 0 { 7 } else { i % 256 } })
   let data = make_byte_array(vals)
-  assert_eq(simd_count_byte(data, b'\x07'), scalar_count_byte(data, b'\x07'))
+  assert_eq(count_byte(data, b'\x07'), scalar_count_byte(data, b'\x07'))
 }
 
 // --- element-wise Int ops (B) ---
 
 ///|
-test "simd_sub matches scalar" {
+test "sub_i32 matches scalar" {
   let a = make_int_array([10, 20, 30, 40, 50, 60, 70])
   let b = make_int_array([1, 2, 3, 4, 5, 6, 7])
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
-  simd_sub(a, b, out)
+  sub_i32(a, b, out)
   scalar_sub(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -360,12 +360,12 @@ test "simd_sub matches scalar" {
 }
 
 ///|
-test "simd_mul matches scalar" {
+test "mul_i32 matches scalar" {
   let a = make_int_array([1, 2, 3, 4, 5, 6, 7])
   let b = make_int_array([10, 20, 30, 40, 50, 60, 70])
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
-  simd_mul(a, b, out)
+  mul_i32(a, b, out)
   scalar_mul(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -373,11 +373,11 @@ test "simd_mul matches scalar" {
 }
 
 ///|
-test "simd_neg matches scalar" {
+test "neg_i32 matches scalar" {
   let a = make_int_array([5, -3, 0, 17, -100, 42, -1])
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
-  simd_neg(a, out)
+  neg_i32(a, out)
   scalar_neg(a, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -385,11 +385,11 @@ test "simd_neg matches scalar" {
 }
 
 ///|
-test "simd_abs matches scalar" {
+test "abs_i32 matches scalar" {
   let a = make_int_array([5, -3, 0, 17, -100, 42, -1])
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
-  simd_abs(a, out)
+  abs_i32(a, out)
   scalar_abs(a, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -397,17 +397,17 @@ test "simd_abs matches scalar" {
 }
 
 ///|
-test "simd_min_elem / simd_max_elem match scalar" {
+test "min_elem_i32 / max_elem_i32 match scalar" {
   let a = make_int_array([5, 1, 9, 2, -3, 7, 0])
   let b = make_int_array([3, 4, 2, 8, -1, 5, 6])
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
-  simd_min_elem(a, b, out)
+  min_elem_i32(a, b, out)
   scalar_min_elem(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
-  simd_max_elem(a, b, out)
+  max_elem_i32(a, b, out)
   scalar_max_elem(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -415,12 +415,12 @@ test "simd_min_elem / simd_max_elem match scalar" {
 }
 
 ///|
-test "simd_eq / simd_lt / simd_gt produce -1/0 masks" {
+test "eq_i32 / lt_i32 / gt_i32 produce -1/0 masks" {
   let a = make_int_array([1, 2, 3, 4, 5, 6, 7])
   let b = make_int_array([1, 5, 3, 2, 9, 6, 0])
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
-  simd_eq(a, b, out)
+  eq_i32(a, b, out)
   scalar_eq(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -428,12 +428,12 @@ test "simd_eq / simd_lt / simd_gt produce -1/0 masks" {
   // eq mask values: -1 (equal) or 0
   assert_eq(out[0], -1)
   assert_eq(out[1], 0)
-  simd_lt(a, b, out)
+  lt_i32(a, b, out)
   scalar_lt(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
-  simd_gt(a, b, out)
+  gt_i32(a, b, out)
   scalar_gt(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -441,13 +441,13 @@ test "simd_eq / simd_lt / simd_gt produce -1/0 masks" {
 }
 
 ///|
-test "simd_where with computed mask" {
+test "where_i32 with computed mask" {
   let a = make_int_array([10, 20, 30, 40, 50, 60, 70])
   let b = make_int_array([1, 2, 3, 4, 5, 6, 7])
   let mask = make_int_array([-1, 0, -1, 0, -1, 0, -1])
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
-  simd_where(mask, a, b, out)
+  where_i32(mask, a, b, out)
   scalar_where(mask, a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
@@ -457,14 +457,14 @@ test "simd_where with computed mask" {
 }
 
 ///|
-test "simd_where end-to-end with simd_lt as mask producer" {
+test "where_i32 end-to-end with lt_i32 as mask producer" {
   let a = make_int_array([10, 20, 30, 40, 50])
   let b = make_int_array([15, 5, 30, 100, 25])
   // clamp: out[i] = max(a[i], b[i])  via where(a < b, b, a)
   let mask = FixedArray::make(5, 0)
   let out = FixedArray::make(5, 0)
-  simd_lt(a, b, mask) // mask = (a < b)
-  simd_where(mask, b, a, out)
+  lt_i32(a, b, mask) // mask = (a < b)
+  where_i32(mask, b, a, out)
   // expected: [15, 20, 30, 100, 50]
   assert_eq(out[0], 15)
   assert_eq(out[1], 20)
@@ -476,40 +476,40 @@ test "simd_where end-to-end with simd_lt as mask producer" {
 // --- string ops (H) ---
 
 ///|
-test "simd_is_ascii true" {
+test "is_ascii true" {
   // "Hello, World! ABCDEFGHIJK" is all ASCII
   let data = make_byte_array([
     72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 65, 66, 67,
     68, 69, 70,
   ])
-  inspect(simd_is_ascii(data), content="true")
+  inspect(is_ascii(data), content="true")
 }
 
 ///|
-test "simd_is_ascii false (high byte in SIMD chunk)" {
+test "is_ascii false (high byte in SIMD chunk)" {
   let data = make_byte_array([
     65, 66, 67, 68, 69, 200, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
   ])
-  inspect(simd_is_ascii(data), content="false")
+  inspect(is_ascii(data), content="false")
 }
 
 ///|
-test "simd_is_ascii false (high byte in tail)" {
+test "is_ascii false (high byte in tail)" {
   let data = make_byte_array([
     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 200,
   ])
-  inspect(simd_is_ascii(data), content="false")
+  inspect(is_ascii(data), content="false")
 }
 
 ///|
-test "simd_to_lower_ascii matches scalar" {
+test "to_lower_ascii matches scalar" {
   let original = [
     72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 76, 68, 33, 32, 65, 66, 67, 68,
     69, 70,
   ]
   let s = make_byte_array(original)
   let r = make_byte_array(original)
-  simd_to_lower_ascii(s)
+  to_lower_ascii(s)
   scalar_to_lower_ascii(r)
   for i in 0..<s.length() {
     assert_eq(s[i], r[i])
@@ -517,14 +517,14 @@ test "simd_to_lower_ascii matches scalar" {
 }
 
 ///|
-test "simd_to_upper_ascii matches scalar" {
+test "to_upper_ascii matches scalar" {
   let original = [
     72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 76, 68, 33, 32, 97, 98, 99, 100,
     101, 102,
   ]
   let s = make_byte_array(original)
   let r = make_byte_array(original)
-  simd_to_upper_ascii(s)
+  to_upper_ascii(s)
   scalar_to_upper_ascii(r)
   for i in 0..<s.length() {
     assert_eq(s[i], r[i])
@@ -532,11 +532,11 @@ test "simd_to_upper_ascii matches scalar" {
 }
 
 ///|
-test "simd_to_lower_ascii leaves non-letters alone" {
+test "to_lower_ascii leaves non-letters alone" {
   let data = make_byte_array([65, 48, 91, 96, 123, 192, 90, 97])
   // 'A'(65)→97, '0'(48) unchanged, '['(91) unchanged, '`'(96) unchanged,
   // '{'(123) unchanged, 0xC0 (>=128) unchanged, 'Z'(90)→122, 'a'(97) unchanged
-  simd_to_lower_ascii(data)
+  to_lower_ascii(data)
   assert_eq(data[0], b'\x61')
   assert_eq(data[1], b'\x30')
   assert_eq(data[2], b'\x5b')
@@ -550,90 +550,90 @@ test "simd_to_lower_ascii leaves non-letters alone" {
 // --- UTF-8 validation (I) ---
 
 ///|
-test "simd_validate_utf8 pure ASCII" {
+test "validate_utf8 pure ASCII" {
   let data = make_byte_array([
     72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 49, 50, 51,
     52, 53, 54, 55, 56, 57, 48,
   ])
-  inspect(simd_validate_utf8(data), content="true")
+  inspect(validate_utf8(data), content="true")
 }
 
 ///|
-test "simd_validate_utf8 valid 2-byte (é)" {
+test "validate_utf8 valid 2-byte (é)" {
   // 'é' = U+00E9 = 0xC3 0xA9
   let data = make_byte_array([72, 0xC3, 0xA9, 108, 108, 111])
-  inspect(simd_validate_utf8(data), content="true")
+  inspect(validate_utf8(data), content="true")
 }
 
 ///|
-test "simd_validate_utf8 valid 3-byte (日)" {
+test "validate_utf8 valid 3-byte (日)" {
   // '日' = U+65E5 = 0xE6 0x97 0xA5
   let data = make_byte_array([0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC])
-  inspect(simd_validate_utf8(data), content="true")
+  inspect(validate_utf8(data), content="true")
 }
 
 ///|
-test "simd_validate_utf8 valid 4-byte" {
+test "validate_utf8 valid 4-byte" {
   // U+1F600 (grinning face) = 0xF0 0x9F 0x98 0x80
   let data = make_byte_array([0xF0, 0x9F, 0x98, 0x80])
-  inspect(simd_validate_utf8(data), content="true")
+  inspect(validate_utf8(data), content="true")
 }
 
 ///|
-test "simd_validate_utf8 lone continuation rejected" {
+test "validate_utf8 lone continuation rejected" {
   let data = make_byte_array([72, 0x80, 108])
-  inspect(simd_validate_utf8(data), content="false")
+  inspect(validate_utf8(data), content="false")
 }
 
 ///|
-test "simd_validate_utf8 truncated multi-byte rejected" {
+test "validate_utf8 truncated multi-byte rejected" {
   // 0xC3 expects 1 continuation but stream ends
   let data = make_byte_array([72, 0xC3])
-  inspect(simd_validate_utf8(data), content="false")
+  inspect(validate_utf8(data), content="false")
 }
 
 ///|
-test "simd_validate_utf8 invalid leading byte rejected" {
+test "validate_utf8 invalid leading byte rejected" {
   // 0xF8 is in the invalid 0xF5..0xFF range
   let data = make_byte_array([72, 0xF8, 0x80])
-  inspect(simd_validate_utf8(data), content="false")
+  inspect(validate_utf8(data), content="false")
 }
 
 ///|
-test "simd_validate_utf8 long ASCII then multi-byte" {
+test "validate_utf8 long ASCII then multi-byte" {
   // 32 ASCII bytes, then a valid 2-byte
   let vals = Array::makei(32, fn(i) { 65 + i % 26 })
   let _ = vals.push(0xC3)
   let _ = vals.push(0xA9)
   let data = make_byte_array(vals)
-  inspect(simd_validate_utf8(data), content="true")
+  inspect(validate_utf8(data), content="true")
 }
 
 ///|
-test "simd_validate_utf8 long ASCII then invalid" {
+test "validate_utf8 long ASCII then invalid" {
   let vals = Array::makei(32, fn(i) { 65 + i % 26 })
   let _ = vals.push(0x80) // lone continuation right after ASCII region
   let data = make_byte_array(vals)
-  inspect(simd_validate_utf8(data), content="false")
+  inspect(validate_utf8(data), content="false")
 }
 
 ///|
-test "simd_validate_utf8 matches scalar on mixed input" {
+test "validate_utf8 matches scalar on mixed input" {
   let data = make_byte_array([
     72, 101, 108, 108, 111, 0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC, 32, 0xC3, 0xA9,
     33, 0xF0, 0x9F, 0x98, 0x80,
   ])
-  assert_eq(simd_validate_utf8(data), scalar_validate_utf8(data))
+  assert_eq(validate_utf8(data), scalar_validate_utf8(data))
 }
 
 // --- gather / scatter (G) ---
 
 ///|
-test "simd_gather basic" {
+test "gather_i32 basic" {
   let arr = make_int_array([10, 20, 30, 40, 50, 60, 70, 80, 90])
   let indices = make_int_array([3, 0, 7, 8, 1])
   let out = FixedArray::make(5, 0)
-  simd_gather(arr, indices, out)
+  gather_i32(arr, indices, out)
   // expected: arr[3], arr[0], arr[7], arr[8], arr[1] = 40, 10, 80, 90, 20
   assert_eq(out[0], 40)
   assert_eq(out[1], 10)
@@ -643,7 +643,7 @@ test "simd_gather basic" {
 }
 
 ///|
-test "simd_gather matches scalar (large)" {
+test "gather_i32 matches scalar (large)" {
   let n = 100
   let arr = FixedArray::make(n, 0)
   for i in 0..<n {
@@ -655,7 +655,7 @@ test "simd_gather matches scalar (large)" {
   }
   let out_s = FixedArray::make(50, 0)
   let out_r = FixedArray::make(50, 0)
-  simd_gather(arr, indices, out_s)
+  gather_i32(arr, indices, out_s)
   scalar_gather(arr, indices, out_r)
   for i in 0..<50 {
     assert_eq(out_s[i], out_r[i])
@@ -663,11 +663,11 @@ test "simd_gather matches scalar (large)" {
 }
 
 ///|
-test "simd_scatter basic" {
+test "scatter_i32 basic" {
   let out = FixedArray::make(10, 0)
   let indices = make_int_array([0, 3, 7, 1, 9])
   let vals = make_int_array([100, 200, 300, 400, 500])
-  simd_scatter(out, indices, vals)
+  scatter_i32(out, indices, vals)
   assert_eq(out[0], 100)
   assert_eq(out[1], 400)
   assert_eq(out[3], 200)
@@ -678,12 +678,12 @@ test "simd_scatter basic" {
 // --- div (Int via f64x2 detour) ---
 
 ///|
-test "simd_div matches scalar (positive)" {
+test "div_i32 matches scalar (positive)" {
   let a = make_int_array([100, 81, 64, 49, 36, 25, 16, 9, 4])
   let b = make_int_array([2, 3, 4, 5, 6, 7, 8, 9, 1])
   let out_s = FixedArray::make(9, 0)
   let out_r = FixedArray::make(9, 0)
-  simd_div(a, b, out_s)
+  div_i32(a, b, out_s)
   scalar_div(a, b, out_r)
   for i in 0..<9 {
     assert_eq(out_s[i], out_r[i])
@@ -691,12 +691,12 @@ test "simd_div matches scalar (positive)" {
 }
 
 ///|
-test "simd_div matches scalar (negatives, truncation)" {
+test "div_i32 matches scalar (negatives, truncation)" {
   let a = make_int_array([-10, -7, 7, -7, 100, -100, 13, -13])
   let b = make_int_array([3, 3, -3, -3, -7, 7, -2, 2])
   let out_s = FixedArray::make(8, 0)
   let out_r = FixedArray::make(8, 0)
-  simd_div(a, b, out_s)
+  div_i32(a, b, out_s)
   scalar_div(a, b, out_r)
   for i in 0..<8 {
     assert_eq(out_s[i], out_r[i])
@@ -716,7 +716,7 @@ test "scalar_sort4_int sorts in place" {
 }
 
 ///|
-test "simd_sort4_int matches scalar" {
+test "sort4_i32 matches scalar" {
   let pairs = [
     [4, 1, 3, 2],
     [-5, -3, -1, -10],
@@ -728,7 +728,7 @@ test "simd_sort4_int matches scalar" {
   for p in pairs {
     let simd_arr = make_int_array(p)
     let scalar_arr = make_int_array(p)
-    simd_sort4_int(simd_arr, 0)
+    sort4_i32(simd_arr, 0)
     scalar_sort4_int(scalar_arr, 0)
     for i in 0..<4 {
       assert_eq(simd_arr[i], scalar_arr[i])
@@ -737,9 +737,9 @@ test "simd_sort4_int matches scalar" {
 }
 
 ///|
-test "simd_sort4_int with offset" {
+test "sort4_i32 with offset" {
   let arr = make_int_array([99, 4, 1, 3, 2, 88])
-  simd_sort4_int(arr, 1)
+  sort4_i32(arr, 1)
   assert_eq(arr[0], 99)
   assert_eq(arr[1], 1)
   assert_eq(arr[2], 2)
@@ -749,45 +749,45 @@ test "simd_sort4_int with offset" {
 }
 
 ///|
-test "simd_sort_int general" {
+test "sort_i32 general" {
   let arr = make_int_array([5, 2, 8, 1, 9, 3, 7, 4, 6, 0])
-  simd_sort_int(arr)
+  sort_i32(arr)
   for i in 0..<10 {
     assert_eq(arr[i], i)
   }
 }
 
 ///|
-test "simd_bitonic_merge8_int interleaved" {
+test "bitonic_merge8_i32 interleaved" {
   // two sorted halves: [1,3,5,7] and [2,4,6,8]
   let arr = make_int_array([1, 3, 5, 7, 2, 4, 6, 8])
-  simd_bitonic_merge8_int(arr, 0)
+  bitonic_merge8_i32(arr, 0)
   for i in 0..<8 {
     assert_eq(arr[i], i + 1)
   }
 }
 
 ///|
-test "simd_bitonic_merge8_int disjoint" {
+test "bitonic_merge8_i32 disjoint" {
   // first half all smaller
   let arr = make_int_array([1, 2, 3, 4, 5, 6, 7, 8])
-  simd_bitonic_merge8_int(arr, 0)
+  bitonic_merge8_i32(arr, 0)
   for i in 0..<8 {
     assert_eq(arr[i], i + 1)
   }
 }
 
 ///|
-test "simd_bitonic_merge8_int second-half smaller" {
+test "bitonic_merge8_i32 second-half smaller" {
   let arr = make_int_array([5, 6, 7, 8, 1, 2, 3, 4])
-  simd_bitonic_merge8_int(arr, 0)
+  bitonic_merge8_i32(arr, 0)
   for i in 0..<8 {
     assert_eq(arr[i], i + 1)
   }
 }
 
 ///|
-test "simd_bitonic_merge8_int matches scalar (random pairs)" {
+test "bitonic_merge8_i32 matches scalar (random pairs)" {
   let cases = [
     [1, 4, 6, 9, 2, 3, 5, 7],
     [2, 2, 4, 8, 3, 3, 5, 9],
@@ -797,7 +797,7 @@ test "simd_bitonic_merge8_int matches scalar (random pairs)" {
   for c in cases {
     let s = make_int_array(c)
     let r = make_int_array(c)
-    simd_bitonic_merge8_int(s, 0)
+    bitonic_merge8_i32(s, 0)
     scalar_bitonic_merge8_int(r, 0)
     for i in 0..<8 {
       assert_eq(s[i], r[i])
@@ -806,18 +806,18 @@ test "simd_bitonic_merge8_int matches scalar (random pairs)" {
 }
 
 ///|
-test "simd_bitonic_merge16_int interleaved" {
+test "bitonic_merge16_i32 interleaved" {
   let arr = make_int_array([
     1, 3, 5, 7, 9, 11, 13, 15, 2, 4, 6, 8, 10, 12, 14, 16,
   ])
-  simd_bitonic_merge16_int(arr, 0)
+  bitonic_merge16_i32(arr, 0)
   for i in 0..<16 {
     assert_eq(arr[i], i + 1)
   }
 }
 
 ///|
-test "simd_bitonic_merge16_int matches scalar (random pairs)" {
+test "bitonic_merge16_i32 matches scalar (random pairs)" {
   let cases = [
     [1, 5, 9, 13, 17, 21, 25, 29, 2, 6, 10, 14, 18, 22, 26, 30],
     [-10, -5, 0, 3, 7, 11, 15, 20, -8, -3, 1, 4, 8, 12, 16, 25],
@@ -827,7 +827,7 @@ test "simd_bitonic_merge16_int matches scalar (random pairs)" {
   for c in cases {
     let s = make_int_array(c)
     let r = make_int_array(c)
-    simd_bitonic_merge16_int(s, 0)
+    bitonic_merge16_i32(s, 0)
     scalar_bitonic_merge16_int(r, 0)
     for i in 0..<16 {
       assert_eq(s[i], r[i])
@@ -836,16 +836,16 @@ test "simd_bitonic_merge16_int matches scalar (random pairs)" {
 }
 
 ///|
-test "simd_sort16_int basic" {
+test "sort16_i32 basic" {
   let arr = make_int_array([15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4])
-  simd_sort16_int(arr, 0)
+  sort16_i32(arr, 0)
   for i in 0..<16 {
     assert_eq(arr[i], i)
   }
 }
 
 ///|
-test "simd_sort16_int matches scalar (random)" {
+test "sort16_i32 matches scalar (random)" {
   let arr_s = FixedArray::make(16, 0)
   let arr_r = FixedArray::make(16, 0)
   for i in 0..<16 {
@@ -853,7 +853,7 @@ test "simd_sort16_int matches scalar (random)" {
     arr_s[i] = v
     arr_r[i] = v
   }
-  simd_sort16_int(arr_s, 0)
+  sort16_i32(arr_s, 0)
   scalar_sort16_int(arr_r, 0)
   for i in 0..<16 {
     assert_eq(arr_s[i], arr_r[i])
@@ -861,9 +861,9 @@ test "simd_sort16_int matches scalar (random)" {
 }
 
 ///|
-test "simd_sort16_int with offset surrounded by sentinels" {
+test "sort16_i32 with offset surrounded by sentinels" {
   let arr = make_int_array([99, 15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4, 88])
-  simd_sort16_int(arr, 1)
+  sort16_i32(arr, 1)
   assert_eq(arr[0], 99)
   for i in 0..<16 {
     assert_eq(arr[i + 1], i)
@@ -903,12 +903,12 @@ test "f32 buf round-trip" {
 }
 
 ///|
-test "simd_add_f32 matches scalar" {
+test "add_f32 matches scalar" {
   let a = make_f32_buf([(1.5 : Float), (2.0 : Float), (3.25 : Float), (4.0 : Float), (5.5 : Float), (6.0 : Float), (7.125 : Float)])
   let b = make_f32_buf([(10.0 : Float), (20.5 : Float), (30.0 : Float), (40.25 : Float), (50.0 : Float), (60.5 : Float), (70.0 : Float)])
   let out_s = f32_buf_alloc(7)
   let out_r = f32_buf_alloc(7)
-  simd_add_f32(a, b, out_s, 7)
+  add_f32(a, b, out_s, 7)
   scalar_add_f32(a, b, out_r, 7)
   for i in 0..<7 {
     assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
@@ -916,12 +916,12 @@ test "simd_add_f32 matches scalar" {
 }
 
 ///|
-test "simd_mul_f32 matches scalar" {
+test "mul_f32 matches scalar" {
   let a = make_f32_buf([(1.5 : Float), (2.0 : Float), (3.25 : Float), (4.0 : Float), (5.5 : Float)])
   let b = make_f32_buf([(2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float), (6.0 : Float)])
   let out_s = f32_buf_alloc(5)
   let out_r = f32_buf_alloc(5)
-  simd_mul_f32(a, b, out_s, 5)
+  mul_f32(a, b, out_s, 5)
   scalar_mul_f32(a, b, out_r, 5)
   for i in 0..<5 {
     assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
@@ -929,85 +929,85 @@ test "simd_mul_f32 matches scalar" {
 }
 
 ///|
-test "simd_sum_f32" {
+test "sum_f32" {
   let a = make_f32_buf([(1.5 : Float), (2.5 : Float), (3.5 : Float), (4.5 : Float), (5.5 : Float)])
   // 1.5+2.5+3.5+4.5+5.5 = 17.5
-  assert_f32_close(simd_sum_f32(a, 5), (17.5 : Float))
+  assert_f32_close(sum_f32(a, 5), (17.5 : Float))
 }
 
 ///|
-test "simd_dot_f32" {
+test "dot_f32" {
   let a = make_f32_buf([(1.0 : Float), (2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float)])
   let b = make_f32_buf([(2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float), (6.0 : Float)])
   // 2+6+12+20+30 = 70
-  assert_f32_close(simd_dot_f32(a, b, 5), (70.0 : Float))
+  assert_f32_close(dot_f32(a, b, 5), (70.0 : Float))
 }
 
 // --- reductions + scan (D) ---
 
 ///|
-test "simd_prod basic + matches scalar" {
+test "prod_i32 basic + matches scalar" {
   let arr = make_int_array([2, 3, 4, 5, 6])
   // 2*3*4*5*6 = 720
-  inspect(simd_prod(arr), content="720")
-  assert_eq(simd_prod(arr), scalar_prod(arr))
+  inspect(prod_i32(arr), content="720")
+  assert_eq(prod_i32(arr), scalar_prod(arr))
 }
 
 ///|
-test "simd_prod empty" {
+test "prod_i32 empty" {
   let arr : FixedArray[Int] = FixedArray::make(0, 0)
-  inspect(simd_prod(arr), content="1")
+  inspect(prod_i32(arr), content="1")
 }
 
 ///|
-test "simd_mean_f64 / simd_var_f64" {
+test "mean_f64 / var_f64" {
   let arr = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0])
   // mean = 3, var (population) = ((1-3)^2 + (2-3)^2 + (3-3)^2 + (4-3)^2 + (5-3)^2) / 5
   //      = (4 + 1 + 0 + 1 + 4) / 5 = 2
-  assert_f64_close(simd_mean_f64(arr), 3.0)
-  assert_f64_close(simd_var_f64(arr), 2.0)
+  assert_f64_close(mean_f64(arr), 3.0)
+  assert_f64_close(var_f64(arr), 2.0)
 }
 
 ///|
-test "simd_var_f64 matches scalar (larger)" {
+test "var_f64 matches scalar (larger)" {
   let n = 21
   let arr = FixedArray::make(n, 0.0)
   for i in 0..<n {
     arr[i] = (i + 1).to_double() * 0.5 - 3.0
   }
-  assert_f64_close(simd_var_f64(arr), scalar_var_f64(arr))
+  assert_f64_close(var_f64(arr), scalar_var_f64(arr))
 }
 
 ///|
-test "simd_count_nonzero" {
+test "count_nonzero_i32" {
   let arr = make_int_array([0, 1, 0, 2, 0, 3, 0, 4, 0, 5])
-  inspect(simd_count_nonzero(arr), content="5")
+  inspect(count_nonzero_i32(arr), content="5")
 }
 
 ///|
-test "simd_all / simd_any" {
+test "all_i32 / any_i32" {
   let all_ones = make_int_array([1, 2, 3, 4, 5, 6, 7])
   let has_zero = make_int_array([1, 2, 0, 4, 5])
   let all_zero = make_int_array([0, 0, 0, 0, 0])
-  inspect(simd_all(all_ones), content="true")
-  inspect(simd_all(has_zero), content="false")
-  inspect(simd_all(all_zero), content="false")
-  inspect(simd_any(all_ones), content="true")
-  inspect(simd_any(has_zero), content="true")
-  inspect(simd_any(all_zero), content="false")
+  inspect(all_i32(all_ones), content="true")
+  inspect(all_i32(has_zero), content="false")
+  inspect(all_i32(all_zero), content="false")
+  inspect(any_i32(all_ones), content="true")
+  inspect(any_i32(has_zero), content="true")
+  inspect(any_i32(all_zero), content="false")
 }
 
 ///|
-test "simd_cumsum / simd_cumprod (scalar fallback)" {
+test "cumsum_i32 / cumprod_i32 (scalar fallback)" {
   let arr = make_int_array([1, 2, 3, 4, 5])
   let out = FixedArray::make(5, 0)
-  simd_cumsum(arr, out)
+  cumsum_i32(arr, out)
   assert_eq(out[0], 1)
   assert_eq(out[1], 3)
   assert_eq(out[2], 6)
   assert_eq(out[3], 10)
   assert_eq(out[4], 15)
-  simd_cumprod(arr, out)
+  cumprod_i32(arr, out)
   assert_eq(out[0], 1)
   assert_eq(out[1], 2)
   assert_eq(out[2], 6)
@@ -1018,7 +1018,7 @@ test "simd_cumsum / simd_cumprod (scalar fallback)" {
 // --- linear algebra (C) ---
 
 ///|
-test "simd_matmul_f64 vs scalar (2x3 * 3x2)" {
+test "matmul_f64 vs scalar (2x3 * 3x2)" {
   // A = [[1,2,3],[4,5,6]]  (2x3)
   // B = [[7,8],[9,10],[11,12]]  (3x2)
   // B^T (row-major) = [[7,9,11],[8,10,12]]  (2x3 in B^T layout, i.e. 2 rows of length 3)
@@ -1026,7 +1026,7 @@ test "simd_matmul_f64 vs scalar (2x3 * 3x2)" {
   let a = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
   let b_t = make_f64_array([7.0, 9.0, 11.0, 8.0, 10.0, 12.0])
   let c = FixedArray::make(4, 0.0)
-  simd_matmul_f64(a, b_t, c, 2, 3, 2)
+  matmul_f64(a, b_t, c, 2, 3, 2)
   assert_f64_close(c[0], 58.0)
   assert_f64_close(c[1], 64.0)
   assert_f64_close(c[2], 139.0)
@@ -1034,7 +1034,7 @@ test "simd_matmul_f64 vs scalar (2x3 * 3x2)" {
 }
 
 ///|
-test "simd_matmul_f64 matches scalar (5x7 * 7x4)" {
+test "matmul_f64 matches scalar (5x7 * 7x4)" {
   let m = 5
   let k = 7
   let n = 4
@@ -1048,7 +1048,7 @@ test "simd_matmul_f64 matches scalar (5x7 * 7x4)" {
   }
   let c_simd = FixedArray::make(m * n, 0.0)
   let c_scalar = FixedArray::make(m * n, 0.0)
-  simd_matmul_f64(a, b_t, c_simd, m, k, n)
+  matmul_f64(a, b_t, c_simd, m, k, n)
   scalar_matmul_f64(a, b_t, c_scalar, m, k, n)
   for i in 0..<(m * n) {
     assert_f64_close(c_simd[i], c_scalar[i])
@@ -1056,19 +1056,19 @@ test "simd_matmul_f64 matches scalar (5x7 * 7x4)" {
 }
 
 ///|
-test "simd_gemv_f64 vs scalar" {
+test "gemv_f64 vs scalar" {
   // A = [[1,2,3],[4,5,6]] (2x3), x = [1,2,3]
   // y = [1+4+9, 4+10+18] = [14, 32]
   let a = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
   let x = make_f64_array([1.0, 2.0, 3.0])
   let y = FixedArray::make(2, 0.0)
-  simd_gemv_f64(a, x, y, 2, 3)
+  gemv_f64(a, x, y, 2, 3)
   assert_f64_close(y[0], 14.0)
   assert_f64_close(y[1], 32.0)
 }
 
 ///|
-test "simd_gemv_f64 matches scalar (larger)" {
+test "gemv_f64 matches scalar (larger)" {
   let m = 10
   let n = 13
   let a = FixedArray::make(m * n, 0.0)
@@ -1081,7 +1081,7 @@ test "simd_gemv_f64 matches scalar (larger)" {
   }
   let y_simd = FixedArray::make(m, 0.0)
   let y_scalar = FixedArray::make(m, 0.0)
-  simd_gemv_f64(a, x, y_simd, m, n)
+  gemv_f64(a, x, y_simd, m, n)
   scalar_gemv_f64(a, x, y_scalar, m, n)
   for i in 0..<m {
     assert_f64_close(y_simd[i], y_scalar[i])
@@ -1089,14 +1089,14 @@ test "simd_gemv_f64 matches scalar (larger)" {
 }
 
 ///|
-test "simd_transpose_f64 (3x4)" {
+test "transpose_f64 (3x4)" {
   // A = [[1,2,3,4],[5,6,7,8],[9,10,11,12]] (3x4)
   // A^T = [[1,5,9],[2,6,10],[3,7,11],[4,8,12]] (4x3)
   let a = make_f64_array([
     1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
   ])
   let out = FixedArray::make(12, 0.0)
-  simd_transpose_f64(a, out, 3, 4)
+  transpose_f64(a, out, 3, 4)
   let expected = make_f64_array([
     1.0, 5.0, 9.0, 2.0, 6.0, 10.0, 3.0, 7.0, 11.0, 4.0, 8.0, 12.0,
   ])
@@ -1125,12 +1125,12 @@ fn assert_f64_close(a : Double, b : Double, eps~ : Double = 1.0e-9) -> Unit {
 }
 
 ///|
-test "simd_add_f64 matches scalar" {
+test "add_f64 matches scalar" {
   let a = make_f64_array([1.5, 2.0, 3.25, 4.0, 5.5, 6.0, 7.125])
   let b = make_f64_array([10.0, 20.5, 30.0, 40.25, 50.0, 60.5, 70.0])
   let out_simd = FixedArray::make(7, 0.0)
   let out_scalar = FixedArray::make(7, 0.0)
-  simd_add_f64(a, b, out_simd)
+  add_f64(a, b, out_simd)
   scalar_add_f64(a, b, out_scalar)
   for i in 0..<7 {
     assert_f64_close(out_simd[i], out_scalar[i])
@@ -1138,22 +1138,22 @@ test "simd_add_f64 matches scalar" {
 }
 
 ///|
-test "simd_sub/mul/div_f64 match scalar" {
+test "sub_i32/mul/div_f64 match scalar" {
   let a = make_f64_array([1.0, 4.0, 9.0, 16.0, 25.0])
   let b = make_f64_array([2.0, 2.0, 3.0, 4.0, 5.0])
   let out = FixedArray::make(5, 0.0)
   let ref_arr = FixedArray::make(5, 0.0)
-  simd_sub_f64(a, b, out)
+  sub_f64(a, b, out)
   scalar_sub_f64(a, b, ref_arr)
   for i in 0..<5 {
     assert_f64_close(out[i], ref_arr[i])
   }
-  simd_mul_f64(a, b, out)
+  mul_f64(a, b, out)
   scalar_mul_f64(a, b, ref_arr)
   for i in 0..<5 {
     assert_f64_close(out[i], ref_arr[i])
   }
-  simd_div_f64(a, b, out)
+  div_f64(a, b, out)
   scalar_div_f64(a, b, ref_arr)
   for i in 0..<5 {
     assert_f64_close(out[i], ref_arr[i])
@@ -1161,10 +1161,10 @@ test "simd_sub/mul/div_f64 match scalar" {
 }
 
 ///|
-test "simd_sqrt_f64 matches scalar" {
+test "sqrt_f64 matches scalar" {
   let a = make_f64_array([1.0, 4.0, 9.0, 16.0, 25.0])
   let out = FixedArray::make(5, 0.0)
-  simd_sqrt_f64(a, out)
+  sqrt_f64(a, out)
   assert_f64_close(out[0], 1.0)
   assert_f64_close(out[1], 2.0)
   assert_f64_close(out[2], 3.0)
@@ -1173,17 +1173,17 @@ test "simd_sqrt_f64 matches scalar" {
 }
 
 ///|
-test "simd_min_f64 / simd_max_f64 element-wise" {
+test "min_elem_f64 / max_elem_f64 element-wise" {
   let a = make_f64_array([1.0, 5.0, 3.0, 8.0, 2.0])
   let b = make_f64_array([4.0, 2.0, 7.0, 6.0, 9.0])
   let out = FixedArray::make(5, 0.0)
-  simd_min_f64(a, b, out)
+  min_elem_f64(a, b, out)
   assert_f64_close(out[0], 1.0)
   assert_f64_close(out[1], 2.0)
   assert_f64_close(out[2], 3.0)
   assert_f64_close(out[3], 6.0)
   assert_f64_close(out[4], 2.0)
-  simd_max_f64(a, b, out)
+  max_elem_f64(a, b, out)
   assert_f64_close(out[0], 4.0)
   assert_f64_close(out[1], 5.0)
   assert_f64_close(out[2], 7.0)
@@ -1192,21 +1192,21 @@ test "simd_min_f64 / simd_max_f64 element-wise" {
 }
 
 ///|
-test "simd_sum_f64 matches scalar" {
+test "sum_f64 matches scalar" {
   let a = make_f64_array([1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5])
-  assert_f64_close(simd_sum_f64(a), scalar_sum_f64(a))
+  assert_f64_close(sum_f64(a), scalar_sum_f64(a))
 }
 
 ///|
-test "simd_sum_f64 empty" {
+test "sum_f64 empty" {
   let arr : FixedArray[Double] = FixedArray::make(0, 0.0)
-  assert_f64_close(simd_sum_f64(arr), 0.0)
+  assert_f64_close(sum_f64(arr), 0.0)
 }
 
 ///|
-test "simd_dot_f64 matches scalar" {
+test "dot_f64 matches scalar" {
   let a = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0])
   let b = make_f64_array([2.0, 3.0, 4.0, 5.0, 6.0])
   // 2 + 6 + 12 + 20 + 30 = 70
-  assert_f64_close(simd_dot_f64(a, b), 70.0)
+  assert_f64_close(dot_f64(a, b), 70.0)
 }

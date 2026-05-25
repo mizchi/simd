@@ -1,18 +1,18 @@
 ///|
 /// SIMD sum - wasm-gc target: scalar fallback (GC heap, no v128.load).
-pub fn simd_sum(arr : FixedArray[Int]) -> Int {
+pub fn sum_i32(arr : FixedArray[Int]) -> Int {
   scalar_sum(arr)
 }
 
 ///|
 /// SIMD dot product - wasm-gc target: scalar fallback.
-pub fn simd_dot_product(a : FixedArray[Int], b : FixedArray[Int]) -> Int {
+pub fn dot_i32(a : FixedArray[Int], b : FixedArray[Int]) -> Int {
   scalar_dot_product(a, b)
 }
 
 ///|
 /// SIMD element-wise add - wasm-gc target: scalar fallback.
-pub fn simd_add(
+pub fn add_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -22,32 +22,32 @@ pub fn simd_add(
 
 ///|
 /// SIMD Adler-32 - wasm-gc target: scalar fallback.
-pub fn simd_adler32(data : FixedArray[Byte]) -> UInt {
+pub fn adler32_bytes(data : FixedArray[Byte]) -> UInt {
   scalar_adler32(data)
 }
 
 ///|
-pub fn simd_min(arr : FixedArray[Int]) -> Int {
+pub fn min_i32(arr : FixedArray[Int]) -> Int {
   scalar_min(arr)
 }
 
 ///|
-pub fn simd_max(arr : FixedArray[Int]) -> Int {
+pub fn max_i32(arr : FixedArray[Int]) -> Int {
   scalar_max(arr)
 }
 
 ///|
-pub fn simd_argmin(arr : FixedArray[Int]) -> Int {
+pub fn argmin_i32(arr : FixedArray[Int]) -> Int {
   scalar_argmin(arr)
 }
 
 ///|
-pub fn simd_argmax(arr : FixedArray[Int]) -> Int {
+pub fn argmax_i32(arr : FixedArray[Int]) -> Int {
   scalar_argmax(arr)
 }
 
 ///|
-pub fn simd_saxpy(
+pub fn saxpy_i32(
   k : Int,
   a : FixedArray[Int],
   b : FixedArray[Int],
@@ -57,12 +57,12 @@ pub fn simd_saxpy(
 }
 
 ///|
-pub fn simd_popcount_bytes(data : FixedArray[Byte]) -> Int {
+pub fn popcount_bytes(data : FixedArray[Byte]) -> Int {
   scalar_popcount_bytes(data)
 }
 
 ///|
-pub fn simd_memcpy_bytes(
+pub fn memcpy_bytes(
   src : FixedArray[Byte],
   si : Int,
   dst : FixedArray[Byte],
@@ -73,7 +73,7 @@ pub fn simd_memcpy_bytes(
 }
 
 ///|
-pub fn simd_memset_bytes(
+pub fn memset_bytes(
   dst : FixedArray[Byte],
   off : Int,
   len : Int,
@@ -83,7 +83,7 @@ pub fn simd_memset_bytes(
 }
 
 ///|
-pub fn simd_equal_bytes(
+pub fn equal_bytes(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
   len : Int,
@@ -92,17 +92,17 @@ pub fn simd_equal_bytes(
 }
 
 ///|
-pub fn simd_find_byte(data : FixedArray[Byte], needle : Byte) -> Int {
+pub fn find_byte(data : FixedArray[Byte], needle : Byte) -> Int {
   scalar_find_byte(data, needle)
 }
 
 ///|
-pub fn simd_count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
+pub fn count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
   scalar_count_byte(data, needle)
 }
 
 ///|
-pub fn simd_add_f64(
+pub fn add_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
   out : FixedArray[Double],
@@ -111,7 +111,7 @@ pub fn simd_add_f64(
 }
 
 ///|
-pub fn simd_sub_f64(
+pub fn sub_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
   out : FixedArray[Double],
@@ -120,7 +120,7 @@ pub fn simd_sub_f64(
 }
 
 ///|
-pub fn simd_mul_f64(
+pub fn mul_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
   out : FixedArray[Double],
@@ -129,7 +129,7 @@ pub fn simd_mul_f64(
 }
 
 ///|
-pub fn simd_div_f64(
+pub fn div_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
   out : FixedArray[Double],
@@ -138,7 +138,7 @@ pub fn simd_div_f64(
 }
 
 ///|
-pub fn simd_sqrt_f64(
+pub fn sqrt_f64(
   a : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
@@ -146,7 +146,7 @@ pub fn simd_sqrt_f64(
 }
 
 ///|
-pub fn simd_min_f64(
+pub fn min_elem_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
   out : FixedArray[Double],
@@ -155,7 +155,7 @@ pub fn simd_min_f64(
 }
 
 ///|
-pub fn simd_max_f64(
+pub fn max_elem_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
   out : FixedArray[Double],
@@ -164,12 +164,12 @@ pub fn simd_max_f64(
 }
 
 ///|
-pub fn simd_sum_f64(arr : FixedArray[Double]) -> Double {
+pub fn sum_f64(arr : FixedArray[Double]) -> Double {
   scalar_sum_f64(arr)
 }
 
 ///|
-pub fn simd_dot_f64(
+pub fn dot_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
 ) -> Double {
@@ -177,7 +177,7 @@ pub fn simd_dot_f64(
 }
 
 ///|
-pub fn simd_sub(
+pub fn sub_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -186,7 +186,7 @@ pub fn simd_sub(
 }
 
 ///|
-pub fn simd_mul(
+pub fn mul_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -195,17 +195,17 @@ pub fn simd_mul(
 }
 
 ///|
-pub fn simd_neg(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+pub fn neg_i32(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
   scalar_neg(a, out)
 }
 
 ///|
-pub fn simd_abs(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+pub fn abs_i32(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
   scalar_abs(a, out)
 }
 
 ///|
-pub fn simd_min_elem(
+pub fn min_elem_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -214,7 +214,7 @@ pub fn simd_min_elem(
 }
 
 ///|
-pub fn simd_max_elem(
+pub fn max_elem_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -223,7 +223,7 @@ pub fn simd_max_elem(
 }
 
 ///|
-pub fn simd_eq(
+pub fn eq_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -232,7 +232,7 @@ pub fn simd_eq(
 }
 
 ///|
-pub fn simd_lt(
+pub fn lt_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -241,7 +241,7 @@ pub fn simd_lt(
 }
 
 ///|
-pub fn simd_gt(
+pub fn gt_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -250,7 +250,7 @@ pub fn simd_gt(
 }
 
 ///|
-pub fn simd_where(
+pub fn where_i32(
   mask : FixedArray[Int],
   a : FixedArray[Int],
   b : FixedArray[Int],
@@ -260,7 +260,7 @@ pub fn simd_where(
 }
 
 ///|
-pub fn simd_matmul_f64(
+pub fn matmul_f64(
   a : FixedArray[Double],
   b_t : FixedArray[Double],
   c : FixedArray[Double],
@@ -272,7 +272,7 @@ pub fn simd_matmul_f64(
 }
 
 ///|
-pub fn simd_gemv_f64(
+pub fn gemv_f64(
   a : FixedArray[Double],
   x : FixedArray[Double],
   y : FixedArray[Double],
@@ -283,7 +283,7 @@ pub fn simd_gemv_f64(
 }
 
 ///|
-pub fn simd_transpose_f64(
+pub fn transpose_f64(
   a : FixedArray[Double],
   out : FixedArray[Double],
   m : Int,
@@ -293,47 +293,47 @@ pub fn simd_transpose_f64(
 }
 
 ///|
-pub fn simd_prod(arr : FixedArray[Int]) -> Int {
+pub fn prod_i32(arr : FixedArray[Int]) -> Int {
   scalar_prod(arr)
 }
 
 ///|
-pub fn simd_mean_f64(arr : FixedArray[Double]) -> Double {
+pub fn mean_f64(arr : FixedArray[Double]) -> Double {
   scalar_mean_f64(arr)
 }
 
 ///|
-pub fn simd_var_f64(arr : FixedArray[Double]) -> Double {
+pub fn var_f64(arr : FixedArray[Double]) -> Double {
   scalar_var_f64(arr)
 }
 
 ///|
-pub fn simd_count_nonzero(arr : FixedArray[Int]) -> Int {
+pub fn count_nonzero_i32(arr : FixedArray[Int]) -> Int {
   scalar_count_nonzero(arr)
 }
 
 ///|
-pub fn simd_all(arr : FixedArray[Int]) -> Bool {
+pub fn all_i32(arr : FixedArray[Int]) -> Bool {
   scalar_all(arr)
 }
 
 ///|
-pub fn simd_any(arr : FixedArray[Int]) -> Bool {
+pub fn any_i32(arr : FixedArray[Int]) -> Bool {
   scalar_any(arr)
 }
 
 ///|
-pub fn simd_cumsum(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+pub fn cumsum_i32(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
   scalar_cumsum(arr, out)
 }
 
 ///|
-pub fn simd_cumprod(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+pub fn cumprod_i32(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
   scalar_cumprod(arr, out)
 }
 
 ///|
-pub fn simd_add_f32(
+pub fn add_f32(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
   out : FixedArray[Byte],
@@ -343,7 +343,7 @@ pub fn simd_add_f32(
 }
 
 ///|
-pub fn simd_mul_f32(
+pub fn mul_f32(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
   out : FixedArray[Byte],
@@ -353,12 +353,12 @@ pub fn simd_mul_f32(
 }
 
 ///|
-pub fn simd_sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
+pub fn sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
   scalar_sum_f32(arr, n)
 }
 
 ///|
-pub fn simd_dot_f32(
+pub fn dot_f32(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
   n : Int,
@@ -367,7 +367,7 @@ pub fn simd_dot_f32(
 }
 
 ///|
-pub fn simd_div(
+pub fn div_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
@@ -376,7 +376,7 @@ pub fn simd_div(
 }
 
 ///|
-pub fn simd_gather(
+pub fn gather_i32(
   arr : FixedArray[Int],
   indices : FixedArray[Int],
   out : FixedArray[Int],
@@ -385,27 +385,27 @@ pub fn simd_gather(
 }
 
 ///|
-pub fn simd_is_ascii(data : FixedArray[Byte]) -> Bool {
+pub fn is_ascii(data : FixedArray[Byte]) -> Bool {
   scalar_is_ascii(data)
 }
 
 ///|
-pub fn simd_to_lower_ascii(data : FixedArray[Byte]) -> Unit {
+pub fn to_lower_ascii(data : FixedArray[Byte]) -> Unit {
   scalar_to_lower_ascii(data)
 }
 
 ///|
-pub fn simd_to_upper_ascii(data : FixedArray[Byte]) -> Unit {
+pub fn to_upper_ascii(data : FixedArray[Byte]) -> Unit {
   scalar_to_upper_ascii(data)
 }
 
 ///|
-pub fn simd_validate_utf8(data : FixedArray[Byte]) -> Bool {
+pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
   scalar_validate_utf8(data)
 }
 
 ///|
-pub fn simd_scatter(
+pub fn scatter_i32(
   out : FixedArray[Int],
   indices : FixedArray[Int],
   vals : FixedArray[Int],
@@ -414,26 +414,26 @@ pub fn simd_scatter(
 }
 
 ///|
-pub fn simd_sort4_int(arr : FixedArray[Int], off : Int) -> Unit {
+pub fn sort4_i32(arr : FixedArray[Int], off : Int) -> Unit {
   scalar_sort4_int(arr, off)
 }
 
 ///|
-pub fn simd_bitonic_merge8_int(arr : FixedArray[Int], off : Int) -> Unit {
+pub fn bitonic_merge8_i32(arr : FixedArray[Int], off : Int) -> Unit {
   scalar_bitonic_merge8_int(arr, off)
 }
 
 ///|
-pub fn simd_bitonic_merge16_int(arr : FixedArray[Int], off : Int) -> Unit {
+pub fn bitonic_merge16_i32(arr : FixedArray[Int], off : Int) -> Unit {
   scalar_bitonic_merge16_int(arr, off)
 }
 
 ///|
-pub fn simd_sort16_int(arr : FixedArray[Int], off : Int) -> Unit {
+pub fn sort16_i32(arr : FixedArray[Int], off : Int) -> Unit {
   scalar_sort16_int(arr, off)
 }
 
 ///|
-pub fn simd_sort_int(arr : FixedArray[Int]) -> Unit {
+pub fn sort_i32(arr : FixedArray[Int]) -> Unit {
   scalar_sort_int(arr)
 }

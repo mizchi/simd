@@ -20,7 +20,7 @@ fn make_bench_byte_array(size : Int) -> FixedArray[Byte] {
 test "bench/sum" (b : @bench.T) {
   let arr = make_bench_int_array(1024)
   b.bench(name="scalar_sum_1024", fn() { b.keep(scalar_sum(arr)) })
-  b.bench(name="simd_sum_1024", fn() { b.keep(simd_sum(arr)) })
+  b.bench(name="simd_sum_1024", fn() { b.keep(sum_i32(arr)) })
 }
 
 ///|
@@ -31,7 +31,7 @@ test "bench/dot_product" (b : @bench.T) {
     b.keep(scalar_dot_product(a, b_arr))
   })
   b.bench(name="simd_dot_product_1024", fn() {
-    b.keep(simd_dot_product(a, b_arr))
+    b.keep(dot_i32(a, b_arr))
   })
 }
 
@@ -41,23 +41,23 @@ test "bench/add" (b : @bench.T) {
   let b_arr = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_add_1024", fn() { scalar_add(a, b_arr, out) })
-  b.bench(name="simd_add_1024", fn() { simd_add(a, b_arr, out) })
+  b.bench(name="simd_add_1024", fn() { add_i32(a, b_arr, out) })
 }
 
 ///|
 test "bench/adler32" (b : @bench.T) {
   let data = make_bench_byte_array(4096)
   b.bench(name="scalar_adler32_4096", fn() { b.keep(scalar_adler32(data)) })
-  b.bench(name="simd_adler32_4096", fn() { b.keep(simd_adler32(data)) })
+  b.bench(name="simd_adler32_4096", fn() { b.keep(adler32_bytes(data)) })
 }
 
 ///|
 test "bench/min_max" (b : @bench.T) {
   let arr = make_bench_int_array(1024)
   b.bench(name="scalar_min_1024", fn() { b.keep(scalar_min(arr)) })
-  b.bench(name="simd_min_1024", fn() { b.keep(simd_min(arr)) })
+  b.bench(name="simd_min_1024", fn() { b.keep(min_i32(arr)) })
   b.bench(name="scalar_max_1024", fn() { b.keep(scalar_max(arr)) })
-  b.bench(name="simd_max_1024", fn() { b.keep(simd_max(arr)) })
+  b.bench(name="simd_max_1024", fn() { b.keep(max_i32(arr)) })
 }
 
 ///|
@@ -66,7 +66,7 @@ test "bench/saxpy" (b : @bench.T) {
   let b_arr = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_saxpy_1024", fn() { scalar_saxpy(3, a, b_arr, out) })
-  b.bench(name="simd_saxpy_1024", fn() { simd_saxpy(3, a, b_arr, out) })
+  b.bench(name="simd_saxpy_1024", fn() { saxpy_i32(3, a, b_arr, out) })
 }
 
 ///|
@@ -76,7 +76,7 @@ test "bench/popcount_bytes" (b : @bench.T) {
     b.keep(scalar_popcount_bytes(data))
   })
   b.bench(name="simd_popcount_4096", fn() {
-    b.keep(simd_popcount_bytes(data))
+    b.keep(popcount_bytes(data))
   })
 }
 
@@ -88,7 +88,7 @@ test "bench/memcpy_bytes" (b : @bench.T) {
     scalar_memcpy_bytes(src, 0, dst, 0, 4096)
   })
   b.bench(name="simd_memcpy_4096", fn() {
-    simd_memcpy_bytes(src, 0, dst, 0, 4096)
+    memcpy_bytes(src, 0, dst, 0, 4096)
   })
 }
 
@@ -99,7 +99,7 @@ test "bench/memset_bytes" (b : @bench.T) {
     scalar_memset_bytes(dst, 0, 4096, b'\x5a')
   })
   b.bench(name="simd_memset_4096", fn() {
-    simd_memset_bytes(dst, 0, 4096, b'\x5a')
+    memset_bytes(dst, 0, 4096, b'\x5a')
   })
 }
 
@@ -111,7 +111,7 @@ test "bench/equal_bytes" (b : @bench.T) {
     b.keep(scalar_equal_bytes(a, b_arr, 4096))
   })
   b.bench(name="simd_equal_4096", fn() {
-    b.keep(simd_equal_bytes(a, b_arr, 4096))
+    b.keep(equal_bytes(a, b_arr, 4096))
   })
 }
 
@@ -125,7 +125,7 @@ test "bench/find_byte" (b : @bench.T) {
     b.keep(scalar_find_byte(data, b'\xaa'))
   })
   b.bench(name="simd_find_byte_4096", fn() {
-    b.keep(simd_find_byte(data, b'\xaa'))
+    b.keep(find_byte(data, b'\xaa'))
   })
 }
 
@@ -136,7 +136,7 @@ test "bench/count_byte" (b : @bench.T) {
     b.keep(scalar_count_byte(data, b'\x07'))
   })
   b.bench(name="simd_count_byte_4096", fn() {
-    b.keep(simd_count_byte(data, b'\x07'))
+    b.keep(count_byte(data, b'\x07'))
   })
 }
 
@@ -157,7 +157,7 @@ test "bench/f64 add" (b : @bench.T) {
   let bb = make_bench_f64_array(1024)
   let out = FixedArray::make(1024, 0.0)
   b.bench(name="scalar_add_f64_1024", fn() { scalar_add_f64(a, bb, out) })
-  b.bench(name="simd_add_f64_1024", fn() { simd_add_f64(a, bb, out) })
+  b.bench(name="simd_add_f64_1024", fn() { add_f64(a, bb, out) })
 }
 
 ///|
@@ -166,7 +166,7 @@ test "bench/f64 mul" (b : @bench.T) {
   let bb = make_bench_f64_array(1024)
   let out = FixedArray::make(1024, 0.0)
   b.bench(name="scalar_mul_f64_1024", fn() { scalar_mul_f64(a, bb, out) })
-  b.bench(name="simd_mul_f64_1024", fn() { simd_mul_f64(a, bb, out) })
+  b.bench(name="simd_mul_f64_1024", fn() { mul_f64(a, bb, out) })
 }
 
 ///|
@@ -175,7 +175,7 @@ test "bench/f64 div" (b : @bench.T) {
   let bb = make_bench_f64_array(1024)
   let out = FixedArray::make(1024, 0.0)
   b.bench(name="scalar_div_f64_1024", fn() { scalar_div_f64(a, bb, out) })
-  b.bench(name="simd_div_f64_1024", fn() { simd_div_f64(a, bb, out) })
+  b.bench(name="simd_div_f64_1024", fn() { div_f64(a, bb, out) })
 }
 
 ///|
@@ -183,14 +183,14 @@ test "bench/f64 sqrt" (b : @bench.T) {
   let a = make_bench_f64_array(1024)
   let out = FixedArray::make(1024, 0.0)
   b.bench(name="scalar_sqrt_f64_1024", fn() { scalar_sqrt_f64(a, out) })
-  b.bench(name="simd_sqrt_f64_1024", fn() { simd_sqrt_f64(a, out) })
+  b.bench(name="simd_sqrt_f64_1024", fn() { sqrt_f64(a, out) })
 }
 
 ///|
 test "bench/f64 sum" (b : @bench.T) {
   let a = make_bench_f64_array(1024)
   b.bench(name="scalar_sum_f64_1024", fn() { b.keep(scalar_sum_f64(a)) })
-  b.bench(name="simd_sum_f64_1024", fn() { b.keep(simd_sum_f64(a)) })
+  b.bench(name="simd_sum_f64_1024", fn() { b.keep(sum_f64(a)) })
 }
 
 ///|
@@ -198,7 +198,7 @@ test "bench/f64 dot" (b : @bench.T) {
   let a = make_bench_f64_array(1024)
   let bb = make_bench_f64_array(1024)
   b.bench(name="scalar_dot_f64_1024", fn() { b.keep(scalar_dot_f64(a, bb)) })
-  b.bench(name="simd_dot_f64_1024", fn() { b.keep(simd_dot_f64(a, bb)) })
+  b.bench(name="simd_dot_f64_1024", fn() { b.keep(dot_f64(a, bb)) })
 }
 
 // --- Int element-wise ---
@@ -209,9 +209,9 @@ test "bench/sub_mul" (b : @bench.T) {
   let y = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_sub_1024", fn() { scalar_sub(x, y, out) })
-  b.bench(name="simd_sub_1024", fn() { simd_sub(x, y, out) })
+  b.bench(name="simd_sub_1024", fn() { sub_i32(x, y, out) })
   b.bench(name="scalar_mul_int_1024", fn() { scalar_mul(x, y, out) })
-  b.bench(name="simd_mul_int_1024", fn() { simd_mul(x, y, out) })
+  b.bench(name="simd_mul_int_1024", fn() { mul_i32(x, y, out) })
 }
 
 ///|
@@ -219,9 +219,9 @@ test "bench/neg_abs" (b : @bench.T) {
   let x = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_neg_1024", fn() { scalar_neg(x, out) })
-  b.bench(name="simd_neg_1024", fn() { simd_neg(x, out) })
+  b.bench(name="simd_neg_1024", fn() { neg_i32(x, out) })
   b.bench(name="scalar_abs_1024", fn() { scalar_abs(x, out) })
-  b.bench(name="simd_abs_1024", fn() { simd_abs(x, out) })
+  b.bench(name="simd_abs_1024", fn() { abs_i32(x, out) })
 }
 
 ///|
@@ -230,9 +230,9 @@ test "bench/min_max_elem" (b : @bench.T) {
   let y = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_min_elem_1024", fn() { scalar_min_elem(x, y, out) })
-  b.bench(name="simd_min_elem_1024", fn() { simd_min_elem(x, y, out) })
+  b.bench(name="simd_min_elem_1024", fn() { min_elem_i32(x, y, out) })
   b.bench(name="scalar_max_elem_1024", fn() { scalar_max_elem(x, y, out) })
-  b.bench(name="simd_max_elem_1024", fn() { simd_max_elem(x, y, out) })
+  b.bench(name="simd_max_elem_1024", fn() { max_elem_i32(x, y, out) })
 }
 
 ///|
@@ -241,9 +241,9 @@ test "bench/compare_mask" (b : @bench.T) {
   let y = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_eq_1024", fn() { scalar_eq(x, y, out) })
-  b.bench(name="simd_eq_1024", fn() { simd_eq(x, y, out) })
+  b.bench(name="simd_eq_1024", fn() { eq_i32(x, y, out) })
   b.bench(name="scalar_lt_1024", fn() { scalar_lt(x, y, out) })
-  b.bench(name="simd_lt_1024", fn() { simd_lt(x, y, out) })
+  b.bench(name="simd_lt_1024", fn() { lt_i32(x, y, out) })
 }
 
 // --- f32 over byte buffer ---
@@ -264,7 +264,7 @@ test "bench/f32 add" (b : @bench.T) {
   let bb = make_bench_f32_buf(n)
   let out = f32_buf_alloc(n)
   b.bench(name="scalar_add_f32_1024", fn() { scalar_add_f32(aa, bb, out, n) })
-  b.bench(name="simd_add_f32_1024", fn() { simd_add_f32(aa, bb, out, n) })
+  b.bench(name="simd_add_f32_1024", fn() { add_f32(aa, bb, out, n) })
 }
 
 ///|
@@ -272,7 +272,7 @@ test "bench/f32 sum" (b : @bench.T) {
   let n = 1024
   let aa = make_bench_f32_buf(n)
   b.bench(name="scalar_sum_f32_1024", fn() { b.keep(scalar_sum_f32(aa, n)) })
-  b.bench(name="simd_sum_f32_1024", fn() { b.keep(simd_sum_f32(aa, n)) })
+  b.bench(name="simd_sum_f32_1024", fn() { b.keep(sum_f32(aa, n)) })
 }
 
 ///|
@@ -284,7 +284,7 @@ test "bench/f32 dot" (b : @bench.T) {
     b.keep(scalar_dot_f32(aa, bb, n))
   })
   b.bench(name="simd_dot_f32_1024", fn() {
-    b.keep(simd_dot_f32(aa, bb, n))
+    b.keep(dot_f32(aa, bb, n))
   })
 }
 
@@ -292,9 +292,9 @@ test "bench/f32 dot" (b : @bench.T) {
 test "bench/argmin_argmax" (b : @bench.T) {
   let arr = make_bench_int_array(1024)
   b.bench(name="scalar_argmin_1024", fn() { b.keep(scalar_argmin(arr)) })
-  b.bench(name="simd_argmin_1024", fn() { b.keep(simd_argmin(arr)) })
+  b.bench(name="simd_argmin_1024", fn() { b.keep(argmin_i32(arr)) })
   b.bench(name="scalar_argmax_1024", fn() { b.keep(scalar_argmax(arr)) })
-  b.bench(name="simd_argmax_1024", fn() { b.keep(simd_argmax(arr)) })
+  b.bench(name="simd_argmax_1024", fn() { b.keep(argmax_i32(arr)) })
 }
 
 // --- reductions ---
@@ -306,14 +306,14 @@ test "bench/prod" (b : @bench.T) {
     arr[i] = i % 3 + 1
   }
   b.bench(name="scalar_prod_1024", fn() { b.keep(scalar_prod(arr)) })
-  b.bench(name="simd_prod_1024", fn() { b.keep(simd_prod(arr)) })
+  b.bench(name="simd_prod_1024", fn() { b.keep(prod_i32(arr)) })
 }
 
 ///|
 test "bench/var_f64" (b : @bench.T) {
   let arr = make_bench_f64_array(1024)
   b.bench(name="scalar_var_f64_1024", fn() { b.keep(scalar_var_f64(arr)) })
-  b.bench(name="simd_var_f64_1024", fn() { b.keep(simd_var_f64(arr)) })
+  b.bench(name="simd_var_f64_1024", fn() { b.keep(var_f64(arr)) })
 }
 
 ///|
@@ -327,7 +327,7 @@ test "bench/count_nonzero" (b : @bench.T) {
     b.keep(scalar_count_nonzero(arr))
   })
   b.bench(name="simd_count_nonzero_1024", fn() {
-    b.keep(simd_count_nonzero(arr))
+    b.keep(count_nonzero_i32(arr))
   })
 }
 
@@ -335,9 +335,9 @@ test "bench/count_nonzero" (b : @bench.T) {
 test "bench/all_any" (b : @bench.T) {
   let arr = make_bench_int_array(1024) // all non-zero
   b.bench(name="scalar_all_1024", fn() { b.keep(scalar_all(arr)) })
-  b.bench(name="simd_all_1024", fn() { b.keep(simd_all(arr)) })
+  b.bench(name="simd_all_1024", fn() { b.keep(all_i32(arr)) })
   b.bench(name="scalar_any_1024", fn() { b.keep(scalar_any(arr)) })
-  b.bench(name="simd_any_1024", fn() { b.keep(simd_any(arr)) })
+  b.bench(name="simd_any_1024", fn() { b.keep(any_i32(arr)) })
 }
 
 // --- linear algebra ---
@@ -356,7 +356,7 @@ test "bench/matmul_f64 64x64" (b : @bench.T) {
     scalar_matmul_f64(a, b_t, c, dim, dim, dim)
   })
   b.bench(name="simd_matmul_f64_64x64", fn() {
-    simd_matmul_f64(a, b_t, c, dim, dim, dim)
+    matmul_f64(a, b_t, c, dim, dim, dim)
   })
 }
 
@@ -369,7 +369,7 @@ test "bench/div_int" (b : @bench.T) {
   }
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_div_int_1024", fn() { scalar_div(aa, bb, out) })
-  b.bench(name="simd_div_int_1024", fn() { simd_div(aa, bb, out) })
+  b.bench(name="simd_div_int_1024", fn() { div_i32(aa, bb, out) })
 }
 
 ///|
@@ -377,14 +377,14 @@ test "bench/cumsum_cumprod" (b : @bench.T) {
   let arr = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_cumsum_1024", fn() { scalar_cumsum(arr, out) })
-  b.bench(name="simd_cumsum_1024", fn() { simd_cumsum(arr, out) })
+  b.bench(name="simd_cumsum_1024", fn() { cumsum_i32(arr, out) })
   // small values for cumprod to avoid overflow noise
   let small = FixedArray::make(1024, 1)
   for i in 0..<1024 {
     small[i] = i % 3 + 1
   }
   b.bench(name="scalar_cumprod_1024", fn() { scalar_cumprod(small, out) })
-  b.bench(name="simd_cumprod_1024", fn() { simd_cumprod(small, out) })
+  b.bench(name="simd_cumprod_1024", fn() { cumprod_i32(small, out) })
 }
 
 // --- UTF-8 validation ---
@@ -400,7 +400,7 @@ test "bench/validate_utf8 ASCII" (b : @bench.T) {
     b.keep(scalar_validate_utf8(data))
   })
   b.bench(name="simd_utf8_ascii_4096", fn() {
-    b.keep(simd_validate_utf8(data))
+    b.keep(validate_utf8(data))
   })
 }
 
@@ -424,7 +424,7 @@ test "bench/validate_utf8 mixed" (b : @bench.T) {
     b.keep(scalar_validate_utf8(data))
   })
   b.bench(name="simd_utf8_mixed_4000", fn() {
-    b.keep(simd_validate_utf8(data))
+    b.keep(validate_utf8(data))
   })
 }
 
@@ -438,7 +438,7 @@ test "bench/is_ascii" (b : @bench.T) {
     data[i] = (65 + i % 26).to_byte()
   }
   b.bench(name="scalar_is_ascii_4096", fn() { b.keep(scalar_is_ascii(data)) })
-  b.bench(name="simd_is_ascii_4096", fn() { b.keep(simd_is_ascii(data)) })
+  b.bench(name="simd_is_ascii_4096", fn() { b.keep(is_ascii(data)) })
 }
 
 ///|
@@ -459,7 +459,7 @@ test "bench/to_lower_ascii" (b : @bench.T) {
     for i in 0..<n {
       scratch[i] = data[i]
     }
-    simd_to_lower_ascii(scratch)
+    to_lower_ascii(scratch)
   })
 }
 
@@ -486,7 +486,7 @@ test "bench/sort16_int" (b : @bench.T) {
       scratch[i] = arr[i]
     }
     for j = 0; j < n; j = j + 16 {
-      simd_sort16_int(scratch, j)
+      sort16_i32(scratch, j)
     }
   })
 }
@@ -501,13 +501,13 @@ test "bench/gather_scatter" (b : @bench.T) {
   }
   let out = FixedArray::make(n, 0)
   b.bench(name="scalar_gather_1024", fn() { scalar_gather(arr, indices, out) })
-  b.bench(name="simd_gather_1024", fn() { simd_gather(arr, indices, out) })
+  b.bench(name="simd_gather_1024", fn() { gather_i32(arr, indices, out) })
   let target = FixedArray::make(n, 0)
   b.bench(name="scalar_scatter_1024", fn() {
     scalar_scatter(target, indices, arr)
   })
   b.bench(name="simd_scatter_1024", fn() {
-    simd_scatter(target, indices, arr)
+    scatter_i32(target, indices, arr)
   })
 }
 
@@ -532,7 +532,7 @@ test "bench/sort4_int" (b : @bench.T) {
       scratch[i] = arr[i]
     }
     for j = 0; j < n; j = j + 4 {
-      simd_sort4_int(scratch, j)
+      sort4_i32(scratch, j)
     }
   })
 }
@@ -550,7 +550,7 @@ test "bench/transpose_f64 128x128" (b : @bench.T) {
     scalar_transpose_f64(a, out, m, n)
   })
   b.bench(name="simd_transpose_128x128", fn() {
-    simd_transpose_f64(a, out, m, n)
+    transpose_f64(a, out, m, n)
   })
 }
 
@@ -571,7 +571,7 @@ test "bench/gemv_f64 256x256" (b : @bench.T) {
     scalar_gemv_f64(a, x, y, m, n)
   })
   b.bench(name="simd_gemv_f64_256x256", fn() {
-    simd_gemv_f64(a, x, y, m, n)
+    gemv_f64(a, x, y, m, n)
   })
 }
 
@@ -587,5 +587,5 @@ test "bench/where" (b : @bench.T) {
   let y = make_bench_int_array(1024)
   let out = FixedArray::make(1024, 0)
   b.bench(name="scalar_where_1024", fn() { scalar_where(mask, x, y, out) })
-  b.bench(name="simd_where_1024", fn() { simd_where(mask, x, y, out) })
+  b.bench(name="simd_where_1024", fn() { where_i32(mask, x, y, out) })
 }
