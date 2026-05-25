@@ -360,7 +360,80 @@ test "bench/matmul_f64 64x64" (b : @bench.T) {
   })
 }
 
+///|
+test "bench/div_int" (b : @bench.T) {
+  let aa = make_bench_int_array(1024)
+  let bb = FixedArray::make(1024, 0)
+  for i in 0..<1024 {
+    bb[i] = i % 7 + 1
+  }
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_div_int_1024", fn() { scalar_div(aa, bb, out) })
+  b.bench(name="simd_div_int_1024", fn() { simd_div(aa, bb, out) })
+}
+
+///|
+test "bench/cumsum_cumprod" (b : @bench.T) {
+  let arr = make_bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_cumsum_1024", fn() { scalar_cumsum(arr, out) })
+  b.bench(name="simd_cumsum_1024", fn() { simd_cumsum(arr, out) })
+  // small values for cumprod to avoid overflow noise
+  let small = FixedArray::make(1024, 1)
+  for i in 0..<1024 {
+    small[i] = i % 3 + 1
+  }
+  b.bench(name="scalar_cumprod_1024", fn() { scalar_cumprod(small, out) })
+  b.bench(name="simd_cumprod_1024", fn() { simd_cumprod(small, out) })
+}
+
 // --- sort ---
+
+///|
+test "bench/sort16_int" (b : @bench.T) {
+  let n = 1024 // 64 blocks of 16
+  let arr = FixedArray::make(n, 0)
+  for i in 0..<n {
+    arr[i] = (i * 17 + 11) % 251
+  }
+  let scratch = FixedArray::make(n, 0)
+  b.bench(name="scalar_sort16_x64", fn() {
+    for i in 0..<n {
+      scratch[i] = arr[i]
+    }
+    for j = 0; j < n; j = j + 16 {
+      scalar_sort16_int(scratch, j)
+    }
+  })
+  b.bench(name="simd_sort16_x64", fn() {
+    for i in 0..<n {
+      scratch[i] = arr[i]
+    }
+    for j = 0; j < n; j = j + 16 {
+      simd_sort16_int(scratch, j)
+    }
+  })
+}
+
+///|
+test "bench/gather_scatter" (b : @bench.T) {
+  let n = 1024
+  let arr = make_bench_int_array(n)
+  let indices = FixedArray::make(n, 0)
+  for i in 0..<n {
+    indices[i] = (i * 31) % n
+  }
+  let out = FixedArray::make(n, 0)
+  b.bench(name="scalar_gather_1024", fn() { scalar_gather(arr, indices, out) })
+  b.bench(name="simd_gather_1024", fn() { simd_gather(arr, indices, out) })
+  let target = FixedArray::make(n, 0)
+  b.bench(name="scalar_scatter_1024", fn() {
+    scalar_scatter(target, indices, arr)
+  })
+  b.bench(name="simd_scatter_1024", fn() {
+    simd_scatter(target, indices, arr)
+  })
+}
 
 ///|
 test "bench/sort4_int" (b : @bench.T) {

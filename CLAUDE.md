@@ -152,6 +152,58 @@ The huge ratio reflects that the scalar path pays per-element `f32_buf_get` / `f
 
 `v128.const` is still parser-blocked, but **`i8x16.shuffle` immediates parse fine** — that opens the door to lane-permutation tricks (sort networks, transpose, prefix sum) without needing a precomputed `FixedArray[Byte]` table.
 
+## Prefix scan, integer div, gather/scatter, sort16
+
+### `simd_cumsum` / `simd_cumprod`
+
+Hillis-Steele prefix scan on i32x4: two `i8x16.shuffle` + `i32x4.add` (or `mul`) stages within a chunk, then a `i32x4.splat(running)` step to fold in the previous chunk's tail. cumprod uses lane-fill 1 (multiplicative identity) and running = 1.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| cumsum | 1024 | 1.36 µs | 854 ns | 1.6 |
+| cumprod | 1024 | 1.34 µs | 934 ns | 1.4 |
+
+The gains are modest because the cross-chunk dependency (`running` updated each iteration) serializes the loop.
+
+### `simd_div` (Int via f64x2)
+
+wasm SIMD has no `i32x4.div_s` / `i32x4.div_u`. Workaround: widen each i32x4 to two f64x2s (lanes 0,1 via `f64x2.convert_low_i32x4_s`, lanes 2,3 via `i8x16.shuffle` swap + the same convert), do `f64x2.div`, narrow back with `i32x4.trunc_sat_f64x2_s_zero`, and recombine with one more `i8x16.shuffle`. f64 mantissa (53 bits) > i32 width (31 bits) so the round-trip is exact for representable quotients; trap semantics on `b == 0` change from `i32.div_s`'s trap to NaN-trunc-to-zero, which is the caller's responsibility.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| div_int | 1024 | 2.88 µs | 458 ns | 6.3 |
+
+### `simd_gather` / `simd_scatter`
+
+`simd_gather` builds each output v128 with `i32.const 0 i32x4.splat` + four `i32x4.replace_lane` (each taking a scalar `i32.load` from `arr + indices[i+k] * 4`), then writes once with `v128.store`. wasm has no real gather instruction so the read side stays scalar; the win comes from fusing four stores into one.
+
+`simd_scatter` falls through to scalar — random writes can't be vectorized without conflict detection.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| gather | 1024 | 2.09 µs | 406 ns | 5.1 |
+| scatter | 1024 | 2.06 µs | 2.02 µs | 1.02 |
+
+### `simd_sort16_int`
+
+Sort 16 elements by running `simd_sort4_int` on each of the four 4-element sub-blocks, then a scalar 3-stage merge (4+4 → 8, 4+4 → 8, 8+8 → 16) into a 16-element scratch buffer. Only the leaf sort is vectorized; merging stays scalar (bitonic SIMD merge is the next step but isn't here yet).
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| sort16_int × 64 | 1024 | 9.14 µs | 8.56 µs | 1.07 |
+
+The ratio is close to 1 because the merge stage dominates and runs scalar. A future SIMD bitonic merge would bring this closer to the leaf 1.7x.
+
+## More parser surface that works
+
+Added during these passes:
+
+- `f64x2.convert_low_i32x4_s` / `i32x4.trunc_sat_f64x2_s_zero` (lane-width conversion)
+- `i32x4.replace_lane <lane>` (immediate lane index)
+- `i32x4.{neg, abs, eq, ne, lt_s, gt_s}`, `i32x4.bitmask`
+- `v128.bitselect`
+- `f32x4.{add, mul, extract_lane, splat}`, `f32.{add, mul, sub, div, sqrt, load, store, convert_i32_s}` — but **not** `f32.min` / `f32.max` (likely same hole as `f64.min` / `f64.max`)
+
 ## Inline-WAT gotchas worth remembering
 
 - `i32.and` is bitwise, **not** logical: combining a `0/1` boolean with a

@@ -367,8 +367,40 @@ pub fn simd_dot_f32(
 }
 
 ///|
+pub fn simd_div(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  scalar_div(a, b, out)
+}
+
+///|
+pub fn simd_gather(
+  arr : FixedArray[Int],
+  indices : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  scalar_gather(arr, indices, out)
+}
+
+///|
+pub fn simd_scatter(
+  out : FixedArray[Int],
+  indices : FixedArray[Int],
+  vals : FixedArray[Int],
+) -> Unit {
+  scalar_scatter(out, indices, vals)
+}
+
+///|
 pub fn simd_sort4_int(arr : FixedArray[Int], off : Int) -> Unit {
   scalar_sort4_int(arr, off)
+}
+
+///|
+pub fn simd_sort16_int(arr : FixedArray[Int], off : Int) -> Unit {
+  scalar_sort16_int(arr, off)
 }
 
 ///|

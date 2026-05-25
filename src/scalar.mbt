@@ -311,6 +311,46 @@ pub fn scalar_where(
   }
 }
 
+///|
+pub fn scalar_div(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i] / b[i]
+  }
+}
+
+// --- gather / scatter (G) ---
+
+///|
+/// out[i] = arr[indices[i]] (numpy fancy indexing).
+pub fn scalar_gather(
+  arr : FixedArray[Int],
+  indices : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let n = indices.length()
+  for i in 0..<n {
+    out[i] = arr[indices[i]]
+  }
+}
+
+///|
+/// out[indices[i]] = vals[i].
+pub fn scalar_scatter(
+  out : FixedArray[Int],
+  indices : FixedArray[Int],
+  vals : FixedArray[Int],
+) -> Unit {
+  let n = indices.length()
+  for i in 0..<n {
+    out[indices[i]] = vals[i]
+  }
+}
+
 // --- sort (F) ---
 
 ///|
@@ -352,6 +392,60 @@ pub fn scalar_sort4_int(arr : FixedArray[Int], off : Int) -> Unit {
   arr[off + 1] = b
   arr[off + 2] = c
   arr[off + 3] = d
+}
+
+///|
+/// 2-way merge of two sorted slices into `out` at `out_off`.
+pub fn scalar_merge2_int(
+  a : FixedArray[Int],
+  a_off : Int,
+  a_len : Int,
+  b : FixedArray[Int],
+  b_off : Int,
+  b_len : Int,
+  out : FixedArray[Int],
+  out_off : Int,
+) -> Unit {
+  let mut i = 0
+  let mut j = 0
+  let mut k = 0
+  while i < a_len && j < b_len {
+    if a[a_off + i] <= b[b_off + j] {
+      out[out_off + k] = a[a_off + i]
+      i = i + 1
+    } else {
+      out[out_off + k] = b[b_off + j]
+      j = j + 1
+    }
+    k = k + 1
+  }
+  while i < a_len {
+    out[out_off + k] = a[a_off + i]
+    i = i + 1
+    k = k + 1
+  }
+  while j < b_len {
+    out[out_off + k] = b[b_off + j]
+    j = j + 1
+    k = k + 1
+  }
+}
+
+///|
+/// Sort 16 elements via 4 sub-sorts of 4 plus a 4+4 → 8 + 4+4 → 8 + 8+8 → 16
+/// scalar merge chain. Reference implementation for `simd_sort16_int`.
+pub fn scalar_sort16_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 16 > arr.length() || off < 0 {
+    return
+  }
+  scalar_sort4_int(arr, off + 0)
+  scalar_sort4_int(arr, off + 4)
+  scalar_sort4_int(arr, off + 8)
+  scalar_sort4_int(arr, off + 12)
+  let tmp = FixedArray::make(16, 0)
+  scalar_merge2_int(arr, off + 0, 4, arr, off + 4, 4, tmp, 0)
+  scalar_merge2_int(arr, off + 8, 4, arr, off + 12, 4, tmp, 8)
+  scalar_merge2_int(tmp, 0, 8, tmp, 8, 8, arr, off)
 }
 
 ///|

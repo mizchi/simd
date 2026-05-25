@@ -365,16 +365,36 @@ pub fn simd_all(arr : FixedArray[Int]) -> Bool {
 }
 
 ///|
-/// cumsum / cumprod stay scalar: dependency chain across lanes makes a
-/// 4-way SIMD prefix sum require cross-lane shuffles whose 16-byte index
-/// pattern would need to live in a precomputed FixedArray[Byte].
+/// Hillis-Steele prefix sum on i32x4: two stages of (shuffle-left + add) per
+/// chunk, then add the running sum from the previous chunk via splat.
+#borrow(arr, out)
+fn simd_cumsum_v128(arr : FixedArray[Int], out : FixedArray[Int], len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) i32.const 0 i32x4.splat local.set 6 i32.const 0 local.set 5 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 7 local.get 6 local.get 7 i8x16.shuffle 0 1 2 3 16 17 18 19 20 21 22 23 24 25 26 27 local.get 7 i32x4.add local.set 8 local.get 6 local.get 8 i8x16.shuffle 0 1 2 3 4 5 6 7 16 17 18 19 20 21 22 23 local.get 8 i32x4.add local.set 9 local.get 5 i32x4.splat local.get 9 i32x4.add local.set 7 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 7 v128.store local.get 7 i32x4.extract_lane 3 local.set 5 local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load i32.add local.set 5 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 5 i32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
 pub fn simd_cumsum(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
-  scalar_cumsum(arr, out)
+  let len = arr.length()
+  if len == 0 {
+    return
+  }
+  simd_cumsum_v128(arr, out, len)
 }
 
 ///|
+/// Hillis-Steele prefix product on i32x4. Same shape as cumsum but the
+/// "fill" lanes are 1 (identity for mul), the running accumulator starts at
+/// 1, and chunks combine via mul.
+#borrow(arr, out)
+fn simd_cumprod_v128(arr : FixedArray[Int], out : FixedArray[Int], len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) i32.const 1 i32x4.splat local.set 6 i32.const 1 local.set 5 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 7 local.get 6 local.get 7 i8x16.shuffle 0 1 2 3 16 17 18 19 20 21 22 23 24 25 26 27 local.get 7 i32x4.mul local.set 8 local.get 6 local.get 8 i8x16.shuffle 0 1 2 3 4 5 6 7 16 17 18 19 20 21 22 23 local.get 8 i32x4.mul local.set 9 local.get 5 i32x4.splat local.get 9 i32x4.mul local.set 7 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 7 v128.store local.get 7 i32x4.extract_lane 3 local.set 5 local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load i32.mul local.set 5 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 5 i32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
 pub fn simd_cumprod(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
-  scalar_cumprod(arr, out)
+  let len = arr.length()
+  if len == 0 {
+    return
+  }
+  simd_cumprod_v128(arr, out, len)
 }
 
 // --- linear algebra (C) ---
@@ -686,6 +706,72 @@ pub fn simd_where(
   simd_where_v128(mask, a, b, out, len)
 }
 
+///|
+/// SIMD i32 div: wasm has no i32x4.div, so we widen lanes (0,1) and (2,3)
+/// to f64x2, do f64x2.div, truncate back via i32x4.trunc_sat_f64x2_s_zero,
+/// and recombine with i8x16.shuffle. i32 range fits in f64 mantissa, so
+/// the round-trip is exact for representable quotients.
+#borrow(a, b, out)
+fn simd_div_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.set 6 local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load local.set 7 local.get 6 f64x2.convert_low_i32x4_s local.set 8 local.get 7 f64x2.convert_low_i32x4_s local.set 9 local.get 8 local.get 9 f64x2.div i32x4.trunc_sat_f64x2_s_zero local.set 10 local.get 6 local.get 6 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 f64x2.convert_low_i32x4_s local.set 8 local.get 7 local.get 7 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 f64x2.convert_low_i32x4_s local.set 9 local.get 8 local.get 9 f64x2.div i32x4.trunc_sat_f64x2_s_zero local.set 11 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 10 local.get 11 i8x16.shuffle 0 1 2 3 4 5 6 7 16 17 18 19 20 21 22 23 v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.div_s i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_div(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_div_v128(a, b, out, len)
+}
+
+// --- gather / scatter (G) ---
+
+///|
+/// Gather 4 elements per chunk: read 4 indices, scalar-load 4 values, build
+/// a v128 via i32x4.replace_lane, then v128.store. wasm SIMD has no real
+/// gather instruction so this mostly saves on the store side.
+#borrow(arr, indices, out)
+fn simd_gather_v128(
+  arr : FixedArray[Int],
+  indices : FixedArray[Int],
+  out : FixedArray[Int],
+  n : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add i32.const 0 i32x4.splat local.get 0 local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 0 local.get 0 local.get 1 local.get 4 i32.const 1 i32.add i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 1 local.get 0 local.get 1 local.get 4 i32.const 2 i32.add i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 2 local.get 0 local.get 1 local.get 4 i32.const 3 i32.add i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 3 v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_gather(
+  arr : FixedArray[Int],
+  indices : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let n = indices.length()
+  if n == 0 {
+    return
+  }
+  simd_gather_v128(arr, indices, out, n)
+}
+
+///|
+/// scatter is fundamentally scalar — random writes can't be vectorized
+/// without lock-step / conflict-detection (which wasm SIMD lacks).
+pub fn simd_scatter(
+  out : FixedArray[Int],
+  indices : FixedArray[Int],
+  vals : FixedArray[Int],
+) -> Unit {
+  scalar_scatter(out, indices, vals)
+}
+
 // --- sort (F) ---
 
 ///|
@@ -702,6 +788,24 @@ pub fn simd_sort4_int(arr : FixedArray[Int], off : Int) -> Unit {
     return
   }
   simd_sort4_v128(arr, off)
+}
+
+///|
+/// Sort 16 elements: 4 SIMD sort4 sub-sorts plus a 3-stage scalar merge.
+/// Only the leaf 4-element sort is vectorized; merging stays scalar (SIMD
+/// merge would need a bitonic merge network).
+pub fn simd_sort16_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 16 > arr.length() || off < 0 {
+    return
+  }
+  simd_sort4_int(arr, off + 0)
+  simd_sort4_int(arr, off + 4)
+  simd_sort4_int(arr, off + 8)
+  simd_sort4_int(arr, off + 12)
+  let tmp = FixedArray::make(16, 0)
+  scalar_merge2_int(arr, off + 0, 4, arr, off + 4, 4, tmp, 0)
+  scalar_merge2_int(arr, off + 8, 4, arr, off + 12, 4, tmp, 8)
+  scalar_merge2_int(tmp, 0, 8, tmp, 8, 8, arr, off)
 }
 
 ///|

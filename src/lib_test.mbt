@@ -473,6 +473,83 @@ test "simd_where end-to-end with simd_lt as mask producer" {
   assert_eq(out[4], 50)
 }
 
+// --- gather / scatter (G) ---
+
+///|
+test "simd_gather basic" {
+  let arr = make_int_array([10, 20, 30, 40, 50, 60, 70, 80, 90])
+  let indices = make_int_array([3, 0, 7, 8, 1])
+  let out = FixedArray::make(5, 0)
+  simd_gather(arr, indices, out)
+  // expected: arr[3], arr[0], arr[7], arr[8], arr[1] = 40, 10, 80, 90, 20
+  assert_eq(out[0], 40)
+  assert_eq(out[1], 10)
+  assert_eq(out[2], 80)
+  assert_eq(out[3], 90)
+  assert_eq(out[4], 20)
+}
+
+///|
+test "simd_gather matches scalar (large)" {
+  let n = 100
+  let arr = FixedArray::make(n, 0)
+  for i in 0..<n {
+    arr[i] = i * 3
+  }
+  let indices = FixedArray::make(50, 0)
+  for i in 0..<50 {
+    indices[i] = (i * 7) % n
+  }
+  let out_s = FixedArray::make(50, 0)
+  let out_r = FixedArray::make(50, 0)
+  simd_gather(arr, indices, out_s)
+  scalar_gather(arr, indices, out_r)
+  for i in 0..<50 {
+    assert_eq(out_s[i], out_r[i])
+  }
+}
+
+///|
+test "simd_scatter basic" {
+  let out = FixedArray::make(10, 0)
+  let indices = make_int_array([0, 3, 7, 1, 9])
+  let vals = make_int_array([100, 200, 300, 400, 500])
+  simd_scatter(out, indices, vals)
+  assert_eq(out[0], 100)
+  assert_eq(out[1], 400)
+  assert_eq(out[3], 200)
+  assert_eq(out[7], 300)
+  assert_eq(out[9], 500)
+}
+
+// --- div (Int via f64x2 detour) ---
+
+///|
+test "simd_div matches scalar (positive)" {
+  let a = make_int_array([100, 81, 64, 49, 36, 25, 16, 9, 4])
+  let b = make_int_array([2, 3, 4, 5, 6, 7, 8, 9, 1])
+  let out_s = FixedArray::make(9, 0)
+  let out_r = FixedArray::make(9, 0)
+  simd_div(a, b, out_s)
+  scalar_div(a, b, out_r)
+  for i in 0..<9 {
+    assert_eq(out_s[i], out_r[i])
+  }
+}
+
+///|
+test "simd_div matches scalar (negatives, truncation)" {
+  let a = make_int_array([-10, -7, 7, -7, 100, -100, 13, -13])
+  let b = make_int_array([3, 3, -3, -3, -7, 7, -2, 2])
+  let out_s = FixedArray::make(8, 0)
+  let out_r = FixedArray::make(8, 0)
+  simd_div(a, b, out_s)
+  scalar_div(a, b, out_r)
+  for i in 0..<8 {
+    assert_eq(out_s[i], out_r[i])
+  }
+}
+
 // --- sort (F) ---
 
 ///|
@@ -525,6 +602,42 @@ test "simd_sort_int general" {
   for i in 0..<10 {
     assert_eq(arr[i], i)
   }
+}
+
+///|
+test "simd_sort16_int basic" {
+  let arr = make_int_array([15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4])
+  simd_sort16_int(arr, 0)
+  for i in 0..<16 {
+    assert_eq(arr[i], i)
+  }
+}
+
+///|
+test "simd_sort16_int matches scalar (random)" {
+  let arr_s = FixedArray::make(16, 0)
+  let arr_r = FixedArray::make(16, 0)
+  for i in 0..<16 {
+    let v = (i * 17 + 5) % 31
+    arr_s[i] = v
+    arr_r[i] = v
+  }
+  simd_sort16_int(arr_s, 0)
+  scalar_sort16_int(arr_r, 0)
+  for i in 0..<16 {
+    assert_eq(arr_s[i], arr_r[i])
+  }
+}
+
+///|
+test "simd_sort16_int with offset surrounded by sentinels" {
+  let arr = make_int_array([99, 15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4, 88])
+  simd_sort16_int(arr, 1)
+  assert_eq(arr[0], 99)
+  for i in 0..<16 {
+    assert_eq(arr[i + 1], i)
+  }
+  assert_eq(arr[17], 88)
 }
 
 // --- f32 over byte buffer ---
