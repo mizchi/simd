@@ -109,6 +109,49 @@ first non-zero element. On a buffer of mostly zeros (the worst case for the
 scalar path) the SIMD version reads every chunk at constant cost; pick the
 implementation based on expected input shape.
 
+## Extensions (argmin/argmax SIMD, transpose, f32, sort)
+
+### argmin / argmax (Int)
+
+Two-pass SIMD: run `simd_min_v128` / `simd_max_v128` first, then use a private `simd_find_int_v128` (i32x4.eq + bitmask + ctz with `select`-based found tracking, same shape as `simd_find_byte`).
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| argmin | 1024 | 761 ns | 530 ns | 1.4 |
+| argmax | 1024 | 1.25 µs | 504 ns | 2.5 |
+
+### simd_transpose_f64
+
+2x2 f64 block via two `v128.load` + two `i8x16.shuffle` immediates + two `v128.store`. Falls back to scalar when either dimension is odd.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| transpose_f64 | 128×128 | 27.3 µs | 8.71 µs | 3.1 |
+
+### f32 over byte-buffer
+
+`FixedArray[Float]` is rejected at the FFI boundary ("Invalid stub type"), and so is `FixedArray[UInt]`. The workable shape is `FixedArray[Byte]` with 4 bytes per element (little-endian IEEE-754) and `Float`-aware helpers (`f32_buf_alloc` / `f32_buf_get` / `f32_buf_set`). The SIMD path is `f32x4` (4-way).
+
+Ops implemented: `simd_{add,mul,sum,dot}_f32`.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| add | 1024 | 11.06 µs | 139 ns | 79.7 |
+| sum | 1024 | 3.73 µs | 146 ns | 25.5 |
+| dot | 1024 | 7.24 µs | 169 ns | 42.8 |
+
+The huge ratio reflects that the scalar path pays per-element `f32_buf_get` / `f32_buf_set` (UInt bit-decode), while the SIMD path goes straight from `v128.load` to `f32x4.*` and back. Treat it as "cost of staying in byte-buffer representation," not as a pure ALU benchmark.
+
+### simd_sort
+
+`simd_sort4_int(arr, off)` sorts a 4-element window in place using a 3-stage sorting network: `i8x16.shuffle` + `i32x4.min_s` / `i32x4.max_s` + blend `i8x16.shuffle`. `simd_sort_int(arr)` defers to the built-in `FixedArray::sort` — a full SIMD merge sort would build on `simd_sort4_int` as the leaf kernel.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| sort4_int x 256 | 1024 | 4.22 µs | 2.49 µs | 1.7 |
+
+`v128.const` is still parser-blocked, but **`i8x16.shuffle` immediates parse fine** — that opens the door to lane-permutation tricks (sort networks, transpose, prefix sum) without needing a precomputed `FixedArray[Byte]` table.
+
 ## Inline-WAT gotchas worth remembering
 
 - `i32.and` is bitwise, **not** logical: combining a `0/1` boolean with a

@@ -473,6 +473,132 @@ test "simd_where end-to-end with simd_lt as mask producer" {
   assert_eq(out[4], 50)
 }
 
+// --- sort (F) ---
+
+///|
+test "scalar_sort4_int sorts in place" {
+  let arr = make_int_array([4, 1, 3, 2])
+  scalar_sort4_int(arr, 0)
+  assert_eq(arr[0], 1)
+  assert_eq(arr[1], 2)
+  assert_eq(arr[2], 3)
+  assert_eq(arr[3], 4)
+}
+
+///|
+test "simd_sort4_int matches scalar" {
+  let pairs = [
+    [4, 1, 3, 2],
+    [-5, -3, -1, -10],
+    [7, 7, 7, 7],
+    [1, 2, 3, 4],
+    [4, 3, 2, 1],
+    [100, -50, 0, 25],
+  ]
+  for p in pairs {
+    let simd_arr = make_int_array(p)
+    let scalar_arr = make_int_array(p)
+    simd_sort4_int(simd_arr, 0)
+    scalar_sort4_int(scalar_arr, 0)
+    for i in 0..<4 {
+      assert_eq(simd_arr[i], scalar_arr[i])
+    }
+  }
+}
+
+///|
+test "simd_sort4_int with offset" {
+  let arr = make_int_array([99, 4, 1, 3, 2, 88])
+  simd_sort4_int(arr, 1)
+  assert_eq(arr[0], 99)
+  assert_eq(arr[1], 1)
+  assert_eq(arr[2], 2)
+  assert_eq(arr[3], 3)
+  assert_eq(arr[4], 4)
+  assert_eq(arr[5], 88)
+}
+
+///|
+test "simd_sort_int general" {
+  let arr = make_int_array([5, 2, 8, 1, 9, 3, 7, 4, 6, 0])
+  simd_sort_int(arr)
+  for i in 0..<10 {
+    assert_eq(arr[i], i)
+  }
+}
+
+// --- f32 over byte buffer ---
+
+///|
+fn make_f32_buf(vals : Array[Float]) -> FixedArray[Byte] {
+  let n = vals.length()
+  let buf = f32_buf_alloc(n)
+  for i in 0..<n {
+    f32_buf_set(buf, i, vals[i])
+  }
+  buf
+}
+
+///|
+fn assert_f32_close(a : Float, b : Float, eps~ : Float = (1.0e-5 : Float)) -> Unit {
+  let d = (a - b).abs()
+  if d > eps {
+    abort("expected ~" + b.to_double().to_string() + " got " + a.to_double().to_string())
+  }
+}
+
+///|
+test "f32 buf round-trip" {
+  let buf = f32_buf_alloc(3)
+  f32_buf_set(buf, 0, (1.5 : Float))
+  f32_buf_set(buf, 1, (2.25 : Float))
+  f32_buf_set(buf, 2, (-3.5 : Float))
+  assert_f32_close(f32_buf_get(buf, 0), (1.5 : Float))
+  assert_f32_close(f32_buf_get(buf, 1), (2.25 : Float))
+  assert_f32_close(f32_buf_get(buf, 2), (-3.5 : Float))
+}
+
+///|
+test "simd_add_f32 matches scalar" {
+  let a = make_f32_buf([(1.5 : Float), (2.0 : Float), (3.25 : Float), (4.0 : Float), (5.5 : Float), (6.0 : Float), (7.125 : Float)])
+  let b = make_f32_buf([(10.0 : Float), (20.5 : Float), (30.0 : Float), (40.25 : Float), (50.0 : Float), (60.5 : Float), (70.0 : Float)])
+  let out_s = f32_buf_alloc(7)
+  let out_r = f32_buf_alloc(7)
+  simd_add_f32(a, b, out_s, 7)
+  scalar_add_f32(a, b, out_r, 7)
+  for i in 0..<7 {
+    assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
+  }
+}
+
+///|
+test "simd_mul_f32 matches scalar" {
+  let a = make_f32_buf([(1.5 : Float), (2.0 : Float), (3.25 : Float), (4.0 : Float), (5.5 : Float)])
+  let b = make_f32_buf([(2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float), (6.0 : Float)])
+  let out_s = f32_buf_alloc(5)
+  let out_r = f32_buf_alloc(5)
+  simd_mul_f32(a, b, out_s, 5)
+  scalar_mul_f32(a, b, out_r, 5)
+  for i in 0..<5 {
+    assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
+  }
+}
+
+///|
+test "simd_sum_f32" {
+  let a = make_f32_buf([(1.5 : Float), (2.5 : Float), (3.5 : Float), (4.5 : Float), (5.5 : Float)])
+  // 1.5+2.5+3.5+4.5+5.5 = 17.5
+  assert_f32_close(simd_sum_f32(a, 5), (17.5 : Float))
+}
+
+///|
+test "simd_dot_f32" {
+  let a = make_f32_buf([(1.0 : Float), (2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float)])
+  let b = make_f32_buf([(2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float), (6.0 : Float)])
+  // 2+6+12+20+30 = 70
+  assert_f32_close(simd_dot_f32(a, b, 5), (70.0 : Float))
+}
+
 // --- reductions + scan (D) ---
 
 ///|

@@ -331,3 +331,47 @@ pub fn simd_cumsum(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
 pub fn simd_cumprod(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
   scalar_cumprod(arr, out)
 }
+
+///|
+pub fn simd_add_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  scalar_add_f32(a, b, out, n)
+}
+
+///|
+pub fn simd_mul_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  scalar_mul_f32(a, b, out, n)
+}
+
+///|
+pub fn simd_sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
+  scalar_sum_f32(arr, n)
+}
+
+///|
+pub fn simd_dot_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  n : Int,
+) -> Float {
+  scalar_dot_f32(a, b, n)
+}
+
+///|
+pub fn simd_sort4_int(arr : FixedArray[Int], off : Int) -> Unit {
+  scalar_sort4_int(arr, off)
+}
+
+///|
+pub fn simd_sort_int(arr : FixedArray[Int]) -> Unit {
+  scalar_sort_int(arr)
+}

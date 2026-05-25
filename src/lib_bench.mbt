@@ -246,6 +246,57 @@ test "bench/compare_mask" (b : @bench.T) {
   b.bench(name="simd_lt_1024", fn() { simd_lt(x, y, out) })
 }
 
+// --- f32 over byte buffer ---
+
+///|
+fn make_bench_f32_buf(n : Int) -> FixedArray[Byte] {
+  let buf = f32_buf_alloc(n)
+  for i in 0..<n {
+    f32_buf_set(buf, i, Float::from_int(i + 1) * (0.5 : Float))
+  }
+  buf
+}
+
+///|
+test "bench/f32 add" (b : @bench.T) {
+  let n = 1024
+  let aa = make_bench_f32_buf(n)
+  let bb = make_bench_f32_buf(n)
+  let out = f32_buf_alloc(n)
+  b.bench(name="scalar_add_f32_1024", fn() { scalar_add_f32(aa, bb, out, n) })
+  b.bench(name="simd_add_f32_1024", fn() { simd_add_f32(aa, bb, out, n) })
+}
+
+///|
+test "bench/f32 sum" (b : @bench.T) {
+  let n = 1024
+  let aa = make_bench_f32_buf(n)
+  b.bench(name="scalar_sum_f32_1024", fn() { b.keep(scalar_sum_f32(aa, n)) })
+  b.bench(name="simd_sum_f32_1024", fn() { b.keep(simd_sum_f32(aa, n)) })
+}
+
+///|
+test "bench/f32 dot" (b : @bench.T) {
+  let n = 1024
+  let aa = make_bench_f32_buf(n)
+  let bb = make_bench_f32_buf(n)
+  b.bench(name="scalar_dot_f32_1024", fn() {
+    b.keep(scalar_dot_f32(aa, bb, n))
+  })
+  b.bench(name="simd_dot_f32_1024", fn() {
+    b.keep(simd_dot_f32(aa, bb, n))
+  })
+}
+
+///|
+test "bench/argmin_argmax" (b : @bench.T) {
+  let arr = make_bench_int_array(1024)
+  b.bench(name="scalar_argmin_1024", fn() { b.keep(scalar_argmin(arr)) })
+  b.bench(name="simd_argmin_1024", fn() { b.keep(simd_argmin(arr)) })
+  b.bench(name="scalar_argmax_1024", fn() { b.keep(scalar_argmax(arr)) })
+  b.bench(name="simd_argmax_1024", fn() { b.keep(simd_argmax(arr)) })
+}
+
 // --- reductions ---
 
 ///|
@@ -306,6 +357,51 @@ test "bench/matmul_f64 64x64" (b : @bench.T) {
   })
   b.bench(name="simd_matmul_f64_64x64", fn() {
     simd_matmul_f64(a, b_t, c, dim, dim, dim)
+  })
+}
+
+// --- sort ---
+
+///|
+test "bench/sort4_int" (b : @bench.T) {
+  let n = 1024 // 256 4-element chunks
+  let arr = FixedArray::make(n, 0)
+  for i in 0..<n {
+    arr[i] = (i * 7 + 11) % 251
+  }
+  let scratch = FixedArray::make(n, 0)
+  b.bench(name="scalar_sort4_x256", fn() {
+    for i in 0..<n {
+      scratch[i] = arr[i]
+    }
+    for j = 0; j < n; j = j + 4 {
+      scalar_sort4_int(scratch, j)
+    }
+  })
+  b.bench(name="simd_sort4_x256", fn() {
+    for i in 0..<n {
+      scratch[i] = arr[i]
+    }
+    for j = 0; j < n; j = j + 4 {
+      simd_sort4_int(scratch, j)
+    }
+  })
+}
+
+///|
+test "bench/transpose_f64 128x128" (b : @bench.T) {
+  let m = 128
+  let n = 128
+  let a = FixedArray::make(m * n, 0.0)
+  let out = FixedArray::make(m * n, 0.0)
+  for i in 0..<(m * n) {
+    a[i] = (i + 1).to_double() * 0.5
+  }
+  b.bench(name="scalar_transpose_128x128", fn() {
+    scalar_transpose_f64(a, out, m, n)
+  })
+  b.bench(name="simd_transpose_128x128", fn() {
+    simd_transpose_f64(a, out, m, n)
   })
 }
 

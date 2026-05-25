@@ -311,6 +311,130 @@ pub fn scalar_where(
   }
 }
 
+// --- sort (F) ---
+
+///|
+/// Sort the 4 elements arr[off..off+3] in place via a 5-comparator network.
+pub fn scalar_sort4_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 4 > arr.length() {
+    return
+  }
+  let mut a = arr[off]
+  let mut b = arr[off + 1]
+  let mut c = arr[off + 2]
+  let mut d = arr[off + 3]
+  if a > b {
+    let t = a
+    a = b
+    b = t
+  }
+  if c > d {
+    let t = c
+    c = d
+    d = t
+  }
+  if a > c {
+    let t = a
+    a = c
+    c = t
+  }
+  if b > d {
+    let t = b
+    b = d
+    d = t
+  }
+  if b > c {
+    let t = b
+    b = c
+    c = t
+  }
+  arr[off] = a
+  arr[off + 1] = b
+  arr[off + 2] = c
+  arr[off + 3] = d
+}
+
+///|
+pub fn scalar_sort_int(arr : FixedArray[Int]) -> Unit {
+  arr.sort()
+}
+
+// --- Float (f32) ops over byte-buffer (E) ---
+// FixedArray[Float] is rejected as an FFI parameter, so f32 buffers are
+// represented as FixedArray[Byte] with 4 bytes per element (little-endian
+// IEEE-754). Helpers below cover the boundary; ops just see byte buffers.
+
+///|
+pub fn f32_buf_alloc(n : Int) -> FixedArray[Byte] {
+  FixedArray::make(n * 4, b'\x00')
+}
+
+///|
+pub fn f32_buf_get(buf : FixedArray[Byte], i : Int) -> Float {
+  let off = i * 4
+  let u : UInt = buf[off].to_int().reinterpret_as_uint() |
+    (buf[off + 1].to_int().reinterpret_as_uint() << 8) |
+    (buf[off + 2].to_int().reinterpret_as_uint() << 16) |
+    (buf[off + 3].to_int().reinterpret_as_uint() << 24)
+  Float::reinterpret_from_uint(u)
+}
+
+///|
+pub fn f32_buf_set(buf : FixedArray[Byte], i : Int, v : Float) -> Unit {
+  let u = v.reinterpret_as_uint()
+  let off = i * 4
+  buf[off] = (u & 0xff).reinterpret_as_int().to_byte()
+  buf[off + 1] = ((u >> 8) & 0xff).reinterpret_as_int().to_byte()
+  buf[off + 2] = ((u >> 16) & 0xff).reinterpret_as_int().to_byte()
+  buf[off + 3] = ((u >> 24) & 0xff).reinterpret_as_int().to_byte()
+}
+
+///|
+pub fn scalar_add_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  for i in 0..<n {
+    f32_buf_set(out, i, f32_buf_get(a, i) + f32_buf_get(b, i))
+  }
+}
+
+///|
+pub fn scalar_mul_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  for i in 0..<n {
+    f32_buf_set(out, i, f32_buf_get(a, i) * f32_buf_get(b, i))
+  }
+}
+
+///|
+pub fn scalar_sum_f32(a : FixedArray[Byte], n : Int) -> Float {
+  let mut acc : Float = (0.0 : Float)
+  for i in 0..<n {
+    acc = acc + f32_buf_get(a, i)
+  }
+  acc
+}
+
+///|
+pub fn scalar_dot_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  n : Int,
+) -> Float {
+  let mut acc : Float = (0.0 : Float)
+  for i in 0..<n {
+    acc = acc + f32_buf_get(a, i) * f32_buf_get(b, i)
+  }
+  acc
+}
+
 // --- reductions + scan (D) ---
 
 ///|
