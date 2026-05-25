@@ -548,6 +548,32 @@ pub fn scalar_bitonic_merge8_int(arr : FixedArray[Int], off : Int) -> Unit {
 }
 
 ///|
+/// Reference: 16+16 sorted → 32 sorted in place via scalar merge.
+pub fn scalar_bitonic_merge32_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 32 > arr.length() || off < 0 {
+    return
+  }
+  let tmp = FixedArray::make(32, 0)
+  scalar_merge2_int(arr, off, 16, arr, off + 16, 16, tmp, 0)
+  for i in 0..<32 {
+    arr[off + i] = tmp[i]
+  }
+}
+
+///|
+/// Reference: 32+32 sorted → 64 sorted in place via scalar merge.
+pub fn scalar_bitonic_merge64_int(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 64 > arr.length() || off < 0 {
+    return
+  }
+  let tmp = FixedArray::make(64, 0)
+  scalar_merge2_int(arr, off, 32, arr, off + 32, 32, tmp, 0)
+  for i in 0..<64 {
+    arr[off + i] = tmp[i]
+  }
+}
+
+///|
 /// Reference: 8+8 sorted → 16 sorted in place via scalar merge.
 pub fn scalar_bitonic_merge16_int(arr : FixedArray[Int], off : Int) -> Unit {
   if off + 16 > arr.length() || off < 0 {

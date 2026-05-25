@@ -429,6 +429,16 @@ pub fn bitonic_merge16_i32(arr : FixedArray[Int], off : Int) -> Unit {
 }
 
 ///|
+pub fn bitonic_merge32_i32(arr : FixedArray[Int], off : Int) -> Unit {
+  @internal.scalar_bitonic_merge32_int(arr, off)
+}
+
+///|
+pub fn bitonic_merge64_i32(arr : FixedArray[Int], off : Int) -> Unit {
+  @internal.scalar_bitonic_merge64_int(arr, off)
+}
+
+///|
 pub fn sort16_i32(arr : FixedArray[Int], off : Int) -> Unit {
   @internal.scalar_sort16_int(arr, off)
 }

@@ -922,6 +922,24 @@ pub fn sort16_i32(arr : FixedArray[Int], off : Int) -> Unit {
 }
 
 ///|
+/// Bitonic merge of two sorted 16-element slices (arr[off..off+16] and
+/// arr[off+16..off+32]) into one sorted 32-element block, in place. 5
+/// stages: distance 16 (reverse B + lane-wise min/max with A), distance 8
+/// (between v128 pairs within each half), distance 4 (between v128 pairs
+/// within each 8-block), distance 2 and 1 (within each v128).
+#borrow(arr)
+fn bitonic_merge32_i32_v128(arr : FixedArray[Int], off : Int) -> Unit =
+  #|(func (param i32) (param i32) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) local.get 0 local.get 1 i32.const 2 i32.shl i32.add v128.load local.set 2 local.get 0 local.get 1 i32.const 4 i32.add i32.const 2 i32.shl i32.add v128.load local.set 3 local.get 0 local.get 1 i32.const 8 i32.add i32.const 2 i32.shl i32.add v128.load local.set 4 local.get 0 local.get 1 i32.const 12 i32.add i32.const 2 i32.shl i32.add v128.load local.set 5 local.get 0 local.get 1 i32.const 16 i32.add i32.const 2 i32.shl i32.add v128.load local.set 6 local.get 0 local.get 1 i32.const 20 i32.add i32.const 2 i32.shl i32.add v128.load local.set 7 local.get 0 local.get 1 i32.const 24 i32.add i32.const 2 i32.shl i32.add v128.load local.set 8 local.get 0 local.get 1 i32.const 28 i32.add i32.const 2 i32.shl i32.add v128.load local.set 9 local.get 9 local.get 9 i8x16.shuffle 12 13 14 15 8 9 10 11 4 5 6 7 0 1 2 3 local.set 10 local.get 8 local.get 8 i8x16.shuffle 12 13 14 15 8 9 10 11 4 5 6 7 0 1 2 3 local.set 11 local.get 7 local.get 7 i8x16.shuffle 12 13 14 15 8 9 10 11 4 5 6 7 0 1 2 3 local.set 12 local.get 6 local.get 6 i8x16.shuffle 12 13 14 15 8 9 10 11 4 5 6 7 0 1 2 3 local.set 13 local.get 2 local.get 10 i32x4.max_s local.set 6 local.get 2 local.get 10 i32x4.min_s local.set 2 local.get 3 local.get 11 i32x4.max_s local.set 7 local.get 3 local.get 11 i32x4.min_s local.set 3 local.get 4 local.get 12 i32x4.max_s local.set 8 local.get 4 local.get 12 i32x4.min_s local.set 4 local.get 5 local.get 13 i32x4.max_s local.set 9 local.get 5 local.get 13 i32x4.min_s local.set 5 local.get 2 local.get 4 i32x4.max_s local.set 10 local.get 2 local.get 4 i32x4.min_s local.set 2 local.get 10 local.set 4 local.get 3 local.get 5 i32x4.max_s local.set 10 local.get 3 local.get 5 i32x4.min_s local.set 3 local.get 10 local.set 5 local.get 6 local.get 8 i32x4.max_s local.set 10 local.get 6 local.get 8 i32x4.min_s local.set 6 local.get 10 local.set 8 local.get 7 local.get 9 i32x4.max_s local.set 10 local.get 7 local.get 9 i32x4.min_s local.set 7 local.get 10 local.set 9 local.get 2 local.get 3 i32x4.max_s local.set 10 local.get 2 local.get 3 i32x4.min_s local.set 2 local.get 10 local.set 3 local.get 4 local.get 5 i32x4.max_s local.set 10 local.get 4 local.get 5 i32x4.min_s local.set 4 local.get 10 local.set 5 local.get 6 local.get 7 i32x4.max_s local.set 10 local.get 6 local.get 7 i32x4.min_s local.set 6 local.get 10 local.set 7 local.get 8 local.get 9 i32x4.max_s local.set 10 local.get 8 local.get 9 i32x4.min_s local.set 8 local.get 10 local.set 9 local.get 2 local.get 2 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 2 local.get 10 i32x4.min_s local.set 11 local.get 2 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 2 local.get 3 local.get 3 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 3 local.get 10 i32x4.min_s local.set 11 local.get 3 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 3 local.get 4 local.get 4 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 4 local.get 10 i32x4.min_s local.set 11 local.get 4 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 4 local.get 5 local.get 5 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 5 local.get 10 i32x4.min_s local.set 11 local.get 5 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 5 local.get 6 local.get 6 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 6 local.get 10 i32x4.min_s local.set 11 local.get 6 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 6 local.get 7 local.get 7 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 7 local.get 10 i32x4.min_s local.set 11 local.get 7 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 7 local.get 8 local.get 8 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 8 local.get 10 i32x4.min_s local.set 11 local.get 8 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 8 local.get 9 local.get 9 i8x16.shuffle 8 9 10 11 12 13 14 15 0 1 2 3 4 5 6 7 local.set 10 local.get 9 local.get 10 i32x4.min_s local.set 11 local.get 9 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 4 5 6 7 24 25 26 27 28 29 30 31 local.set 9 local.get 2 local.get 2 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 2 local.get 10 i32x4.min_s local.set 11 local.get 2 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 2 local.get 3 local.get 3 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 3 local.get 10 i32x4.min_s local.set 11 local.get 3 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 3 local.get 4 local.get 4 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 4 local.get 10 i32x4.min_s local.set 11 local.get 4 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 4 local.get 5 local.get 5 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 5 local.get 10 i32x4.min_s local.set 11 local.get 5 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 5 local.get 6 local.get 6 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 6 local.get 10 i32x4.min_s local.set 11 local.get 6 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 6 local.get 7 local.get 7 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 7 local.get 10 i32x4.min_s local.set 11 local.get 7 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 7 local.get 8 local.get 8 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 8 local.get 10 i32x4.min_s local.set 11 local.get 8 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 8 local.get 9 local.get 9 i8x16.shuffle 4 5 6 7 0 1 2 3 12 13 14 15 8 9 10 11 local.set 10 local.get 9 local.get 10 i32x4.min_s local.set 11 local.get 9 local.get 10 i32x4.max_s local.set 12 local.get 11 local.get 12 i8x16.shuffle 0 1 2 3 20 21 22 23 8 9 10 11 28 29 30 31 local.set 9 local.get 0 local.get 1 i32.const 2 i32.shl i32.add local.get 2 v128.store local.get 0 local.get 1 i32.const 4 i32.add i32.const 2 i32.shl i32.add local.get 3 v128.store local.get 0 local.get 1 i32.const 8 i32.add i32.const 2 i32.shl i32.add local.get 4 v128.store local.get 0 local.get 1 i32.const 12 i32.add i32.const 2 i32.shl i32.add local.get 5 v128.store local.get 0 local.get 1 i32.const 16 i32.add i32.const 2 i32.shl i32.add local.get 6 v128.store local.get 0 local.get 1 i32.const 20 i32.add i32.const 2 i32.shl i32.add local.get 7 v128.store local.get 0 local.get 1 i32.const 24 i32.add i32.const 2 i32.shl i32.add local.get 8 v128.store local.get 0 local.get 1 i32.const 28 i32.add i32.const 2 i32.shl i32.add local.get 9 v128.store)
+
+///|
+pub fn bitonic_merge32_i32(arr : FixedArray[Int], off : Int) -> Unit {
+  if off + 32 > arr.length() || off < 0 {
+    return
+  }
+  bitonic_merge32_i32_v128(arr, off)
+}
+
+///|
 /// General-purpose sort: SIMD-leaf bottom-up merge sort.
 /// Leaf (16-element blocks): sort16_i32 (fully SIMD).
 /// Tail block (< 16): fall back to the built-in scalar sort.
@@ -966,11 +984,30 @@ pub fn sort_i32(arr : FixedArray[Int]) -> Unit {
     }
   }
 
-  // 2. merge ladder. Start width = 16, ping-pong between arr and tmp.
+  // 2. merge ladder.
+  // 2a. width = 16 pass: in-place SIMD bitonic_merge32 for full 32-blocks.
+  //     Tail (last sub-block of 16-31 elements) falls back to scalar.
   let tmp = FixedArray::make(n, 0)
-  let mut width = 16
-  // even number of merge passes → result back in arr (we want this).
-  // We achieve it by, after each pass, swapping the conceptual src/dst.
+  let mut pos = 0
+  while pos + 32 <= n {
+    bitonic_merge32_i32(arr, pos)
+    pos = pos + 32
+  }
+  // last block: pos..n is either a single 16-block (already sorted, skip) or
+  // a 16-block plus a tail of 0..15 already-sorted elements; merge into arr
+  // via tmp + copy-back.
+  if pos + 16 < n {
+    let tail_total = n - pos
+    @internal.scalar_merge2_int(
+      arr, pos, 16, arr, pos + 16, tail_total - 16, tmp, pos,
+    )
+    for k = pos; k < n; k = k + 1 {
+      arr[k] = tmp[k]
+    }
+  }
+
+  // 2b. width >= 32 pass: scalar merge ladder with ping-pong between arr and tmp.
+  let mut width = 32
   let mut src_is_arr = true
   while width < n {
     let merged = width * 2
