@@ -344,6 +344,297 @@ test "simd_count_byte matches scalar" {
   assert_eq(simd_count_byte(data, b'\x07'), scalar_count_byte(data, b'\x07'))
 }
 
+// --- element-wise Int ops (B) ---
+
+///|
+test "simd_sub matches scalar" {
+  let a = make_int_array([10, 20, 30, 40, 50, 60, 70])
+  let b = make_int_array([1, 2, 3, 4, 5, 6, 7])
+  let out = FixedArray::make(7, 0)
+  let ref_arr = FixedArray::make(7, 0)
+  simd_sub(a, b, out)
+  scalar_sub(a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+}
+
+///|
+test "simd_mul matches scalar" {
+  let a = make_int_array([1, 2, 3, 4, 5, 6, 7])
+  let b = make_int_array([10, 20, 30, 40, 50, 60, 70])
+  let out = FixedArray::make(7, 0)
+  let ref_arr = FixedArray::make(7, 0)
+  simd_mul(a, b, out)
+  scalar_mul(a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+}
+
+///|
+test "simd_neg matches scalar" {
+  let a = make_int_array([5, -3, 0, 17, -100, 42, -1])
+  let out = FixedArray::make(7, 0)
+  let ref_arr = FixedArray::make(7, 0)
+  simd_neg(a, out)
+  scalar_neg(a, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+}
+
+///|
+test "simd_abs matches scalar" {
+  let a = make_int_array([5, -3, 0, 17, -100, 42, -1])
+  let out = FixedArray::make(7, 0)
+  let ref_arr = FixedArray::make(7, 0)
+  simd_abs(a, out)
+  scalar_abs(a, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+}
+
+///|
+test "simd_min_elem / simd_max_elem match scalar" {
+  let a = make_int_array([5, 1, 9, 2, -3, 7, 0])
+  let b = make_int_array([3, 4, 2, 8, -1, 5, 6])
+  let out = FixedArray::make(7, 0)
+  let ref_arr = FixedArray::make(7, 0)
+  simd_min_elem(a, b, out)
+  scalar_min_elem(a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+  simd_max_elem(a, b, out)
+  scalar_max_elem(a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+}
+
+///|
+test "simd_eq / simd_lt / simd_gt produce -1/0 masks" {
+  let a = make_int_array([1, 2, 3, 4, 5, 6, 7])
+  let b = make_int_array([1, 5, 3, 2, 9, 6, 0])
+  let out = FixedArray::make(7, 0)
+  let ref_arr = FixedArray::make(7, 0)
+  simd_eq(a, b, out)
+  scalar_eq(a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+  // eq mask values: -1 (equal) or 0
+  assert_eq(out[0], -1)
+  assert_eq(out[1], 0)
+  simd_lt(a, b, out)
+  scalar_lt(a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+  simd_gt(a, b, out)
+  scalar_gt(a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+}
+
+///|
+test "simd_where with computed mask" {
+  let a = make_int_array([10, 20, 30, 40, 50, 60, 70])
+  let b = make_int_array([1, 2, 3, 4, 5, 6, 7])
+  let mask = make_int_array([-1, 0, -1, 0, -1, 0, -1])
+  let out = FixedArray::make(7, 0)
+  let ref_arr = FixedArray::make(7, 0)
+  simd_where(mask, a, b, out)
+  scalar_where(mask, a, b, ref_arr)
+  for i in 0..<7 {
+    assert_eq(out[i], ref_arr[i])
+  }
+  assert_eq(out[0], 10)
+  assert_eq(out[1], 2)
+}
+
+///|
+test "simd_where end-to-end with simd_lt as mask producer" {
+  let a = make_int_array([10, 20, 30, 40, 50])
+  let b = make_int_array([15, 5, 30, 100, 25])
+  // clamp: out[i] = max(a[i], b[i])  via where(a < b, b, a)
+  let mask = FixedArray::make(5, 0)
+  let out = FixedArray::make(5, 0)
+  simd_lt(a, b, mask) // mask = (a < b)
+  simd_where(mask, b, a, out)
+  // expected: [15, 20, 30, 100, 50]
+  assert_eq(out[0], 15)
+  assert_eq(out[1], 20)
+  assert_eq(out[2], 30)
+  assert_eq(out[3], 100)
+  assert_eq(out[4], 50)
+}
+
+// --- reductions + scan (D) ---
+
+///|
+test "simd_prod basic + matches scalar" {
+  let arr = make_int_array([2, 3, 4, 5, 6])
+  // 2*3*4*5*6 = 720
+  inspect(simd_prod(arr), content="720")
+  assert_eq(simd_prod(arr), scalar_prod(arr))
+}
+
+///|
+test "simd_prod empty" {
+  let arr : FixedArray[Int] = FixedArray::make(0, 0)
+  inspect(simd_prod(arr), content="1")
+}
+
+///|
+test "simd_mean_f64 / simd_var_f64" {
+  let arr = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0])
+  // mean = 3, var (population) = ((1-3)^2 + (2-3)^2 + (3-3)^2 + (4-3)^2 + (5-3)^2) / 5
+  //      = (4 + 1 + 0 + 1 + 4) / 5 = 2
+  assert_f64_close(simd_mean_f64(arr), 3.0)
+  assert_f64_close(simd_var_f64(arr), 2.0)
+}
+
+///|
+test "simd_var_f64 matches scalar (larger)" {
+  let n = 21
+  let arr = FixedArray::make(n, 0.0)
+  for i in 0..<n {
+    arr[i] = (i + 1).to_double() * 0.5 - 3.0
+  }
+  assert_f64_close(simd_var_f64(arr), scalar_var_f64(arr))
+}
+
+///|
+test "simd_count_nonzero" {
+  let arr = make_int_array([0, 1, 0, 2, 0, 3, 0, 4, 0, 5])
+  inspect(simd_count_nonzero(arr), content="5")
+}
+
+///|
+test "simd_all / simd_any" {
+  let all_ones = make_int_array([1, 2, 3, 4, 5, 6, 7])
+  let has_zero = make_int_array([1, 2, 0, 4, 5])
+  let all_zero = make_int_array([0, 0, 0, 0, 0])
+  inspect(simd_all(all_ones), content="true")
+  inspect(simd_all(has_zero), content="false")
+  inspect(simd_all(all_zero), content="false")
+  inspect(simd_any(all_ones), content="true")
+  inspect(simd_any(has_zero), content="true")
+  inspect(simd_any(all_zero), content="false")
+}
+
+///|
+test "simd_cumsum / simd_cumprod (scalar fallback)" {
+  let arr = make_int_array([1, 2, 3, 4, 5])
+  let out = FixedArray::make(5, 0)
+  simd_cumsum(arr, out)
+  assert_eq(out[0], 1)
+  assert_eq(out[1], 3)
+  assert_eq(out[2], 6)
+  assert_eq(out[3], 10)
+  assert_eq(out[4], 15)
+  simd_cumprod(arr, out)
+  assert_eq(out[0], 1)
+  assert_eq(out[1], 2)
+  assert_eq(out[2], 6)
+  assert_eq(out[3], 24)
+  assert_eq(out[4], 120)
+}
+
+// --- linear algebra (C) ---
+
+///|
+test "simd_matmul_f64 vs scalar (2x3 * 3x2)" {
+  // A = [[1,2,3],[4,5,6]]  (2x3)
+  // B = [[7,8],[9,10],[11,12]]  (3x2)
+  // B^T (row-major) = [[7,9,11],[8,10,12]]  (2x3 in B^T layout, i.e. 2 rows of length 3)
+  // Expected C = A * B = [[58,64],[139,154]]
+  let a = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+  let b_t = make_f64_array([7.0, 9.0, 11.0, 8.0, 10.0, 12.0])
+  let c = FixedArray::make(4, 0.0)
+  simd_matmul_f64(a, b_t, c, 2, 3, 2)
+  assert_f64_close(c[0], 58.0)
+  assert_f64_close(c[1], 64.0)
+  assert_f64_close(c[2], 139.0)
+  assert_f64_close(c[3], 154.0)
+}
+
+///|
+test "simd_matmul_f64 matches scalar (5x7 * 7x4)" {
+  let m = 5
+  let k = 7
+  let n = 4
+  let a = FixedArray::make(m * k, 0.0)
+  let b_t = FixedArray::make(n * k, 0.0)
+  for i in 0..<(m * k) {
+    a[i] = (i + 1).to_double() * 0.5
+  }
+  for j in 0..<(n * k) {
+    b_t[j] = ((j * 3 + 1) % 17).to_double()
+  }
+  let c_simd = FixedArray::make(m * n, 0.0)
+  let c_scalar = FixedArray::make(m * n, 0.0)
+  simd_matmul_f64(a, b_t, c_simd, m, k, n)
+  scalar_matmul_f64(a, b_t, c_scalar, m, k, n)
+  for i in 0..<(m * n) {
+    assert_f64_close(c_simd[i], c_scalar[i])
+  }
+}
+
+///|
+test "simd_gemv_f64 vs scalar" {
+  // A = [[1,2,3],[4,5,6]] (2x3), x = [1,2,3]
+  // y = [1+4+9, 4+10+18] = [14, 32]
+  let a = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+  let x = make_f64_array([1.0, 2.0, 3.0])
+  let y = FixedArray::make(2, 0.0)
+  simd_gemv_f64(a, x, y, 2, 3)
+  assert_f64_close(y[0], 14.0)
+  assert_f64_close(y[1], 32.0)
+}
+
+///|
+test "simd_gemv_f64 matches scalar (larger)" {
+  let m = 10
+  let n = 13
+  let a = FixedArray::make(m * n, 0.0)
+  let x = FixedArray::make(n, 0.0)
+  for i in 0..<(m * n) {
+    a[i] = (i + 1).to_double() * 0.25
+  }
+  for j in 0..<n {
+    x[j] = (j + 1).to_double()
+  }
+  let y_simd = FixedArray::make(m, 0.0)
+  let y_scalar = FixedArray::make(m, 0.0)
+  simd_gemv_f64(a, x, y_simd, m, n)
+  scalar_gemv_f64(a, x, y_scalar, m, n)
+  for i in 0..<m {
+    assert_f64_close(y_simd[i], y_scalar[i])
+  }
+}
+
+///|
+test "simd_transpose_f64 (3x4)" {
+  // A = [[1,2,3,4],[5,6,7,8],[9,10,11,12]] (3x4)
+  // A^T = [[1,5,9],[2,6,10],[3,7,11],[4,8,12]] (4x3)
+  let a = make_f64_array([
+    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+  ])
+  let out = FixedArray::make(12, 0.0)
+  simd_transpose_f64(a, out, 3, 4)
+  let expected = make_f64_array([
+    1.0, 5.0, 9.0, 2.0, 6.0, 10.0, 3.0, 7.0, 11.0, 4.0, 8.0, 12.0,
+  ])
+  for i in 0..<12 {
+    assert_f64_close(out[i], expected[i])
+  }
+}
+
 // --- Double (f64) ops ---
 
 ///|

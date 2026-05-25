@@ -264,6 +264,391 @@ pub fn simd_count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
   simd_count_byte_v128(data, len, needle.to_int())
 }
 
+// --- reductions + scan (D) ---
+
+///|
+#borrow(arr)
+fn simd_prod_v128(arr : FixedArray[Int], len : Int) -> Int =
+  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local v128) i32.const 1 i32x4.splat local.set 5 local.get 1 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 2 i32.const 2 i32.shl i32.add v128.load i32x4.mul local.set 5 local.get 2 i32.const 4 i32.add local.set 2 br 0 end end local.get 5 i32x4.extract_lane 0 local.get 5 i32x4.extract_lane 1 i32.mul local.get 5 i32x4.extract_lane 2 i32.mul local.get 5 i32x4.extract_lane 3 i32.mul local.set 4 block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.const 2 i32.shl i32.add i32.load i32.mul local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4)
+
+///|
+pub fn simd_prod(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return 1
+  }
+  simd_prod_v128(arr, len)
+}
+
+///|
+pub fn simd_mean_f64(arr : FixedArray[Double]) -> Double {
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  simd_sum_f64(arr) / len.to_double()
+}
+
+///|
+/// 2nd pass for variance: sum((arr[i] - mu)^2) using f64x2 fused-mul accumulator.
+#borrow(arr)
+fn simd_var_f64_pass2(arr : FixedArray[Double], len : Int, mu : Double) -> Double =
+  #|(func (param i32) (param i32) (param f64) (result f64) (local i32) (local i32) (local f64) (local f64) (local v128) (local v128) (local v128) local.get 2 f64x2.splat local.set 7 i32.const 0 f64.convert_i32_s f64x2.splat local.set 8 local.get 1 i32.const 1 i32.shr_s i32.const 1 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 8 local.get 0 local.get 3 i32.const 3 i32.shl i32.add v128.load local.get 7 f64x2.sub local.tee 9 local.get 9 f64x2.mul f64x2.add local.set 8 local.get 3 i32.const 2 i32.add local.set 3 br 0 end end local.get 8 f64x2.extract_lane 0 local.get 8 f64x2.extract_lane 1 f64.add local.set 6 block loop local.get 3 local.get 1 i32.ge_s br_if 1 local.get 6 local.get 0 local.get 3 i32.const 3 i32.shl i32.add f64.load local.get 2 f64.sub local.tee 5 local.get 5 f64.mul f64.add local.set 6 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 6)
+
+///|
+pub fn simd_var_f64(arr : FixedArray[Double]) -> Double {
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  let mu = simd_mean_f64(arr)
+  simd_var_f64_pass2(arr, len, mu) / len.to_double()
+}
+
+///|
+#borrow(arr)
+fn simd_count_nonzero_v128(arr : FixedArray[Int], len : Int) -> Int =
+  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local v128) i32.const 0 i32x4.splat local.set 5 local.get 1 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.const 2 i32.shl i32.add v128.load local.get 5 i32x4.ne i32x4.bitmask i32.popcnt i32.add local.set 4 local.get 2 i32.const 4 i32.add local.set 2 br 0 end end block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 i32.const 0 local.get 0 local.get 2 i32.const 2 i32.shl i32.add i32.load i32.ne i32.add local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4)
+
+///|
+pub fn simd_count_nonzero(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return 0
+  }
+  simd_count_nonzero_v128(arr, len)
+}
+
+///|
+/// any/all over Int (treats lane != 0 as true). Returns 1 if true, 0 if false.
+#borrow(arr)
+fn simd_any_v128(arr : FixedArray[Int], len : Int) -> Int =
+  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local v128) i32.const 0 i32x4.splat local.set 5 local.get 1 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.const 2 i32.shl i32.add v128.load local.get 5 i32x4.ne i32x4.bitmask i32.or local.set 4 local.get 2 i32.const 4 i32.add local.set 2 br 0 end end block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 i32.const 0 local.get 0 local.get 2 i32.const 2 i32.shl i32.add i32.load i32.ne i32.or local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4 i32.const 0 i32.ne)
+
+///|
+pub fn simd_any(arr : FixedArray[Int]) -> Bool {
+  let len = arr.length()
+  if len == 0 {
+    return false
+  }
+  simd_any_v128(arr, len) != 0
+}
+
+///|
+#borrow(arr)
+fn simd_all_v128(arr : FixedArray[Int], len : Int) -> Int =
+  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local v128) i32.const 0 i32x4.splat local.set 5 local.get 1 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.const 2 i32.shl i32.add v128.load local.get 5 i32x4.eq i32x4.bitmask i32.or local.set 4 local.get 2 i32.const 4 i32.add local.set 2 br 0 end end block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 i32.const 0 local.get 0 local.get 2 i32.const 2 i32.shl i32.add i32.load i32.eq i32.or local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4 i32.eqz)
+
+///|
+pub fn simd_all(arr : FixedArray[Int]) -> Bool {
+  let len = arr.length()
+  if len == 0 {
+    return true
+  }
+  simd_all_v128(arr, len) != 0
+}
+
+///|
+/// cumsum / cumprod stay scalar: dependency chain across lanes makes a
+/// 4-way SIMD prefix sum require cross-lane shuffles whose 16-byte index
+/// pattern would need to live in a precomputed FixedArray[Byte].
+pub fn simd_cumsum(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  scalar_cumsum(arr, out)
+}
+
+///|
+pub fn simd_cumprod(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  scalar_cumprod(arr, out)
+}
+
+// --- linear algebra (C) ---
+
+///|
+/// Compute dot(a[a_off..a_off+k], b[b_off..b_off+k]) as f64.
+/// Used as the inner loop for matmul and gemv.
+#borrow(a, b)
+fn simd_dot_f64_range(
+  a : FixedArray[Double],
+  a_off : Int,
+  b : FixedArray[Double],
+  b_off : Int,
+  k : Int,
+) -> Double =
+  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (result f64) (local i32) (local i32) (local f64) (local v128) i32.const 0 f64.convert_i32_s f64x2.splat local.set 8 local.get 4 i32.const 1 i32.shr_s i32.const 1 i32.shl local.set 6 block loop local.get 5 local.get 6 i32.ge_s br_if 1 local.get 8 local.get 0 local.get 1 local.get 5 i32.add i32.const 3 i32.shl i32.add v128.load local.get 2 local.get 3 local.get 5 i32.add i32.const 3 i32.shl i32.add v128.load f64x2.mul f64x2.add local.set 8 local.get 5 i32.const 2 i32.add local.set 5 br 0 end end local.get 8 f64x2.extract_lane 0 local.get 8 f64x2.extract_lane 1 f64.add local.set 7 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 7 local.get 0 local.get 1 local.get 5 i32.add i32.const 3 i32.shl i32.add f64.load local.get 2 local.get 3 local.get 5 i32.add i32.const 3 i32.shl i32.add f64.load f64.mul f64.add local.set 7 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end local.get 7)
+
+///|
+/// SIMD matmul (B in transposed form): A is M x K, B^T is N x K, C is M x N.
+/// Inner-loop dot products use f64x2 via `simd_dot_f64_range`.
+pub fn simd_matmul_f64(
+  a : FixedArray[Double],
+  b_t : FixedArray[Double],
+  c : FixedArray[Double],
+  m : Int,
+  k : Int,
+  n : Int,
+) -> Unit {
+  if m == 0 || n == 0 {
+    return
+  }
+  for i in 0..<m {
+    let a_off = i * k
+    for j in 0..<n {
+      c[i * n + j] = simd_dot_f64_range(a, a_off, b_t, j * k, k)
+    }
+  }
+}
+
+///|
+pub fn simd_gemv_f64(
+  a : FixedArray[Double],
+  x : FixedArray[Double],
+  y : FixedArray[Double],
+  m : Int,
+  n : Int,
+) -> Unit {
+  if m == 0 {
+    return
+  }
+  for i in 0..<m {
+    y[i] = simd_dot_f64_range(a, i * n, x, 0, n)
+  }
+}
+
+///|
+/// Transpose stays scalar for now: a SIMD 2x2 block path would need
+/// `i8x16.shuffle` with a 16-byte literal pattern, which we'd have to load
+/// from a precomputed FixedArray[Byte] - tractable but not a clear win for
+/// a memory-bound op.
+pub fn simd_transpose_f64(
+  a : FixedArray[Double],
+  out : FixedArray[Double],
+  m : Int,
+  n : Int,
+) -> Unit {
+  scalar_transpose_f64(a, out, m, n)
+}
+
+// --- Int element-wise ops (B) ---
+
+///|
+#borrow(a, b, out)
+fn simd_sub_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.sub v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.sub i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_sub(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_sub_v128(a, b, out, len)
+}
+
+///|
+#borrow(a, b, out)
+fn simd_mul_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.mul v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.mul i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_mul(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_mul_v128(a, b, out, len)
+}
+
+///|
+#borrow(a, out)
+fn simd_neg_v128(a : FixedArray[Int], out : FixedArray[Int], len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load i32x4.neg v128.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add i32.const 0 local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load i32.sub i32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+pub fn simd_neg(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_neg_v128(a, out, len)
+}
+
+///|
+#borrow(a, out)
+fn simd_abs_v128(a : FixedArray[Int], out : FixedArray[Int], len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load i32x4.abs v128.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add i32.const 0 local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load i32.sub local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load i32.const 0 i32.lt_s select i32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+pub fn simd_abs(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_abs_v128(a, out, len)
+}
+
+///|
+#borrow(a, b, out)
+fn simd_min_elem_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.min_s v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.lt_s select i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_min_elem(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_min_elem_v128(a, b, out, len)
+}
+
+///|
+#borrow(a, b, out)
+fn simd_max_elem_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.max_s v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.gt_s select i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_max_elem(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_max_elem_v128(a, b, out, len)
+}
+
+///|
+/// eq → mask: out[i] = (a[i] == b[i]) ? -1 : 0.
+/// Vector i32x4.eq already yields 0xFFFFFFFF/0 lanes; scalar tail uses
+/// `i32.const 0 ... i32.sub` to sign-extend `0/1` → `0/-1`.
+#borrow(a, b, out)
+fn simd_eq_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.eq v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add i32.const 0 local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.eq i32.sub i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_eq(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_eq_v128(a, b, out, len)
+}
+
+///|
+#borrow(a, b, out)
+fn simd_lt_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.lt_s v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add i32.const 0 local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.lt_s i32.sub i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_lt(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_lt_v128(a, b, out, len)
+}
+
+///|
+#borrow(a, b, out)
+fn simd_gt_v128(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.gt_s v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add i32.const 0 local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.gt_s i32.sub i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn simd_gt(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_gt_v128(a, b, out, len)
+}
+
+///|
+/// where(mask, a, b, out): out[i] = mask[i] ? a[i] : b[i]. Uses v128.bitselect:
+/// bitselect(v1, v2, c) = (v1 & c) | (v2 & ~c), so mask=-1 picks `a`, mask=0 picks `b`.
+#borrow(mask, a, b, out)
+fn simd_where_v128(
+  mask : FixedArray[Int],
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 4 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 6 block loop local.get 5 local.get 6 i32.ge_s br_if 1 local.get 3 local.get 5 i32.const 2 i32.shl i32.add local.get 1 local.get 5 i32.const 2 i32.shl i32.add v128.load local.get 2 local.get 5 i32.const 2 i32.shl i32.add v128.load local.get 0 local.get 5 i32.const 2 i32.shl i32.add v128.load v128.bitselect v128.store local.get 5 i32.const 4 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 3 local.get 5 i32.const 2 i32.shl i32.add local.get 1 local.get 5 i32.const 2 i32.shl i32.add i32.load local.get 2 local.get 5 i32.const 2 i32.shl i32.add i32.load local.get 0 local.get 5 i32.const 2 i32.shl i32.add i32.load select i32.store local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
+pub fn simd_where(
+  mask : FixedArray[Int],
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = mask.length()
+  if len == 0 {
+    return
+  }
+  simd_where_v128(mask, a, b, out, len)
+}
+
 // --- Double (f64) SIMD ops via f64x2 (2-way) ---
 
 ///|

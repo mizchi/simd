@@ -193,6 +193,276 @@ pub fn scalar_count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
   c
 }
 
+// --- element-wise Int ops (B) ---
+
+///|
+pub fn scalar_sub(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i] - b[i]
+  }
+}
+
+///|
+pub fn scalar_mul(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i] * b[i]
+  }
+}
+
+///|
+pub fn scalar_neg(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = -a[i]
+  }
+}
+
+///|
+pub fn scalar_abs(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = if a[i] < 0 { -a[i] } else { a[i] }
+  }
+}
+
+///|
+/// Element-wise min: out[i] = min(a[i], b[i]).
+pub fn scalar_min_elem(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = if a[i] < b[i] { a[i] } else { b[i] }
+  }
+}
+
+///|
+pub fn scalar_max_elem(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = if a[i] > b[i] { a[i] } else { b[i] }
+  }
+}
+
+///|
+/// Element-wise eq → mask (-1 if a[i] == b[i] else 0).
+pub fn scalar_eq(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = if a[i] == b[i] { -1 } else { 0 }
+  }
+}
+
+///|
+pub fn scalar_lt(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = if a[i] < b[i] { -1 } else { 0 }
+  }
+}
+
+///|
+pub fn scalar_gt(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = if a[i] > b[i] { -1 } else { 0 }
+  }
+}
+
+///|
+/// out[i] = mask[i] != 0 ? a[i] : b[i].
+pub fn scalar_where(
+  mask : FixedArray[Int],
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = mask.length()
+  for i in 0..<len {
+    out[i] = if mask[i] != 0 { a[i] } else { b[i] }
+  }
+}
+
+// --- reductions + scan (D) ---
+
+///|
+pub fn scalar_prod(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return 1
+  }
+  let mut acc = 1
+  for i in 0..<len {
+    acc = acc * arr[i]
+  }
+  acc
+}
+
+///|
+pub fn scalar_mean_f64(arr : FixedArray[Double]) -> Double {
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  scalar_sum_f64(arr) / len.to_double()
+}
+
+///|
+/// Population variance (1/n * sum (x - mu)^2).
+pub fn scalar_var_f64(arr : FixedArray[Double]) -> Double {
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  let mu = scalar_mean_f64(arr)
+  let mut acc = 0.0
+  for i in 0..<len {
+    let d = arr[i] - mu
+    acc = acc + d * d
+  }
+  acc / len.to_double()
+}
+
+///|
+pub fn scalar_count_nonzero(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  let mut c = 0
+  for i in 0..<len {
+    if arr[i] != 0 {
+      c = c + 1
+    }
+  }
+  c
+}
+
+///|
+pub fn scalar_all(arr : FixedArray[Int]) -> Bool {
+  let len = arr.length()
+  for i in 0..<len {
+    if arr[i] == 0 {
+      return false
+    }
+  }
+  true
+}
+
+///|
+pub fn scalar_any(arr : FixedArray[Int]) -> Bool {
+  let len = arr.length()
+  for i in 0..<len {
+    if arr[i] != 0 {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Prefix sum: out[i] = sum(arr[0..=i]).
+pub fn scalar_cumsum(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  let len = arr.length()
+  let mut acc = 0
+  for i in 0..<len {
+    acc = acc + arr[i]
+    out[i] = acc
+  }
+}
+
+///|
+pub fn scalar_cumprod(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  let len = arr.length()
+  let mut acc = 1
+  for i in 0..<len {
+    acc = acc * arr[i]
+    out[i] = acc
+  }
+}
+
+// --- linear algebra (C) ---
+
+///|
+/// matmul with B already in transposed form (row-major B^T).
+/// A is M x K, B^T is N x K, C is M x N - all row-major.
+pub fn scalar_matmul_f64(
+  a : FixedArray[Double],
+  b_t : FixedArray[Double],
+  c : FixedArray[Double],
+  m : Int,
+  k : Int,
+  n : Int,
+) -> Unit {
+  for i in 0..<m {
+    for j in 0..<n {
+      let mut acc = 0.0
+      for kk in 0..<k {
+        acc = acc + a[i * k + kk] * b_t[j * k + kk]
+      }
+      c[i * n + j] = acc
+    }
+  }
+}
+
+///|
+/// gemv: y = A * x.  A is M x N row-major, x is N, y is M.
+pub fn scalar_gemv_f64(
+  a : FixedArray[Double],
+  x : FixedArray[Double],
+  y : FixedArray[Double],
+  m : Int,
+  n : Int,
+) -> Unit {
+  for i in 0..<m {
+    let mut acc = 0.0
+    for j in 0..<n {
+      acc = acc + a[i * n + j] * x[j]
+    }
+    y[i] = acc
+  }
+}
+
+///|
+/// Transpose: out[j*m + i] = a[i*n + j].
+pub fn scalar_transpose_f64(
+  a : FixedArray[Double],
+  out : FixedArray[Double],
+  m : Int,
+  n : Int,
+) -> Unit {
+  for i in 0..<m {
+    for j in 0..<n {
+      out[j * m + i] = a[i * n + j]
+    }
+  }
+}
+
 // --- Double (f64) ops ---
 
 ///|

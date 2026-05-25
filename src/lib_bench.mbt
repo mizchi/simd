@@ -200,3 +200,147 @@ test "bench/f64 dot" (b : @bench.T) {
   b.bench(name="scalar_dot_f64_1024", fn() { b.keep(scalar_dot_f64(a, bb)) })
   b.bench(name="simd_dot_f64_1024", fn() { b.keep(simd_dot_f64(a, bb)) })
 }
+
+// --- Int element-wise ---
+
+///|
+test "bench/sub_mul" (b : @bench.T) {
+  let x = make_bench_int_array(1024)
+  let y = make_bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_sub_1024", fn() { scalar_sub(x, y, out) })
+  b.bench(name="simd_sub_1024", fn() { simd_sub(x, y, out) })
+  b.bench(name="scalar_mul_int_1024", fn() { scalar_mul(x, y, out) })
+  b.bench(name="simd_mul_int_1024", fn() { simd_mul(x, y, out) })
+}
+
+///|
+test "bench/neg_abs" (b : @bench.T) {
+  let x = make_bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_neg_1024", fn() { scalar_neg(x, out) })
+  b.bench(name="simd_neg_1024", fn() { simd_neg(x, out) })
+  b.bench(name="scalar_abs_1024", fn() { scalar_abs(x, out) })
+  b.bench(name="simd_abs_1024", fn() { simd_abs(x, out) })
+}
+
+///|
+test "bench/min_max_elem" (b : @bench.T) {
+  let x = make_bench_int_array(1024)
+  let y = make_bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_min_elem_1024", fn() { scalar_min_elem(x, y, out) })
+  b.bench(name="simd_min_elem_1024", fn() { simd_min_elem(x, y, out) })
+  b.bench(name="scalar_max_elem_1024", fn() { scalar_max_elem(x, y, out) })
+  b.bench(name="simd_max_elem_1024", fn() { simd_max_elem(x, y, out) })
+}
+
+///|
+test "bench/compare_mask" (b : @bench.T) {
+  let x = make_bench_int_array(1024)
+  let y = make_bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_eq_1024", fn() { scalar_eq(x, y, out) })
+  b.bench(name="simd_eq_1024", fn() { simd_eq(x, y, out) })
+  b.bench(name="scalar_lt_1024", fn() { scalar_lt(x, y, out) })
+  b.bench(name="simd_lt_1024", fn() { simd_lt(x, y, out) })
+}
+
+// --- reductions ---
+
+///|
+test "bench/prod" (b : @bench.T) {
+  let arr = FixedArray::make(1024, 1)
+  for i in 0..<1024 {
+    arr[i] = i % 3 + 1
+  }
+  b.bench(name="scalar_prod_1024", fn() { b.keep(scalar_prod(arr)) })
+  b.bench(name="simd_prod_1024", fn() { b.keep(simd_prod(arr)) })
+}
+
+///|
+test "bench/var_f64" (b : @bench.T) {
+  let arr = make_bench_f64_array(1024)
+  b.bench(name="scalar_var_f64_1024", fn() { b.keep(scalar_var_f64(arr)) })
+  b.bench(name="simd_var_f64_1024", fn() { b.keep(simd_var_f64(arr)) })
+}
+
+///|
+test "bench/count_nonzero" (b : @bench.T) {
+  let arr = make_bench_int_array(1024)
+  // sprinkle zeros
+  for i in 0..<128 {
+    arr[i * 8] = 0
+  }
+  b.bench(name="scalar_count_nonzero_1024", fn() {
+    b.keep(scalar_count_nonzero(arr))
+  })
+  b.bench(name="simd_count_nonzero_1024", fn() {
+    b.keep(simd_count_nonzero(arr))
+  })
+}
+
+///|
+test "bench/all_any" (b : @bench.T) {
+  let arr = make_bench_int_array(1024) // all non-zero
+  b.bench(name="scalar_all_1024", fn() { b.keep(scalar_all(arr)) })
+  b.bench(name="simd_all_1024", fn() { b.keep(simd_all(arr)) })
+  b.bench(name="scalar_any_1024", fn() { b.keep(scalar_any(arr)) })
+  b.bench(name="simd_any_1024", fn() { b.keep(simd_any(arr)) })
+}
+
+// --- linear algebra ---
+
+///|
+test "bench/matmul_f64 64x64" (b : @bench.T) {
+  let dim = 64
+  let a = FixedArray::make(dim * dim, 0.0)
+  let b_t = FixedArray::make(dim * dim, 0.0)
+  let c = FixedArray::make(dim * dim, 0.0)
+  for i in 0..<(dim * dim) {
+    a[i] = (i + 1).to_double() * 0.001
+    b_t[i] = ((i * 7 + 3) % 19).to_double() * 0.01
+  }
+  b.bench(name="scalar_matmul_f64_64x64", fn() {
+    scalar_matmul_f64(a, b_t, c, dim, dim, dim)
+  })
+  b.bench(name="simd_matmul_f64_64x64", fn() {
+    simd_matmul_f64(a, b_t, c, dim, dim, dim)
+  })
+}
+
+///|
+test "bench/gemv_f64 256x256" (b : @bench.T) {
+  let m = 256
+  let n = 256
+  let a = FixedArray::make(m * n, 0.0)
+  let x = FixedArray::make(n, 0.0)
+  let y = FixedArray::make(m, 0.0)
+  for i in 0..<(m * n) {
+    a[i] = (i + 1).to_double() * 0.001
+  }
+  for j in 0..<n {
+    x[j] = (j + 1).to_double()
+  }
+  b.bench(name="scalar_gemv_f64_256x256", fn() {
+    scalar_gemv_f64(a, x, y, m, n)
+  })
+  b.bench(name="simd_gemv_f64_256x256", fn() {
+    simd_gemv_f64(a, x, y, m, n)
+  })
+}
+
+///|
+test "bench/where" (b : @bench.T) {
+  let mask = FixedArray::make(1024, -1)
+  for i in 0..<1024 {
+    if i % 3 == 0 {
+      mask[i] = 0
+    }
+  }
+  let x = make_bench_int_array(1024)
+  let y = make_bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_where_1024", fn() { scalar_where(mask, x, y, out) })
+  b.bench(name="simd_where_1024", fn() { simd_where(mask, x, y, out) })
+}

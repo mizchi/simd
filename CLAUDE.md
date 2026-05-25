@@ -62,6 +62,53 @@ Notes specific to f64:
 - `FixedArray[Float]` (f32) cannot be passed across the FFI today — the compiler rejects it as "Invalid stub type". f32 ops are deferred; f64 is the practical numpy dtype anyway.
 - `f64.min` / `f64.max` are rejected by the Dwarfsm parser, and `f64.const` literals likely trip the same `Int32.of_string` path as `v128.const`. Workarounds: use `select` with `f64.lt` / `f64.gt` for the scalar tail, and synthesize `0.0` via `i32.const 0 f64.convert_i32_s` (then `f64x2.splat` for accumulators). The vector variants `f64x2.min` / `f64x2.max` parse fine.
 
+## Numpy-style ops (B / C / D)
+
+### Element-wise Int + `where`
+
+`simd_{sub,mul,neg,abs,min_elem,max_elem,eq,lt,gt}` (Int) and
+`simd_where(mask, a, b, out)`. `eq` / `lt` / `gt` produce numpy-style int
+masks (`-1` / `0`); pass that mask to `simd_where` (uses `v128.bitselect`).
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| sub | 1024 | 1.72 µs | 147 ns | 11.7 |
+| mul (Int) | 1024 | 1.74 µs | 159 ns | 10.9 |
+| neg | 1024 | 1.14 µs | 106 ns | 10.8 |
+| abs | 1024 | 1.66 µs | 107 ns | 15.5 |
+| min_elem / max_elem | 1024 | ~2.2 µs | 131 ns | ~16.7 |
+| eq / lt | 1024 | 1.66 µs | 134 ns | 12.4 |
+| where | 1024 | 2.10 µs | 213 ns | 9.9 |
+
+### Linear algebra
+
+- `simd_matmul_f64(A, B^T, C, m, k, n)` — B is passed already transposed (row-major B^T), so the inner loop is a plain dot product of two contiguous rows. Inner uses f64x2 via a private `simd_dot_f64_range(a, a_off, b, b_off, k)`.
+- `simd_gemv_f64(A, x, y, m, n)` — one f64x2 dot product per output row.
+- `simd_transpose_f64` — stays scalar (a SIMD 2x2 block path would need `i8x16.shuffle` with a 16-byte literal pattern; tractable but not a clear win for a memory-bound op, so deferred).
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| matmul_f64 | 64×64 | 359 µs | 65 µs | 5.5 |
+| gemv_f64 | 256×256 | 86 µs | 16 µs | 5.3 |
+
+### Reductions + scan
+
+- `simd_prod` (Int), `simd_mean_f64`, `simd_var_f64`, `simd_count_nonzero`, `simd_all`, `simd_any` — all SIMD-accelerated.
+- `simd_cumsum` / `simd_cumprod` stay scalar: the dependency chain across lanes makes a 4-way SIMD prefix sum require cross-lane shuffles whose 16-byte index pattern would need a precomputed `FixedArray[Byte]`. Deferred.
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| prod | 1024 | 751 ns | 171 ns | 4.4 |
+| var_f64 | 1024 | 1.37 µs | 625 ns | 2.2 |
+| count_nonzero | 1024 | 668 ns | 217 ns | 3.1 |
+| all | 1024 | 642 ns | 194 ns | 3.3 |
+| any (all non-zero) | 1024 | 18 ns | 204 ns | 0.09 |
+
+`simd_any` loses on this bench because the scalar version returns on the very
+first non-zero element. On a buffer of mostly zeros (the worst case for the
+scalar path) the SIMD version reads every chunk at constant cost; pick the
+implementation based on expected input shape.
+
 ## Inline-WAT gotchas worth remembering
 
 - `i32.and` is bitwise, **not** logical: combining a `0/1` boolean with a
