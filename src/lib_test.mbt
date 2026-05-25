@@ -343,3 +343,109 @@ test "simd_count_byte matches scalar" {
   let data = make_byte_array(vals)
   assert_eq(simd_count_byte(data, b'\x07'), scalar_count_byte(data, b'\x07'))
 }
+
+// --- Double (f64) ops ---
+
+///|
+fn make_f64_array(vals : Array[Double]) -> FixedArray[Double] {
+  let arr = FixedArray::make(vals.length(), 0.0)
+  for i, v in vals {
+    arr[i] = v
+  }
+  arr
+}
+
+///|
+fn assert_f64_close(a : Double, b : Double, eps~ : Double = 1.0e-9) -> Unit {
+  let d = (a - b).abs()
+  if d > eps {
+    abort("expected ~" + b.to_string() + " got " + a.to_string())
+  }
+}
+
+///|
+test "simd_add_f64 matches scalar" {
+  let a = make_f64_array([1.5, 2.0, 3.25, 4.0, 5.5, 6.0, 7.125])
+  let b = make_f64_array([10.0, 20.5, 30.0, 40.25, 50.0, 60.5, 70.0])
+  let out_simd = FixedArray::make(7, 0.0)
+  let out_scalar = FixedArray::make(7, 0.0)
+  simd_add_f64(a, b, out_simd)
+  scalar_add_f64(a, b, out_scalar)
+  for i in 0..<7 {
+    assert_f64_close(out_simd[i], out_scalar[i])
+  }
+}
+
+///|
+test "simd_sub/mul/div_f64 match scalar" {
+  let a = make_f64_array([1.0, 4.0, 9.0, 16.0, 25.0])
+  let b = make_f64_array([2.0, 2.0, 3.0, 4.0, 5.0])
+  let out = FixedArray::make(5, 0.0)
+  let ref_arr = FixedArray::make(5, 0.0)
+  simd_sub_f64(a, b, out)
+  scalar_sub_f64(a, b, ref_arr)
+  for i in 0..<5 {
+    assert_f64_close(out[i], ref_arr[i])
+  }
+  simd_mul_f64(a, b, out)
+  scalar_mul_f64(a, b, ref_arr)
+  for i in 0..<5 {
+    assert_f64_close(out[i], ref_arr[i])
+  }
+  simd_div_f64(a, b, out)
+  scalar_div_f64(a, b, ref_arr)
+  for i in 0..<5 {
+    assert_f64_close(out[i], ref_arr[i])
+  }
+}
+
+///|
+test "simd_sqrt_f64 matches scalar" {
+  let a = make_f64_array([1.0, 4.0, 9.0, 16.0, 25.0])
+  let out = FixedArray::make(5, 0.0)
+  simd_sqrt_f64(a, out)
+  assert_f64_close(out[0], 1.0)
+  assert_f64_close(out[1], 2.0)
+  assert_f64_close(out[2], 3.0)
+  assert_f64_close(out[3], 4.0)
+  assert_f64_close(out[4], 5.0)
+}
+
+///|
+test "simd_min_f64 / simd_max_f64 element-wise" {
+  let a = make_f64_array([1.0, 5.0, 3.0, 8.0, 2.0])
+  let b = make_f64_array([4.0, 2.0, 7.0, 6.0, 9.0])
+  let out = FixedArray::make(5, 0.0)
+  simd_min_f64(a, b, out)
+  assert_f64_close(out[0], 1.0)
+  assert_f64_close(out[1], 2.0)
+  assert_f64_close(out[2], 3.0)
+  assert_f64_close(out[3], 6.0)
+  assert_f64_close(out[4], 2.0)
+  simd_max_f64(a, b, out)
+  assert_f64_close(out[0], 4.0)
+  assert_f64_close(out[1], 5.0)
+  assert_f64_close(out[2], 7.0)
+  assert_f64_close(out[3], 8.0)
+  assert_f64_close(out[4], 9.0)
+}
+
+///|
+test "simd_sum_f64 matches scalar" {
+  let a = make_f64_array([1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5])
+  assert_f64_close(simd_sum_f64(a), scalar_sum_f64(a))
+}
+
+///|
+test "simd_sum_f64 empty" {
+  let arr : FixedArray[Double] = FixedArray::make(0, 0.0)
+  assert_f64_close(simd_sum_f64(arr), 0.0)
+}
+
+///|
+test "simd_dot_f64 matches scalar" {
+  let a = make_f64_array([1.0, 2.0, 3.0, 4.0, 5.0])
+  let b = make_f64_array([2.0, 3.0, 4.0, 5.0, 6.0])
+  // 2 + 6 + 12 + 20 + 30 = 70
+  assert_f64_close(simd_dot_f64(a, b), 70.0)
+}

@@ -139,3 +139,64 @@ test "bench/count_byte" (b : @bench.T) {
     b.keep(simd_count_byte(data, b'\x07'))
   })
 }
+
+// --- f64 ops ---
+
+///|
+fn make_bench_f64_array(size : Int) -> FixedArray[Double] {
+  let arr = FixedArray::make(size, 0.0)
+  for i in 0..<size {
+    arr[i] = (i + 1).to_double() * 0.5
+  }
+  arr
+}
+
+///|
+test "bench/f64 add" (b : @bench.T) {
+  let a = make_bench_f64_array(1024)
+  let bb = make_bench_f64_array(1024)
+  let out = FixedArray::make(1024, 0.0)
+  b.bench(name="scalar_add_f64_1024", fn() { scalar_add_f64(a, bb, out) })
+  b.bench(name="simd_add_f64_1024", fn() { simd_add_f64(a, bb, out) })
+}
+
+///|
+test "bench/f64 mul" (b : @bench.T) {
+  let a = make_bench_f64_array(1024)
+  let bb = make_bench_f64_array(1024)
+  let out = FixedArray::make(1024, 0.0)
+  b.bench(name="scalar_mul_f64_1024", fn() { scalar_mul_f64(a, bb, out) })
+  b.bench(name="simd_mul_f64_1024", fn() { simd_mul_f64(a, bb, out) })
+}
+
+///|
+test "bench/f64 div" (b : @bench.T) {
+  let a = make_bench_f64_array(1024)
+  let bb = make_bench_f64_array(1024)
+  let out = FixedArray::make(1024, 0.0)
+  b.bench(name="scalar_div_f64_1024", fn() { scalar_div_f64(a, bb, out) })
+  b.bench(name="simd_div_f64_1024", fn() { simd_div_f64(a, bb, out) })
+}
+
+///|
+test "bench/f64 sqrt" (b : @bench.T) {
+  let a = make_bench_f64_array(1024)
+  let out = FixedArray::make(1024, 0.0)
+  b.bench(name="scalar_sqrt_f64_1024", fn() { scalar_sqrt_f64(a, out) })
+  b.bench(name="simd_sqrt_f64_1024", fn() { simd_sqrt_f64(a, out) })
+}
+
+///|
+test "bench/f64 sum" (b : @bench.T) {
+  let a = make_bench_f64_array(1024)
+  b.bench(name="scalar_sum_f64_1024", fn() { b.keep(scalar_sum_f64(a)) })
+  b.bench(name="simd_sum_f64_1024", fn() { b.keep(simd_sum_f64(a)) })
+}
+
+///|
+test "bench/f64 dot" (b : @bench.T) {
+  let a = make_bench_f64_array(1024)
+  let bb = make_bench_f64_array(1024)
+  b.bench(name="scalar_dot_f64_1024", fn() { b.keep(scalar_dot_f64(a, bb)) })
+  b.bench(name="simd_dot_f64_1024", fn() { b.keep(simd_dot_f64(a, bb)) })
+}

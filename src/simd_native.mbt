@@ -141,3 +141,78 @@ pub fn simd_find_byte(data : FixedArray[Byte], needle : Byte) -> Int {
 pub fn simd_count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
   scalar_count_byte(data, needle)
 }
+
+///|
+pub fn simd_add_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  scalar_add_f64(a, b, out)
+}
+
+///|
+pub fn simd_sub_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  scalar_sub_f64(a, b, out)
+}
+
+///|
+pub fn simd_mul_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  scalar_mul_f64(a, b, out)
+}
+
+///|
+pub fn simd_div_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  scalar_div_f64(a, b, out)
+}
+
+///|
+pub fn simd_sqrt_f64(
+  a : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  scalar_sqrt_f64(a, out)
+}
+
+///|
+pub fn simd_min_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  scalar_min_f64(a, b, out)
+}
+
+///|
+pub fn simd_max_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  scalar_max_f64(a, b, out)
+}
+
+///|
+pub fn simd_sum_f64(arr : FixedArray[Double]) -> Double {
+  scalar_sum_f64(arr)
+}
+
+///|
+pub fn simd_dot_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+) -> Double {
+  scalar_dot_f64(a, b)
+}

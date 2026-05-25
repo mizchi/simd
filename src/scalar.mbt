@@ -193,6 +193,115 @@ pub fn scalar_count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
   c
 }
 
+// --- Double (f64) ops ---
+
+///|
+pub fn scalar_add_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i] + b[i]
+  }
+}
+
+///|
+pub fn scalar_sub_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i] - b[i]
+  }
+}
+
+///|
+pub fn scalar_mul_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i] * b[i]
+  }
+}
+
+///|
+pub fn scalar_div_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i] / b[i]
+  }
+}
+
+///|
+pub fn scalar_sqrt_f64(
+  a : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i].sqrt()
+  }
+}
+
+///|
+pub fn scalar_sum_f64(arr : FixedArray[Double]) -> Double {
+  let len = arr.length()
+  let mut acc = 0.0
+  for i in 0..<len {
+    acc = acc + arr[i]
+  }
+  acc
+}
+
+///|
+pub fn scalar_dot_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+) -> Double {
+  let len = a.length()
+  let mut acc = 0.0
+  for i in 0..<len {
+    acc = acc + a[i] * b[i]
+  }
+  acc
+}
+
+///|
+/// Element-wise min (out[i] = min(a[i], b[i])).
+pub fn scalar_min_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i].min(b[i])
+  }
+}
+
+///|
+pub fn scalar_max_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = a[i].max(b[i])
+  }
+}
+
 ///|
 /// Adler-32 checksum (scalar).
 pub fn scalar_adler32(data : FixedArray[Byte]) -> UInt {

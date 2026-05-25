@@ -44,6 +44,24 @@ Bench on Apple Silicon under V8/wasm runtime, sizes as noted.
 `argmin` / `argmax` stay on the scalar path: early-exit needs `if` / `return`
 opcodes that the Dwarfsm inline-WAT parser handles less reliably.
 
+## Double (f64) ops via f64x2
+
+Element-wise: `simd_{add,sub,mul,div,sqrt,min,max}_f64`. Reductions: `simd_{sum,dot}_f64`. All 2-way parallel.
+
+| op | size | scalar | simd (f64x2) | x |
+|---|---|---|---|---|
+| add | 1024 | 1.71 µs | 278 ns | 6.2 |
+| mul | 1024 | 1.94 µs | 256 ns | 7.6 |
+| div | 1024 | 1.84 µs | 264 ns | 7.0 |
+| sqrt | 1024 | 1.24 µs | 252 ns | 4.9 |
+| sum | 1024 | 681 ns | 292 ns | 2.3 |
+| dot | 1024 | 1.25 µs | 336 ns | 3.7 |
+
+Notes specific to f64:
+
+- `FixedArray[Float]` (f32) cannot be passed across the FFI today — the compiler rejects it as "Invalid stub type". f32 ops are deferred; f64 is the practical numpy dtype anyway.
+- `f64.min` / `f64.max` are rejected by the Dwarfsm parser, and `f64.const` literals likely trip the same `Int32.of_string` path as `v128.const`. Workarounds: use `select` with `f64.lt` / `f64.gt` for the scalar tail, and synthesize `0.0` via `i32.const 0 f64.convert_i32_s` (then `f64x2.splat` for accumulators). The vector variants `f64x2.min` / `f64x2.max` parse fine.
+
 ## Inline-WAT gotchas worth remembering
 
 - `i32.and` is bitwise, **not** logical: combining a `0/1` boolean with a
@@ -54,7 +72,12 @@ opcodes that the Dwarfsm inline-WAT parser handles less reliably.
   `N`. Off-by-one (`local.get N+k` against `N+k-1` declared) compiles fine but
   fails at instantiation with `invalid local index`.
 - Wasm has no `i32.min_s/max_s`; reduce horizontally with `select` over
-  extracted lanes.
+  extracted lanes. `f64.min` / `f64.max` exist in core wasm but the Dwarfsm
+  inline parser rejects them — use `select` + `f64.lt` / `f64.gt` instead.
+- Float / Double constants: `f64.const X` and `v128.const ... X ...` literals
+  trip the parser's int-decoder. Synthesize via `i32.const N f64.convert_i32_s`
+  (and `f64x2.splat` for vectors); load shuffle / lookup tables from a
+  `FixedArray[Byte]` via `v128.load`.
 
 ## Commands
 
