@@ -875,6 +875,48 @@ test "bitonic_merge32_i32 interleaved" {
 }
 
 ///|
+test "bitonic_merge64_i32 interleaved" {
+  let arr = FixedArray::make(64, 0)
+  for i in 0..<32 {
+    arr[i] = i * 2 + 1
+  }
+  for i in 0..<32 {
+    arr[32 + i] = i * 2 + 2
+  }
+  bitonic_merge64_i32(arr, 0)
+  for i in 0..<64 {
+    assert_eq(arr[i], i + 1)
+  }
+}
+
+///|
+test "bitonic_merge64_i32 matches scalar" {
+  let h1 = FixedArray::make(32, 0)
+  for i in 0..<32 {
+    h1[i] = (i * 13 + 7) % 101
+  }
+  @internal.scalar_sort_int(h1)
+  let h2 = FixedArray::make(32, 0)
+  for i in 0..<32 {
+    h2[i] = (i * 17 + 3) % 97
+  }
+  @internal.scalar_sort_int(h2)
+  let arr_a = FixedArray::make(64, 0)
+  let arr_b = FixedArray::make(64, 0)
+  for i in 0..<32 {
+    arr_a[i] = h1[i]
+    arr_b[i] = h1[i]
+    arr_a[32 + i] = h2[i]
+    arr_b[32 + i] = h2[i]
+  }
+  bitonic_merge64_i32(arr_a, 0)
+  @internal.scalar_bitonic_merge64_int(arr_b, 0)
+  for i in 0..<64 {
+    assert_eq(arr_a[i], arr_b[i])
+  }
+}
+
+///|
 test "bitonic_merge32_i32 matches scalar" {
   let h1 = FixedArray::make(16, 0)
   for i in 0..<16 {

@@ -194,23 +194,31 @@ Sort 16 elements by running `simd_sort4_int` on each of the four 4-element sub-b
 
 The ratio is close to 1 because the merge stage dominates and runs scalar. A future SIMD bitonic merge would bring this closer to the leaf 1.7x.
 
-## General-purpose `sort_i32` (SIMD-leaf merge sort)
+## General-purpose `sort_i32` (SIMD leaf + SIMD merge32/64 + scalar tail)
 
-`sort_i32(arr)` is now a bottom-up merge sort with a SIMD leaf:
+`sort_i32(arr)` is a bottom-up merge sort with three SIMD phases:
 
-1. Sort every aligned 16-block with `sort16_i32` (fully SIMD).
-2. Tail block (< 16 elements) falls through to the built-in scalar sort.
-3. Merge ladder (16+16 → 32, 32+32 → 64, ...) is scalar `merge2_int`
-   between ping-pong buffers; a future SIMD bitonic merge would replace
-   this and shrink the merge cost.
+1. **Leaf**: sort every aligned 16-block with `sort16_i32` (fully SIMD).
+   Tail < 16 falls through to the built-in scalar sort.
+2. **width = 16 pass**: in-place SIMD `bitonic_merge32_i32` for every
+   aligned 32-block. Tail (16-element block + partial < 16) goes through
+   scalar `merge2_int` once into `tmp` and back.
+3. **width = 32 pass**: in-place SIMD `bitonic_merge64_i32` for every
+   aligned 64-block. Same tail treatment as the previous pass.
+4. **width ≥ 64**: scalar `merge2_int` ladder with ping-pong between
+   `arr` and `tmp`. A future SIMD `bitonic_merge128` / `_256` would
+   shrink this further but the working set hits 32+ v128 registers and
+   the win shrinks.
 
-| op | size | scalar (FixedArray::sort) | simd | x |
+| variant | size | scalar (`FixedArray::sort`) | simd | x |
 |---|---|---|---|---|
-| sort_i32 | 1024 | 148.93 µs | 23.38 µs | **6.4** |
+| leaf only (old) | 1024 | 148.93 µs | 23.38 µs | 6.4 |
+| + merge32 in ladder | 1024 | 158.02 µs | 21.08 µs | 7.5 |
+| **+ merge64 in ladder** | 1024 | 157.41 µs | **16.38 µs** | **9.6** |
 
-The leaf phase dominates: 64 calls to a fully-SIMD `sort16_i32` is much
-cheaper than the equivalent scalar comparisons, even with the scalar
-ladder on top.
+Each additional SIMD merge level shaves another 15-25 % off because it
+replaces N scalar `merge2` calls (~O(2N) ops each) with one inline-WAT
+function call doing the same work register-resident.
 
 ## Full SIMD sort16 (no scalar merge left)
 
