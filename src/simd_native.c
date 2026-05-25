@@ -110,6 +110,140 @@ void simd_add_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t len)
   }
 }
 
+void simd_sub_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    vst1q_s32(out + i, vsubq_s32(vld1q_s32(a + i), vld1q_s32(b + i)));
+  }
+#elif USE_SSE2
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), _mm_sub_epi32(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] - b[i];
+}
+
+void simd_mul_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    vst1q_s32(out + i, vmulq_s32(vld1q_s32(a + i), vld1q_s32(b + i)));
+  }
+#elif defined(__SSE4_1__)
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), _mm_mullo_epi32(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] * b[i];
+}
+
+void simd_min_elem_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    vst1q_s32(out + i, vminq_s32(vld1q_s32(a + i), vld1q_s32(b + i)));
+  }
+#elif defined(__SSE4_1__)
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), _mm_min_epi32(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] < b[i] ? a[i] : b[i];
+}
+
+void simd_max_elem_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    vst1q_s32(out + i, vmaxq_s32(vld1q_s32(a + i), vld1q_s32(b + i)));
+  }
+#elif defined(__SSE4_1__)
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), _mm_max_epi32(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] > b[i] ? a[i] : b[i];
+}
+
+int32_t simd_min_ffi(const int32_t* arr, int32_t len) {
+  if (len <= 0) return 0;
+  int32_t result = arr[0];
+  int32_t i = 0;
+#if USE_NEON
+  if (len >= 4) {
+    int32x4_t acc = vld1q_s32(arr);
+    i = 4;
+    int32_t end4 = (len / 4) * 4;
+    for (; i < end4; i += 4) {
+      acc = vminq_s32(acc, vld1q_s32(arr + i));
+    }
+    result = vminvq_s32(acc);
+  }
+#endif
+  for (; i < len; i++) {
+    if (arr[i] < result) result = arr[i];
+  }
+  return result;
+}
+
+int32_t simd_max_ffi(const int32_t* arr, int32_t len) {
+  if (len <= 0) return 0;
+  int32_t result = arr[0];
+  int32_t i = 0;
+#if USE_NEON
+  if (len >= 4) {
+    int32x4_t acc = vld1q_s32(arr);
+    i = 4;
+    int32_t end4 = (len / 4) * 4;
+    for (; i < end4; i += 4) {
+      acc = vmaxq_s32(acc, vld1q_s32(arr + i));
+    }
+    result = vmaxvq_s32(acc);
+  }
+#endif
+  for (; i < len; i++) {
+    if (arr[i] > result) result = arr[i];
+  }
+  return result;
+}
+
+void simd_saxpy_ffi(int32_t k, const int32_t* a, const int32_t* b, int32_t* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32x4_t kv = vdupq_n_s32(k);
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    vst1q_s32(out + i, vaddq_s32(vmulq_s32(kv, vld1q_s32(a + i)), vld1q_s32(b + i)));
+  }
+#elif defined(__SSE4_1__)
+  __m128i kv = _mm_set1_epi32(k);
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), _mm_add_epi32(_mm_mullo_epi32(kv, va), vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = k * a[i] + b[i];
+}
+
 uint32_t simd_adler32_ffi(const uint8_t* data, int32_t len) {
   uint32_t a = 1, b = 0;
   const uint32_t MOD_ADLER = 65521;

@@ -20,6 +20,60 @@ extern "C" fn simd_add_ffi(
 ) -> Unit = "simd_add_ffi"
 
 ///|
+#borrow(a, b, out)
+extern "C" fn simd_sub_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_sub_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_mul_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_mul_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_min_elem_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_min_elem_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_max_elem_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_max_elem_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_min_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_min_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_max_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_max_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_saxpy_ffi(
+  k : Int,
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_saxpy_ffi"
+
+///|
 #borrow(data)
 extern "C" fn simd_adler32_ffi(data : FixedArray[Byte], len : Int) -> UInt = "simd_adler32_ffi"
 
@@ -68,13 +122,22 @@ pub fn adler32_bytes(data : FixedArray[Byte]) -> UInt {
 }
 
 ///|
+/// native min reduce: C FFI (NEON / SSE4.1).
 pub fn min_i32(arr : FixedArray[Int]) -> Int {
-  @internal.scalar_min(arr)
+  let len = arr.length()
+  if len == 0 {
+    return 0
+  }
+  simd_min_ffi(arr, len)
 }
 
 ///|
 pub fn max_i32(arr : FixedArray[Int]) -> Int {
-  @internal.scalar_max(arr)
+  let len = arr.length()
+  if len == 0 {
+    return 0
+  }
+  simd_max_ffi(arr, len)
 }
 
 ///|
@@ -94,7 +157,11 @@ pub fn saxpy_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_saxpy(k, a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_saxpy_ffi(k, a, b, out, len)
 }
 
 ///|
@@ -223,7 +290,11 @@ pub fn sub_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_sub(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_sub_ffi(a, b, out, len)
 }
 
 ///|
@@ -232,7 +303,11 @@ pub fn mul_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_mul(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_mul_ffi(a, b, out, len)
 }
 
 ///|
@@ -251,7 +326,11 @@ pub fn min_elem_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_min_elem(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_min_elem_ffi(a, b, out, len)
 }
 
 ///|
@@ -260,7 +339,11 @@ pub fn max_elem_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_max_elem(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_max_elem_ffi(a, b, out, len)
 }
 
 ///|
