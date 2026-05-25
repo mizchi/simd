@@ -466,6 +466,28 @@ test "bench/to_lower_ascii" (b : @bench.T) {
 // --- sort ---
 
 ///|
+test "bench/sort_i32 (full)" (b : @bench.T) {
+  let n = 1024
+  let arr = FixedArray::make(n, 0)
+  for i in 0..<n {
+    arr[i] = (i * 17 + 11) % 1009
+  }
+  let scratch = FixedArray::make(n, 0)
+  b.bench(name="scalar_sort_int_1024", fn() {
+    for i in 0..<n {
+      scratch[i] = arr[i]
+    }
+    @internal.scalar_sort_int(scratch)
+  })
+  b.bench(name="simd_sort_i32_1024", fn() {
+    for i in 0..<n {
+      scratch[i] = arr[i]
+    }
+    sort_i32(scratch)
+  })
+}
+
+///|
 test "bench/sort16_int" (b : @bench.T) {
   let n = 1024 // 64 blocks of 16
   let arr = FixedArray::make(n, 0)

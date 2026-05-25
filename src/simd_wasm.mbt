@@ -922,11 +922,96 @@ pub fn sort16_i32(arr : FixedArray[Int], off : Int) -> Unit {
 }
 
 ///|
-/// General-purpose sort: defers to the built-in FixedArray.sort. A future
-/// numpy-style SIMD sort would build on simd_sort4 as the bottom-level
-/// kernel of a merge sort.
+/// General-purpose sort: SIMD-leaf bottom-up merge sort.
+/// Leaf (16-element blocks): sort16_i32 (fully SIMD).
+/// Tail block (< 16): fall back to the built-in scalar sort.
+/// Merge ladder (16+16 → 32, 32+32 → 64, ...): scalar merge2 between
+/// ping-pong buffers; a future SIMD bitonic merge would replace this.
 pub fn sort_i32(arr : FixedArray[Int]) -> Unit {
-  arr.sort()
+  let n = arr.length()
+  if n <= 1 {
+    return
+  }
+  if n <= 16 {
+    // tiny case: leaf-only path.
+    if n == 16 {
+      sort16_i32(arr, 0)
+    } else if n == 8 {
+      sort4_i32(arr, 0)
+      sort4_i32(arr, 4)
+      bitonic_merge8_i32(arr, 0)
+    } else if n == 4 {
+      sort4_i32(arr, 0)
+    } else {
+      @internal.scalar_sort_int(arr)
+    }
+    return
+  }
+
+  // 1. leaf-sort each aligned 16-block.
+  let leaf_end = n / 16 * 16
+  for i = 0; i < leaf_end; i = i + 16 {
+    sort16_i32(arr, i)
+  }
+  // 1b. tail < 16: copy out, scalar sort, copy back.
+  let tail_len = n - leaf_end
+  if tail_len > 0 {
+    let tail = FixedArray::make(tail_len, 0)
+    for k in 0..<tail_len {
+      tail[k] = arr[leaf_end + k]
+    }
+    @internal.scalar_sort_int(tail)
+    for k in 0..<tail_len {
+      arr[leaf_end + k] = tail[k]
+    }
+  }
+
+  // 2. merge ladder. Start width = 16, ping-pong between arr and tmp.
+  let tmp = FixedArray::make(n, 0)
+  let mut width = 16
+  // even number of merge passes → result back in arr (we want this).
+  // We achieve it by, after each pass, swapping the conceptual src/dst.
+  let mut src_is_arr = true
+  while width < n {
+    let merged = width * 2
+    let mut i = 0
+    while i < n {
+      let a_off = i
+      let a_end = if a_off + width <= n { a_off + width } else { n }
+      let b_off = a_end
+      let b_end = if b_off + width <= n { b_off + width } else { n }
+      if b_off >= n {
+        // no B half: copy A as-is into dst.
+        if src_is_arr {
+          for k = a_off; k < a_end; k = k + 1 {
+            tmp[k] = arr[k]
+          }
+        } else {
+          for k = a_off; k < a_end; k = k + 1 {
+            arr[k] = tmp[k]
+          }
+        }
+      } else if src_is_arr {
+        @internal.scalar_merge2_int(
+          arr, a_off, a_end - a_off, arr, b_off, b_end - b_off, tmp, a_off,
+        )
+      } else {
+        @internal.scalar_merge2_int(
+          tmp, a_off, a_end - a_off, tmp, b_off, b_end - b_off, arr, a_off,
+        )
+      }
+      i = i + merged
+    }
+    width = merged
+    src_is_arr = !src_is_arr
+  }
+
+  // 3. if final pass landed in tmp, copy back into arr.
+  if !src_is_arr {
+    for k in 0..<n {
+      arr[k] = tmp[k]
+    }
+  }
 }
 
 // --- Float (f32) SIMD ops via f32x4 (4-way) over byte buffers ---

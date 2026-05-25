@@ -758,6 +758,60 @@ test "sort_i32 general" {
 }
 
 ///|
+test "sort_i32 large (multi-pass merge ladder)" {
+  // size 1000 - not power of 2, exercises tail handling + ladder copy
+  let n = 1000
+  let arr = FixedArray::make(n, 0)
+  let ref_arr = FixedArray::make(n, 0)
+  for i in 0..<n {
+    let v = (i * 31 + 17) % 991
+    arr[i] = v
+    ref_arr[i] = v
+  }
+  sort_i32(arr)
+  @internal.scalar_sort_int(ref_arr)
+  for i in 0..<n {
+    assert_eq(arr[i], ref_arr[i])
+  }
+}
+
+///|
+test "sort_i32 power of two (1024)" {
+  let n = 1024
+  let arr = FixedArray::make(n, 0)
+  let ref_arr = FixedArray::make(n, 0)
+  for i in 0..<n {
+    let v = (i * 13 + 7) % 257
+    arr[i] = v
+    ref_arr[i] = v
+  }
+  sort_i32(arr)
+  @internal.scalar_sort_int(ref_arr)
+  for i in 0..<n {
+    assert_eq(arr[i], ref_arr[i])
+  }
+}
+
+///|
+test "sort_i32 small odd sizes (1, 2, 3, 5, 7, 11, 17)" {
+  let sizes = [1, 2, 3, 5, 7, 11, 17]
+  for n in sizes {
+    let arr = FixedArray::make(n, 0)
+    let ref_arr = FixedArray::make(n, 0)
+    for i in 0..<n {
+      let v = (i * 7 + 3) % 19 - 10
+      arr[i] = v
+      ref_arr[i] = v
+    }
+    sort_i32(arr)
+    @internal.scalar_sort_int(ref_arr)
+    for i in 0..<n {
+      assert_eq(arr[i], ref_arr[i])
+    }
+  }
+}
+
+///|
 test "bitonic_merge8_i32 interleaved" {
   // two sorted halves: [1,3,5,7] and [2,4,6,8]
   let arr = make_int_array([1, 3, 5, 7, 2, 4, 6, 8])

@@ -194,6 +194,24 @@ Sort 16 elements by running `simd_sort4_int` on each of the four 4-element sub-b
 
 The ratio is close to 1 because the merge stage dominates and runs scalar. A future SIMD bitonic merge would bring this closer to the leaf 1.7x.
 
+## General-purpose `sort_i32` (SIMD-leaf merge sort)
+
+`sort_i32(arr)` is now a bottom-up merge sort with a SIMD leaf:
+
+1. Sort every aligned 16-block with `sort16_i32` (fully SIMD).
+2. Tail block (< 16 elements) falls through to the built-in scalar sort.
+3. Merge ladder (16+16 → 32, 32+32 → 64, ...) is scalar `merge2_int`
+   between ping-pong buffers; a future SIMD bitonic merge would replace
+   this and shrink the merge cost.
+
+| op | size | scalar (FixedArray::sort) | simd | x |
+|---|---|---|---|---|
+| sort_i32 | 1024 | 148.93 µs | 23.38 µs | **6.4** |
+
+The leaf phase dominates: 64 calls to a fully-SIMD `sort16_i32` is much
+cheaper than the equivalent scalar comparisons, even with the scalar
+ladder on top.
+
 ## Full SIMD sort16 (no scalar merge left)
 
 Added `simd_bitonic_merge16_int(arr, off)`: 8+8 → 16 SIMD bitonic merge in 4 stages — reverse B halves and lane-wise min/max against A halves (distance 8), distance-4 min/max between v128 pairs in each 8-half, then distance-2 and distance-1 compare-exchange within each of the 4 v128s. `simd_sort16_int` is now fully SIMD: 4 leaf `sort4` + 2 `bitonic_merge8` + 1 `bitonic_merge16`.
