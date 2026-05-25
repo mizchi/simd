@@ -16,24 +16,24 @@ fn make_byte_array(vals : Array[Int]) -> FixedArray[Byte] {
   arr
 }
 
-// --- scalar_sum ---
+// --- @internal.scalar_sum ---
 
 ///|
 test "scalar_sum empty" {
   let arr : FixedArray[Int] = FixedArray::make(0, 0)
-  inspect(scalar_sum(arr), content="0")
+  inspect(@internal.scalar_sum(arr), content="0")
 }
 
 ///|
 test "scalar_sum basic" {
   let arr = make_int_array([1, 2, 3, 4, 5])
-  inspect(scalar_sum(arr), content="15")
+  inspect(@internal.scalar_sum(arr), content="15")
 }
 
 ///|
 test "scalar_sum with negatives" {
   let arr = make_int_array([10, -3, 7, -2])
-  inspect(scalar_sum(arr), content="12")
+  inspect(@internal.scalar_sum(arr), content="12")
 }
 
 // --- sum_i32 ---
@@ -59,16 +59,16 @@ test "sum_i32 non-aligned" {
 ///|
 test "sum_i32 matches scalar" {
   let arr = make_int_array([10, 20, 30, 40, 50, 60, 70])
-  inspect(sum_i32(arr) == scalar_sum(arr), content="true")
+  inspect(sum_i32(arr) == @internal.scalar_sum(arr), content="true")
 }
 
-// --- scalar_dot_product ---
+// --- @internal.scalar_dot_product ---
 
 ///|
 test "scalar_dot_product basic" {
   let a = make_int_array([1, 2, 3])
   let b = make_int_array([4, 5, 6])
-  inspect(scalar_dot_product(a, b), content="32")
+  inspect(@internal.scalar_dot_product(a, b), content="32")
 }
 
 // --- dot_i32 ---
@@ -84,17 +84,17 @@ test "dot_i32 basic" {
 test "dot_i32 non-aligned" {
   let a = make_int_array([1, 2, 3, 4, 5])
   let b = make_int_array([2, 3, 4, 5, 6])
-  inspect(dot_i32(a, b) == scalar_dot_product(a, b), content="true")
+  inspect(dot_i32(a, b) == @internal.scalar_dot_product(a, b), content="true")
 }
 
-// --- scalar_add ---
+// --- @internal.scalar_add ---
 
 ///|
 test "scalar_add basic" {
   let a = make_int_array([1, 2, 3, 4])
   let b = make_int_array([10, 20, 30, 40])
   let out = FixedArray::make(4, 0)
-  scalar_add(a, b, out)
+  @internal.scalar_add(a, b, out)
   inspect(out[0], content="11")
   inspect(out[3], content="44")
 }
@@ -118,25 +118,25 @@ test "add_i32 non-aligned" {
   let out = FixedArray::make(5, 0)
   let expected = FixedArray::make(5, 0)
   add_i32(a, b, out)
-  scalar_add(a, b, expected)
+  @internal.scalar_add(a, b, expected)
   for i in 0..<5 {
     assert_eq(out[i], expected[i])
   }
 }
 
-// --- scalar_adler32 ---
+// --- @internal.scalar_adler32 ---
 
 ///|
 test "scalar_adler32 empty" {
   let data : FixedArray[Byte] = FixedArray::make(0, b'\x00')
-  inspect(scalar_adler32(data), content="1")
+  inspect(@internal.scalar_adler32(data), content="1")
 }
 
 ///|
 test "scalar_adler32 wikipedia" {
   // "Wikipedia" -> Adler-32 = 0x11E60398
   let data = make_byte_array([87, 105, 107, 105, 112, 101, 100, 105, 97])
-  inspect(scalar_adler32(data), content="300286872")
+  inspect(@internal.scalar_adler32(data), content="300286872")
 }
 
 // --- adler32_bytes ---
@@ -144,7 +144,7 @@ test "scalar_adler32 wikipedia" {
 ///|
 test "adler32_bytes matches scalar" {
   let data = make_byte_array([87, 105, 107, 105, 112, 101, 100, 105, 97])
-  inspect(adler32_bytes(data) == scalar_adler32(data), content="true")
+  inspect(adler32_bytes(data) == @internal.scalar_adler32(data), content="true")
 }
 
 ///|
@@ -158,29 +158,29 @@ test "adler32_bytes empty" {
 ///|
 test "scalar_min/max basic" {
   let arr = make_int_array([5, -3, 8, -1, 2, 7])
-  inspect(scalar_min(arr), content="-3")
-  inspect(scalar_max(arr), content="8")
+  inspect(@internal.scalar_min(arr), content="-3")
+  inspect(@internal.scalar_max(arr), content="8")
 }
 
 ///|
 test "scalar_argmin/argmax basic" {
   let arr = make_int_array([5, -3, 8, -1, 2, 7])
-  inspect(scalar_argmin(arr), content="1")
-  inspect(scalar_argmax(arr), content="2")
+  inspect(@internal.scalar_argmin(arr), content="1")
+  inspect(@internal.scalar_argmax(arr), content="2")
 }
 
 ///|
 test "min_i32/max match scalar" {
   let arr = make_int_array([5, -3, 8, -1, 2, 7, 100, -50, 12, 4, 0, 9])
-  assert_eq(min_i32(arr), scalar_min(arr))
-  assert_eq(max_i32(arr), scalar_max(arr))
+  assert_eq(min_i32(arr), @internal.scalar_min(arr))
+  assert_eq(max_i32(arr), @internal.scalar_max(arr))
 }
 
 ///|
 test "argmin_i32/argmax match scalar" {
   let arr = make_int_array([5, -3, 8, -1, 2, 7, 100, -50, 12, 4, 0, 9])
-  assert_eq(argmin_i32(arr), scalar_argmin(arr))
-  assert_eq(argmax_i32(arr), scalar_argmax(arr))
+  assert_eq(argmin_i32(arr), @internal.scalar_argmin(arr))
+  assert_eq(argmax_i32(arr), @internal.scalar_argmax(arr))
 }
 
 ///|
@@ -216,7 +216,7 @@ test "saxpy_i32 matches scalar" {
   let out_simd = FixedArray::make(9, 0)
   let out_scalar = FixedArray::make(9, 0)
   saxpy_i32(3, a, b, out_simd)
-  scalar_saxpy(3, a, b, out_scalar)
+  @internal.scalar_saxpy(3, a, b, out_scalar)
   for i in 0..<9 {
     assert_eq(out_simd[i], out_scalar[i])
   }
@@ -239,14 +239,14 @@ test "saxpy_i32 basic value" {
 test "scalar_popcount_bytes basic" {
   let data = make_byte_array([0, 1, 2, 3, 255])
   // 0+1+1+2+8 = 12
-  inspect(scalar_popcount_bytes(data), content="12")
+  inspect(@internal.scalar_popcount_bytes(data), content="12")
 }
 
 ///|
 test "popcount_bytes matches scalar" {
   let vals = Array::makei(40, fn(i) { (i * 13 + 7) % 256 })
   let data = make_byte_array(vals)
-  assert_eq(popcount_bytes(data), scalar_popcount_bytes(data))
+  assert_eq(popcount_bytes(data), @internal.scalar_popcount_bytes(data))
 }
 
 ///|
@@ -341,7 +341,7 @@ test "find_byte not found" {
 test "count_byte matches scalar" {
   let vals = Array::makei(50, fn(i) { if i % 3 == 0 { 7 } else { i % 256 } })
   let data = make_byte_array(vals)
-  assert_eq(count_byte(data, b'\x07'), scalar_count_byte(data, b'\x07'))
+  assert_eq(count_byte(data, b'\x07'), @internal.scalar_count_byte(data, b'\x07'))
 }
 
 // --- element-wise Int ops (B) ---
@@ -353,7 +353,7 @@ test "sub_i32 matches scalar" {
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
   sub_i32(a, b, out)
-  scalar_sub(a, b, ref_arr)
+  @internal.scalar_sub(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -366,7 +366,7 @@ test "mul_i32 matches scalar" {
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
   mul_i32(a, b, out)
-  scalar_mul(a, b, ref_arr)
+  @internal.scalar_mul(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -378,7 +378,7 @@ test "neg_i32 matches scalar" {
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
   neg_i32(a, out)
-  scalar_neg(a, ref_arr)
+  @internal.scalar_neg(a, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -390,7 +390,7 @@ test "abs_i32 matches scalar" {
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
   abs_i32(a, out)
-  scalar_abs(a, ref_arr)
+  @internal.scalar_abs(a, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -403,12 +403,12 @@ test "min_elem_i32 / max_elem_i32 match scalar" {
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
   min_elem_i32(a, b, out)
-  scalar_min_elem(a, b, ref_arr)
+  @internal.scalar_min_elem(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
   max_elem_i32(a, b, out)
-  scalar_max_elem(a, b, ref_arr)
+  @internal.scalar_max_elem(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -421,7 +421,7 @@ test "eq_i32 / lt_i32 / gt_i32 produce -1/0 masks" {
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
   eq_i32(a, b, out)
-  scalar_eq(a, b, ref_arr)
+  @internal.scalar_eq(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -429,12 +429,12 @@ test "eq_i32 / lt_i32 / gt_i32 produce -1/0 masks" {
   assert_eq(out[0], -1)
   assert_eq(out[1], 0)
   lt_i32(a, b, out)
-  scalar_lt(a, b, ref_arr)
+  @internal.scalar_lt(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
   gt_i32(a, b, out)
-  scalar_gt(a, b, ref_arr)
+  @internal.scalar_gt(a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -448,7 +448,7 @@ test "where_i32 with computed mask" {
   let out = FixedArray::make(7, 0)
   let ref_arr = FixedArray::make(7, 0)
   where_i32(mask, a, b, out)
-  scalar_where(mask, a, b, ref_arr)
+  @internal.scalar_where(mask, a, b, ref_arr)
   for i in 0..<7 {
     assert_eq(out[i], ref_arr[i])
   }
@@ -510,7 +510,7 @@ test "to_lower_ascii matches scalar" {
   let s = make_byte_array(original)
   let r = make_byte_array(original)
   to_lower_ascii(s)
-  scalar_to_lower_ascii(r)
+  @internal.scalar_to_lower_ascii(r)
   for i in 0..<s.length() {
     assert_eq(s[i], r[i])
   }
@@ -525,7 +525,7 @@ test "to_upper_ascii matches scalar" {
   let s = make_byte_array(original)
   let r = make_byte_array(original)
   to_upper_ascii(s)
-  scalar_to_upper_ascii(r)
+  @internal.scalar_to_upper_ascii(r)
   for i in 0..<s.length() {
     assert_eq(s[i], r[i])
   }
@@ -623,7 +623,7 @@ test "validate_utf8 matches scalar on mixed input" {
     72, 101, 108, 108, 111, 0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC, 32, 0xC3, 0xA9,
     33, 0xF0, 0x9F, 0x98, 0x80,
   ])
-  assert_eq(validate_utf8(data), scalar_validate_utf8(data))
+  assert_eq(validate_utf8(data), @internal.scalar_validate_utf8(data))
 }
 
 // --- gather / scatter (G) ---
@@ -656,7 +656,7 @@ test "gather_i32 matches scalar (large)" {
   let out_s = FixedArray::make(50, 0)
   let out_r = FixedArray::make(50, 0)
   gather_i32(arr, indices, out_s)
-  scalar_gather(arr, indices, out_r)
+  @internal.scalar_gather(arr, indices, out_r)
   for i in 0..<50 {
     assert_eq(out_s[i], out_r[i])
   }
@@ -684,7 +684,7 @@ test "div_i32 matches scalar (positive)" {
   let out_s = FixedArray::make(9, 0)
   let out_r = FixedArray::make(9, 0)
   div_i32(a, b, out_s)
-  scalar_div(a, b, out_r)
+  @internal.scalar_div(a, b, out_r)
   for i in 0..<9 {
     assert_eq(out_s[i], out_r[i])
   }
@@ -697,7 +697,7 @@ test "div_i32 matches scalar (negatives, truncation)" {
   let out_s = FixedArray::make(8, 0)
   let out_r = FixedArray::make(8, 0)
   div_i32(a, b, out_s)
-  scalar_div(a, b, out_r)
+  @internal.scalar_div(a, b, out_r)
   for i in 0..<8 {
     assert_eq(out_s[i], out_r[i])
   }
@@ -708,7 +708,7 @@ test "div_i32 matches scalar (negatives, truncation)" {
 ///|
 test "scalar_sort4_int sorts in place" {
   let arr = make_int_array([4, 1, 3, 2])
-  scalar_sort4_int(arr, 0)
+  @internal.scalar_sort4_int(arr, 0)
   assert_eq(arr[0], 1)
   assert_eq(arr[1], 2)
   assert_eq(arr[2], 3)
@@ -727,11 +727,11 @@ test "sort4_i32 matches scalar" {
   ]
   for p in pairs {
     let simd_arr = make_int_array(p)
-    let scalar_arr = make_int_array(p)
+    let ref_arr = make_int_array(p)
     sort4_i32(simd_arr, 0)
-    scalar_sort4_int(scalar_arr, 0)
+    @internal.scalar_sort4_int(ref_arr, 0)
     for i in 0..<4 {
-      assert_eq(simd_arr[i], scalar_arr[i])
+      assert_eq(simd_arr[i], ref_arr[i])
     }
   }
 }
@@ -798,7 +798,7 @@ test "bitonic_merge8_i32 matches scalar (random pairs)" {
     let s = make_int_array(c)
     let r = make_int_array(c)
     bitonic_merge8_i32(s, 0)
-    scalar_bitonic_merge8_int(r, 0)
+    @internal.scalar_bitonic_merge8_int(r, 0)
     for i in 0..<8 {
       assert_eq(s[i], r[i])
     }
@@ -828,7 +828,7 @@ test "bitonic_merge16_i32 matches scalar (random pairs)" {
     let s = make_int_array(c)
     let r = make_int_array(c)
     bitonic_merge16_i32(s, 0)
-    scalar_bitonic_merge16_int(r, 0)
+    @internal.scalar_bitonic_merge16_int(r, 0)
     for i in 0..<16 {
       assert_eq(s[i], r[i])
     }
@@ -854,7 +854,7 @@ test "sort16_i32 matches scalar (random)" {
     arr_r[i] = v
   }
   sort16_i32(arr_s, 0)
-  scalar_sort16_int(arr_r, 0)
+  @internal.scalar_sort16_int(arr_r, 0)
   for i in 0..<16 {
     assert_eq(arr_s[i], arr_r[i])
   }
@@ -909,7 +909,7 @@ test "add_f32 matches scalar" {
   let out_s = f32_buf_alloc(7)
   let out_r = f32_buf_alloc(7)
   add_f32(a, b, out_s, 7)
-  scalar_add_f32(a, b, out_r, 7)
+  @internal.scalar_add_f32(a, b, out_r, 7)
   for i in 0..<7 {
     assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
   }
@@ -922,7 +922,7 @@ test "mul_f32 matches scalar" {
   let out_s = f32_buf_alloc(5)
   let out_r = f32_buf_alloc(5)
   mul_f32(a, b, out_s, 5)
-  scalar_mul_f32(a, b, out_r, 5)
+  @internal.scalar_mul_f32(a, b, out_r, 5)
   for i in 0..<5 {
     assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
   }
@@ -950,7 +950,7 @@ test "prod_i32 basic + matches scalar" {
   let arr = make_int_array([2, 3, 4, 5, 6])
   // 2*3*4*5*6 = 720
   inspect(prod_i32(arr), content="720")
-  assert_eq(prod_i32(arr), scalar_prod(arr))
+  assert_eq(prod_i32(arr), @internal.scalar_prod(arr))
 }
 
 ///|
@@ -975,7 +975,7 @@ test "var_f64 matches scalar (larger)" {
   for i in 0..<n {
     arr[i] = (i + 1).to_double() * 0.5 - 3.0
   }
-  assert_f64_close(var_f64(arr), scalar_var_f64(arr))
+  assert_f64_close(var_f64(arr), @internal.scalar_var_f64(arr))
 }
 
 ///|
@@ -1049,7 +1049,7 @@ test "matmul_f64 matches scalar (5x7 * 7x4)" {
   let c_simd = FixedArray::make(m * n, 0.0)
   let c_scalar = FixedArray::make(m * n, 0.0)
   matmul_f64(a, b_t, c_simd, m, k, n)
-  scalar_matmul_f64(a, b_t, c_scalar, m, k, n)
+  @internal.scalar_matmul_f64(a, b_t, c_scalar, m, k, n)
   for i in 0..<(m * n) {
     assert_f64_close(c_simd[i], c_scalar[i])
   }
@@ -1082,7 +1082,7 @@ test "gemv_f64 matches scalar (larger)" {
   let y_simd = FixedArray::make(m, 0.0)
   let y_scalar = FixedArray::make(m, 0.0)
   gemv_f64(a, x, y_simd, m, n)
-  scalar_gemv_f64(a, x, y_scalar, m, n)
+  @internal.scalar_gemv_f64(a, x, y_scalar, m, n)
   for i in 0..<m {
     assert_f64_close(y_simd[i], y_scalar[i])
   }
@@ -1131,7 +1131,7 @@ test "add_f64 matches scalar" {
   let out_simd = FixedArray::make(7, 0.0)
   let out_scalar = FixedArray::make(7, 0.0)
   add_f64(a, b, out_simd)
-  scalar_add_f64(a, b, out_scalar)
+  @internal.scalar_add_f64(a, b, out_scalar)
   for i in 0..<7 {
     assert_f64_close(out_simd[i], out_scalar[i])
   }
@@ -1144,17 +1144,17 @@ test "sub_i32/mul/div_f64 match scalar" {
   let out = FixedArray::make(5, 0.0)
   let ref_arr = FixedArray::make(5, 0.0)
   sub_f64(a, b, out)
-  scalar_sub_f64(a, b, ref_arr)
+  @internal.scalar_sub_f64(a, b, ref_arr)
   for i in 0..<5 {
     assert_f64_close(out[i], ref_arr[i])
   }
   mul_f64(a, b, out)
-  scalar_mul_f64(a, b, ref_arr)
+  @internal.scalar_mul_f64(a, b, ref_arr)
   for i in 0..<5 {
     assert_f64_close(out[i], ref_arr[i])
   }
   div_f64(a, b, out)
-  scalar_div_f64(a, b, ref_arr)
+  @internal.scalar_div_f64(a, b, ref_arr)
   for i in 0..<5 {
     assert_f64_close(out[i], ref_arr[i])
   }
@@ -1194,7 +1194,7 @@ test "min_elem_f64 / max_elem_f64 element-wise" {
 ///|
 test "sum_f64 matches scalar" {
   let a = make_f64_array([1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5])
-  assert_f64_close(sum_f64(a), scalar_sum_f64(a))
+  assert_f64_close(sum_f64(a), @internal.scalar_sum_f64(a))
 }
 
 ///|

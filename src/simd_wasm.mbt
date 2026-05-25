@@ -481,7 +481,7 @@ pub fn transpose_f64(
       }
     }
   } else {
-    scalar_transpose_f64(a, out, m, n)
+    @internal.scalar_transpose_f64(a, out, m, n)
   }
 }
 
@@ -759,7 +759,7 @@ pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
   } else {
     0
   }
-  scalar_validate_utf8_from(data, start)
+  @internal.scalar_validate_utf8_from(data, start)
 }
 
 // --- string ops (H) ---
@@ -847,7 +847,7 @@ pub fn scatter_i32(
   indices : FixedArray[Int],
   vals : FixedArray[Int],
 ) -> Unit {
-  scalar_scatter(out, indices, vals)
+  @internal.scalar_scatter(out, indices, vals)
 }
 
 // --- sort (F) ---

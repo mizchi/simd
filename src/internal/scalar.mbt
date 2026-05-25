@@ -583,17 +583,12 @@ pub fn scalar_sort_int(arr : FixedArray[Int]) -> Unit {
 }
 
 // --- Float (f32) ops over byte-buffer (E) ---
-// FixedArray[Float] is rejected as an FFI parameter, so f32 buffers are
-// represented as FixedArray[Byte] with 4 bytes per element (little-endian
-// IEEE-754). Helpers below cover the boundary; ops just see byte buffers.
+// Private duplicates of the byte-buffer codec; the public surface lives in
+// src/f32_buf.mbt. Kept here so scalar_*_f32 reference impls stay self-
+// contained within this `internal` sub-package.
 
 ///|
-pub fn f32_buf_alloc(n : Int) -> FixedArray[Byte] {
-  FixedArray::make(n * 4, b'\x00')
-}
-
-///|
-pub fn f32_buf_get(buf : FixedArray[Byte], i : Int) -> Float {
+fn load_f32_le(buf : FixedArray[Byte], i : Int) -> Float {
   let off = i * 4
   let u : UInt = buf[off].to_int().reinterpret_as_uint() |
     (buf[off + 1].to_int().reinterpret_as_uint() << 8) |
@@ -603,7 +598,7 @@ pub fn f32_buf_get(buf : FixedArray[Byte], i : Int) -> Float {
 }
 
 ///|
-pub fn f32_buf_set(buf : FixedArray[Byte], i : Int, v : Float) -> Unit {
+fn store_f32_le(buf : FixedArray[Byte], i : Int, v : Float) -> Unit {
   let u = v.reinterpret_as_uint()
   let off = i * 4
   buf[off] = (u & 0xff).reinterpret_as_int().to_byte()
@@ -620,7 +615,7 @@ pub fn scalar_add_f32(
   n : Int,
 ) -> Unit {
   for i in 0..<n {
-    f32_buf_set(out, i, f32_buf_get(a, i) + f32_buf_get(b, i))
+    store_f32_le(out, i, load_f32_le(a, i) + load_f32_le(b, i))
   }
 }
 
@@ -632,7 +627,7 @@ pub fn scalar_mul_f32(
   n : Int,
 ) -> Unit {
   for i in 0..<n {
-    f32_buf_set(out, i, f32_buf_get(a, i) * f32_buf_get(b, i))
+    store_f32_le(out, i, load_f32_le(a, i) * load_f32_le(b, i))
   }
 }
 
@@ -640,7 +635,7 @@ pub fn scalar_mul_f32(
 pub fn scalar_sum_f32(a : FixedArray[Byte], n : Int) -> Float {
   let mut acc : Float = (0.0 : Float)
   for i in 0..<n {
-    acc = acc + f32_buf_get(a, i)
+    acc = acc + load_f32_le(a, i)
   }
   acc
 }
@@ -653,7 +648,7 @@ pub fn scalar_dot_f32(
 ) -> Float {
   let mut acc : Float = (0.0 : Float)
   for i in 0..<n {
-    acc = acc + f32_buf_get(a, i) * f32_buf_get(b, i)
+    acc = acc + load_f32_le(a, i) * load_f32_le(b, i)
   }
   acc
 }
