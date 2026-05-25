@@ -148,6 +148,46 @@ extern "C" fn simd_dot_f64_ffi(
 ) -> Double = "simd_dot_f64_ffi"
 
 ///|
+#borrow(a, b, out)
+extern "C" fn simd_add_f32_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit = "simd_add_f32_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_mul_f32_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit = "simd_mul_f32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_sum_f32_ffi(arr : FixedArray[Byte], n : Int) -> Float = "simd_sum_f32_ffi"
+
+///|
+#borrow(a, b)
+extern "C" fn simd_dot_f32_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  n : Int,
+) -> Float = "simd_dot_f32_ffi"
+
+///|
+#borrow(a, b)
+extern "C" fn simd_dot_f64_range_ffi(
+  a : FixedArray[Double],
+  a_off : Int,
+  b : FixedArray[Double],
+  b_off : Int,
+  k : Int,
+) -> Double = "simd_dot_f64_range_ffi"
+
+///|
 #borrow(a, out)
 extern "C" fn simd_neg_i32_ffi(
   a : FixedArray[Int],
@@ -679,7 +719,15 @@ pub fn matmul_f64(
   k : Int,
   n : Int,
 ) -> Unit {
-  @internal.scalar_matmul_f64(a, b_t, c, m, k, n)
+  if m == 0 || n == 0 {
+    return
+  }
+  for i in 0..<m {
+    let a_off = i * k
+    for j in 0..<n {
+      c[i * n + j] = simd_dot_f64_range_ffi(a, a_off, b_t, j * k, k)
+    }
+  }
 }
 
 ///|
@@ -690,7 +738,12 @@ pub fn gemv_f64(
   m : Int,
   n : Int,
 ) -> Unit {
-  @internal.scalar_gemv_f64(a, x, y, m, n)
+  if m == 0 {
+    return
+  }
+  for i in 0..<m {
+    y[i] = simd_dot_f64_range_ffi(a, i * n, x, 0, n)
+  }
 }
 
 ///|
@@ -766,7 +819,10 @@ pub fn add_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  @internal.scalar_add_f32(a, b, out, n)
+  if n == 0 {
+    return
+  }
+  simd_add_f32_ffi(a, b, out, n)
 }
 
 ///|
@@ -776,12 +832,18 @@ pub fn mul_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  @internal.scalar_mul_f32(a, b, out, n)
+  if n == 0 {
+    return
+  }
+  simd_mul_f32_ffi(a, b, out, n)
 }
 
 ///|
 pub fn sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
-  @internal.scalar_sum_f32(arr, n)
+  if n == 0 {
+    return (0.0 : Float)
+  }
+  simd_sum_f32_ffi(arr, n)
 }
 
 ///|
@@ -790,7 +852,10 @@ pub fn dot_f32(
   b : FixedArray[Byte],
   n : Int,
 ) -> Float {
-  @internal.scalar_dot_f32(a, b, n)
+  if n == 0 {
+    return (0.0 : Float)
+  }
+  simd_dot_f32_ffi(a, b, n)
 }
 
 ///|

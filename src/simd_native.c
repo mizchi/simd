@@ -417,6 +417,86 @@ double simd_dot_f64_ffi(const double* a, const double* b, int32_t len) {
   return result;
 }
 
+// --- f32 (byte-buffer ABI: caller hands us uint8_t* containing 4 byte LE f32) ---
+
+void simd_add_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, uint8_t* out_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  const float* b = (const float*)b_bytes;
+  float* out = (float*)out_bytes;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) vst1q_f32(out + i, vaddq_f32(vld1q_f32(a + i), vld1q_f32(b + i)));
+#elif USE_SSE2
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) _mm_storeu_ps(out + i, _mm_add_ps(_mm_loadu_ps(a + i), _mm_loadu_ps(b + i)));
+#endif
+  for (; i < n; i++) out[i] = a[i] + b[i];
+}
+
+void simd_mul_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, uint8_t* out_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  const float* b = (const float*)b_bytes;
+  float* out = (float*)out_bytes;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) vst1q_f32(out + i, vmulq_f32(vld1q_f32(a + i), vld1q_f32(b + i)));
+#elif USE_SSE2
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) _mm_storeu_ps(out + i, _mm_mul_ps(_mm_loadu_ps(a + i), _mm_loadu_ps(b + i)));
+#endif
+  for (; i < n; i++) out[i] = a[i] * b[i];
+}
+
+float simd_sum_f32_ffi(const uint8_t* arr_bytes, int32_t n) {
+  const float* arr = (const float*)arr_bytes;
+  float result = 0.0f;
+  int32_t i = 0;
+#if USE_NEON
+  float32x4_t acc = vdupq_n_f32(0.0f);
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) acc = vaddq_f32(acc, vld1q_f32(arr + i));
+  result = vaddvq_f32(acc);
+#elif USE_SSE2
+  __m128 acc = _mm_setzero_ps();
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) acc = _mm_add_ps(acc, _mm_loadu_ps(arr + i));
+  float lanes[4];
+  _mm_storeu_ps(lanes, acc);
+  result = lanes[0] + lanes[1] + lanes[2] + lanes[3];
+#endif
+  for (; i < n; i++) result += arr[i];
+  return result;
+}
+
+float simd_dot_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  const float* b = (const float*)b_bytes;
+  float result = 0.0f;
+  int32_t i = 0;
+#if USE_NEON
+  float32x4_t acc = vdupq_n_f32(0.0f);
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) acc = vaddq_f32(acc, vmulq_f32(vld1q_f32(a + i), vld1q_f32(b + i)));
+  result = vaddvq_f32(acc);
+#elif USE_SSE2
+  __m128 acc = _mm_setzero_ps();
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) acc = _mm_add_ps(acc, _mm_mul_ps(_mm_loadu_ps(a + i), _mm_loadu_ps(b + i)));
+  float lanes[4];
+  _mm_storeu_ps(lanes, acc);
+  result = lanes[0] + lanes[1] + lanes[2] + lanes[3];
+#endif
+  for (; i < n; i++) result += a[i] * b[i];
+  return result;
+}
+
+// Inner kernel used by matmul / gemv: dot product over a slice.
+double simd_dot_f64_range_ffi(const double* a, int32_t a_off, const double* b, int32_t b_off, int32_t k) {
+  return simd_dot_f64_ffi(a + a_off, b + b_off, k);
+}
+
 // --- Int element-wise + reduce ---
 
 void simd_neg_i32_ffi(const int32_t* a, int32_t* out, int32_t len) {
