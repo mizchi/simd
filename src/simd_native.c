@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <math.h>
 
 /* TCC (MoonBit default) doesn't support NEON/SSE intrinsics.
    Use clang/gcc with -march=native for actual SIMD. */
@@ -242,6 +243,177 @@ void simd_saxpy_ffi(int32_t k, const int32_t* a, const int32_t* b, int32_t* out,
   }
 #endif
   for (; i < len; i++) out[i] = k * a[i] + b[i];
+}
+
+// --- f64 ops ---
+
+void simd_add_f64_ffi(const double* a, const double* b, double* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    vst1q_f64(out + i, vaddq_f64(vld1q_f64(a + i), vld1q_f64(b + i)));
+  }
+#elif USE_SSE2
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    __m128d va = _mm_loadu_pd(a + i);
+    __m128d vb = _mm_loadu_pd(b + i);
+    _mm_storeu_pd(out + i, _mm_add_pd(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] + b[i];
+}
+
+void simd_sub_f64_ffi(const double* a, const double* b, double* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    vst1q_f64(out + i, vsubq_f64(vld1q_f64(a + i), vld1q_f64(b + i)));
+  }
+#elif USE_SSE2
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    __m128d va = _mm_loadu_pd(a + i);
+    __m128d vb = _mm_loadu_pd(b + i);
+    _mm_storeu_pd(out + i, _mm_sub_pd(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] - b[i];
+}
+
+void simd_mul_f64_ffi(const double* a, const double* b, double* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    vst1q_f64(out + i, vmulq_f64(vld1q_f64(a + i), vld1q_f64(b + i)));
+  }
+#elif USE_SSE2
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    __m128d va = _mm_loadu_pd(a + i);
+    __m128d vb = _mm_loadu_pd(b + i);
+    _mm_storeu_pd(out + i, _mm_mul_pd(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] * b[i];
+}
+
+void simd_div_f64_ffi(const double* a, const double* b, double* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    vst1q_f64(out + i, vdivq_f64(vld1q_f64(a + i), vld1q_f64(b + i)));
+  }
+#elif USE_SSE2
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    __m128d va = _mm_loadu_pd(a + i);
+    __m128d vb = _mm_loadu_pd(b + i);
+    _mm_storeu_pd(out + i, _mm_div_pd(va, vb));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] / b[i];
+}
+
+void simd_sqrt_f64_ffi(const double* a, double* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    vst1q_f64(out + i, vsqrtq_f64(vld1q_f64(a + i)));
+  }
+#elif USE_SSE2
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    _mm_storeu_pd(out + i, _mm_sqrt_pd(_mm_loadu_pd(a + i)));
+  }
+#endif
+  for (; i < len; i++) out[i] = sqrt(a[i]);
+}
+
+void simd_min_elem_f64_ffi(const double* a, const double* b, double* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    vst1q_f64(out + i, vminq_f64(vld1q_f64(a + i), vld1q_f64(b + i)));
+  }
+#elif USE_SSE2
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    _mm_storeu_pd(out + i, _mm_min_pd(_mm_loadu_pd(a + i), _mm_loadu_pd(b + i)));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] < b[i] ? a[i] : b[i];
+}
+
+void simd_max_elem_f64_ffi(const double* a, const double* b, double* out, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    vst1q_f64(out + i, vmaxq_f64(vld1q_f64(a + i), vld1q_f64(b + i)));
+  }
+#elif USE_SSE2
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    _mm_storeu_pd(out + i, _mm_max_pd(_mm_loadu_pd(a + i), _mm_loadu_pd(b + i)));
+  }
+#endif
+  for (; i < len; i++) out[i] = a[i] > b[i] ? a[i] : b[i];
+}
+
+double simd_sum_f64_ffi(const double* arr, int32_t len) {
+  double result = 0.0;
+  int32_t i = 0;
+#if USE_NEON
+  float64x2_t acc = vdupq_n_f64(0.0);
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    acc = vaddq_f64(acc, vld1q_f64(arr + i));
+  }
+  result = vaddvq_f64(acc);
+#elif USE_SSE2
+  __m128d acc = _mm_setzero_pd();
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    acc = _mm_add_pd(acc, _mm_loadu_pd(arr + i));
+  }
+  // horizontal add lane 0 + lane 1
+  double lanes[2];
+  _mm_storeu_pd(lanes, acc);
+  result = lanes[0] + lanes[1];
+#endif
+  for (; i < len; i++) result += arr[i];
+  return result;
+}
+
+double simd_dot_f64_ffi(const double* a, const double* b, int32_t len) {
+  double result = 0.0;
+  int32_t i = 0;
+#if USE_NEON
+  float64x2_t acc = vdupq_n_f64(0.0);
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    acc = vaddq_f64(acc, vmulq_f64(vld1q_f64(a + i), vld1q_f64(b + i)));
+  }
+  result = vaddvq_f64(acc);
+#elif USE_SSE2
+  __m128d acc = _mm_setzero_pd();
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    acc = _mm_add_pd(acc, _mm_mul_pd(_mm_loadu_pd(a + i), _mm_loadu_pd(b + i)));
+  }
+  double lanes[2];
+  _mm_storeu_pd(lanes, acc);
+  result = lanes[0] + lanes[1];
+#endif
+  for (; i < len; i++) result += a[i] * b[i];
+  return result;
 }
 
 uint32_t simd_adler32_ffi(const uint8_t* data, int32_t len) {

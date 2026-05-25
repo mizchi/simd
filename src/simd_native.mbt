@@ -74,6 +74,80 @@ extern "C" fn simd_saxpy_ffi(
 ) -> Unit = "simd_saxpy_ffi"
 
 ///|
+#borrow(a, b, out)
+extern "C" fn simd_add_f64_ffi(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+  len : Int,
+) -> Unit = "simd_add_f64_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_sub_f64_ffi(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+  len : Int,
+) -> Unit = "simd_sub_f64_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_mul_f64_ffi(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+  len : Int,
+) -> Unit = "simd_mul_f64_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_div_f64_ffi(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+  len : Int,
+) -> Unit = "simd_div_f64_ffi"
+
+///|
+#borrow(a, out)
+extern "C" fn simd_sqrt_f64_ffi(
+  a : FixedArray[Double],
+  out : FixedArray[Double],
+  len : Int,
+) -> Unit = "simd_sqrt_f64_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_min_elem_f64_ffi(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+  len : Int,
+) -> Unit = "simd_min_elem_f64_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_max_elem_f64_ffi(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+  len : Int,
+) -> Unit = "simd_max_elem_f64_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_sum_f64_ffi(arr : FixedArray[Double], len : Int) -> Double = "simd_sum_f64_ffi"
+
+///|
+#borrow(a, b)
+extern "C" fn simd_dot_f64_ffi(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  len : Int,
+) -> Double = "simd_dot_f64_ffi"
+
+///|
 #borrow(data)
 extern "C" fn simd_adler32_ffi(data : FixedArray[Byte], len : Int) -> UInt = "simd_adler32_ffi"
 
@@ -215,7 +289,11 @@ pub fn add_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  @internal.scalar_add_f64(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_add_f64_ffi(a, b, out, len)
 }
 
 ///|
@@ -224,7 +302,11 @@ pub fn sub_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  @internal.scalar_sub_f64(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_sub_f64_ffi(a, b, out, len)
 }
 
 ///|
@@ -233,7 +315,11 @@ pub fn mul_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  @internal.scalar_mul_f64(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_mul_f64_ffi(a, b, out, len)
 }
 
 ///|
@@ -242,7 +328,11 @@ pub fn div_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  @internal.scalar_div_f64(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_div_f64_ffi(a, b, out, len)
 }
 
 ///|
@@ -250,7 +340,11 @@ pub fn sqrt_f64(
   a : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  @internal.scalar_sqrt_f64(a, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_sqrt_f64_ffi(a, out, len)
 }
 
 ///|
@@ -259,7 +353,11 @@ pub fn min_elem_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  @internal.scalar_min_f64(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_min_elem_f64_ffi(a, b, out, len)
 }
 
 ///|
@@ -268,12 +366,20 @@ pub fn max_elem_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  @internal.scalar_max_f64(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_max_elem_f64_ffi(a, b, out, len)
 }
 
 ///|
 pub fn sum_f64(arr : FixedArray[Double]) -> Double {
-  @internal.scalar_sum_f64(arr)
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  simd_sum_f64_ffi(arr, len)
 }
 
 ///|
@@ -281,7 +387,11 @@ pub fn dot_f64(
   a : FixedArray[Double],
   b : FixedArray[Double],
 ) -> Double {
-  @internal.scalar_dot_f64(a, b)
+  let len = a.length()
+  if len == 0 {
+    return 0.0
+  }
+  simd_dot_f64_ffi(a, b, len)
 }
 
 ///|
