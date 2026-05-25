@@ -152,3 +152,194 @@ test "simd_adler32 empty" {
   let data : FixedArray[Byte] = FixedArray::make(0, b'\x00')
   inspect(simd_adler32(data), content="1")
 }
+
+// --- min / max / argmin / argmax ---
+
+///|
+test "scalar_min/max basic" {
+  let arr = make_int_array([5, -3, 8, -1, 2, 7])
+  inspect(scalar_min(arr), content="-3")
+  inspect(scalar_max(arr), content="8")
+}
+
+///|
+test "scalar_argmin/argmax basic" {
+  let arr = make_int_array([5, -3, 8, -1, 2, 7])
+  inspect(scalar_argmin(arr), content="1")
+  inspect(scalar_argmax(arr), content="2")
+}
+
+///|
+test "simd_min/max match scalar" {
+  let arr = make_int_array([5, -3, 8, -1, 2, 7, 100, -50, 12, 4, 0, 9])
+  assert_eq(simd_min(arr), scalar_min(arr))
+  assert_eq(simd_max(arr), scalar_max(arr))
+}
+
+///|
+test "simd_argmin/argmax match scalar" {
+  let arr = make_int_array([5, -3, 8, -1, 2, 7, 100, -50, 12, 4, 0, 9])
+  assert_eq(simd_argmin(arr), scalar_argmin(arr))
+  assert_eq(simd_argmax(arr), scalar_argmax(arr))
+}
+
+///|
+test "simd_min/max non-aligned" {
+  let arr = make_int_array([1, 2, 3, 4, 5])
+  assert_eq(simd_min(arr), 1)
+  assert_eq(simd_max(arr), 5)
+}
+
+///|
+test "simd_argmin/argmax with duplicates picks first" {
+  let arr = make_int_array([3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5])
+  // first min (1) at index 1, first max (9) at index 5
+  assert_eq(simd_argmin(arr), 1)
+  assert_eq(simd_argmax(arr), 5)
+}
+
+///|
+test "simd_min/max empty" {
+  let arr : FixedArray[Int] = FixedArray::make(0, 0)
+  inspect(simd_min(arr), content="0")
+  inspect(simd_max(arr), content="0")
+  inspect(simd_argmin(arr), content="-1")
+  inspect(simd_argmax(arr), content="-1")
+}
+
+// --- saxpy ---
+
+///|
+test "simd_saxpy matches scalar" {
+  let a = make_int_array([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  let b = make_int_array([10, 20, 30, 40, 50, 60, 70, 80, 90])
+  let out_simd = FixedArray::make(9, 0)
+  let out_scalar = FixedArray::make(9, 0)
+  simd_saxpy(3, a, b, out_simd)
+  scalar_saxpy(3, a, b, out_scalar)
+  for i in 0..<9 {
+    assert_eq(out_simd[i], out_scalar[i])
+  }
+}
+
+///|
+test "simd_saxpy basic value" {
+  let a = make_int_array([1, 2, 3, 4])
+  let b = make_int_array([10, 20, 30, 40])
+  let out = FixedArray::make(4, 0)
+  simd_saxpy(2, a, b, out)
+  // 2*1+10=12, 2*2+20=24, 2*3+30=36, 2*4+40=48
+  assert_eq(out[0], 12)
+  assert_eq(out[3], 48)
+}
+
+// --- popcount_bytes ---
+
+///|
+test "scalar_popcount_bytes basic" {
+  let data = make_byte_array([0, 1, 2, 3, 255])
+  // 0+1+1+2+8 = 12
+  inspect(scalar_popcount_bytes(data), content="12")
+}
+
+///|
+test "simd_popcount_bytes matches scalar" {
+  let vals = Array::makei(40, fn(i) { (i * 13 + 7) % 256 })
+  let data = make_byte_array(vals)
+  assert_eq(simd_popcount_bytes(data), scalar_popcount_bytes(data))
+}
+
+///|
+test "simd_popcount_bytes empty" {
+  let data : FixedArray[Byte] = FixedArray::make(0, b'\x00')
+  inspect(simd_popcount_bytes(data), content="0")
+}
+
+// --- byte primitives ---
+
+///|
+test "simd_memcpy_bytes basic" {
+  let src = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+  let dst = FixedArray::make(20, b'\x00')
+  simd_memcpy_bytes(src, 0, dst, 0, 20)
+  for i in 0..<20 {
+    assert_eq(dst[i], src[i])
+  }
+}
+
+///|
+test "simd_memcpy_bytes with offsets" {
+  let src = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  let dst = FixedArray::make(15, b'\xff')
+  simd_memcpy_bytes(src, 2, dst, 3, 6)
+  // dst[3..9] = src[2..8] = 3,4,5,6,7,8; rest unchanged
+  assert_eq(dst[0], b'\xff')
+  assert_eq(dst[3], b'\x03')
+  assert_eq(dst[8], b'\x08')
+  assert_eq(dst[9], b'\xff')
+}
+
+///|
+test "simd_memset_bytes basic" {
+  let dst = FixedArray::make(20, b'\x00')
+  simd_memset_bytes(dst, 0, 20, b'\x5a')
+  for i in 0..<20 {
+    assert_eq(dst[i], b'\x5a')
+  }
+}
+
+///|
+test "simd_memset_bytes partial" {
+  let dst = FixedArray::make(20, b'\x00')
+  simd_memset_bytes(dst, 5, 10, b'\x42')
+  assert_eq(dst[4], b'\x00')
+  assert_eq(dst[5], b'\x42')
+  assert_eq(dst[14], b'\x42')
+  assert_eq(dst[15], b'\x00')
+}
+
+///|
+test "simd_equal_bytes true" {
+  let a = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  inspect(simd_equal_bytes(a, b, 17), content="true")
+}
+
+///|
+test "simd_equal_bytes false at tail" {
+  let a = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 99])
+  let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  inspect(simd_equal_bytes(a, b, 17), content="false")
+}
+
+///|
+test "simd_equal_bytes false at first SIMD block" {
+  let a = make_byte_array([1, 2, 9, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  inspect(simd_equal_bytes(a, b, 17), content="false")
+}
+
+///|
+test "simd_find_byte found in SIMD block" {
+  let data = make_byte_array([0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  inspect(simd_find_byte(data, b'\x07'), content="5")
+}
+
+///|
+test "simd_find_byte found in tail" {
+  let data = make_byte_array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9])
+  inspect(simd_find_byte(data, b'\x09'), content="16")
+}
+
+///|
+test "simd_find_byte not found" {
+  let data = make_byte_array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  inspect(simd_find_byte(data, b'\x07'), content="-1")
+}
+
+///|
+test "simd_count_byte matches scalar" {
+  let vals = Array::makei(50, fn(i) { if i % 3 == 0 { 7 } else { i % 256 } })
+  let data = make_byte_array(vals)
+  assert_eq(simd_count_byte(data, b'\x07'), scalar_count_byte(data, b'\x07'))
+}

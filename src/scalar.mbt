@@ -34,6 +34,166 @@ pub fn scalar_add(
 }
 
 ///|
+/// Min of an integer array (scalar). Returns 0 if empty.
+pub fn scalar_min(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return 0
+  }
+  for i = 1, m = arr[0]; i < len; {
+    continue i + 1, if arr[i] < m { arr[i] } else { m }
+  } nobreak {
+    m
+  }
+}
+
+///|
+/// Max of an integer array (scalar). Returns 0 if empty.
+pub fn scalar_max(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return 0
+  }
+  for i = 1, m = arr[0]; i < len; {
+    continue i + 1, if arr[i] > m { arr[i] } else { m }
+  } nobreak {
+    m
+  }
+}
+
+///|
+/// Index of the first minimum element (scalar). Returns -1 if empty.
+pub fn scalar_argmin(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return -1
+  }
+  let mut idx = 0
+  let mut best = arr[0]
+  for i in 1..<len {
+    if arr[i] < best {
+      best = arr[i]
+      idx = i
+    }
+  }
+  idx
+}
+
+///|
+/// Index of the first maximum element (scalar). Returns -1 if empty.
+pub fn scalar_argmax(arr : FixedArray[Int]) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return -1
+  }
+  let mut idx = 0
+  let mut best = arr[0]
+  for i in 1..<len {
+    if arr[i] > best {
+      best = arr[i]
+      idx = i
+    }
+  }
+  idx
+}
+
+///|
+/// out[i] = k * a[i] + b[i] (scalar SAXPY-style for Int).
+pub fn scalar_saxpy(
+  k : Int,
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  let len = a.length()
+  for i in 0..<len {
+    out[i] = k * a[i] + b[i]
+  }
+}
+
+///|
+/// Total number of 1-bits across a byte buffer (scalar popcount).
+pub fn scalar_popcount_bytes(data : FixedArray[Byte]) -> Int {
+  let len = data.length()
+  let mut acc = 0
+  for i in 0..<len {
+    let mut v : UInt = data[i].to_int().reinterpret_as_uint()
+    while v != 0 {
+      acc = acc + (v & 1).reinterpret_as_int()
+      v = v >> 1
+    }
+  }
+  acc
+}
+
+///|
+/// out[di..di+len] = src[si..si+len] (scalar byte copy).
+pub fn scalar_memcpy_bytes(
+  src : FixedArray[Byte],
+  si : Int,
+  dst : FixedArray[Byte],
+  di : Int,
+  len : Int,
+) -> Unit {
+  for k in 0..<len {
+    dst[di + k] = src[si + k]
+  }
+}
+
+///|
+/// dst[off..off+len] = value (scalar byte fill).
+pub fn scalar_memset_bytes(
+  dst : FixedArray[Byte],
+  off : Int,
+  len : Int,
+  value : Byte,
+) -> Unit {
+  for k in 0..<len {
+    dst[off + k] = value
+  }
+}
+
+///|
+/// True iff a[0..len] == b[0..len] byte-wise (scalar).
+pub fn scalar_equal_bytes(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  len : Int,
+) -> Bool {
+  for k in 0..<len {
+    if a[k] != b[k] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Index of first occurrence of `needle` in `data`, or -1 if not found.
+pub fn scalar_find_byte(data : FixedArray[Byte], needle : Byte) -> Int {
+  let len = data.length()
+  for i in 0..<len {
+    if data[i] == needle {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+/// Count occurrences of `needle` in `data`.
+pub fn scalar_count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
+  let len = data.length()
+  let mut c = 0
+  for i in 0..<len {
+    if data[i] == needle {
+      c = c + 1
+    }
+  }
+  c
+}
+
+///|
 /// Adler-32 checksum (scalar).
 pub fn scalar_adler32(data : FixedArray[Byte]) -> UInt {
   let mod_adler = 65521U

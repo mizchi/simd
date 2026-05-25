@@ -50,3 +50,92 @@ test "bench/adler32" (b : @bench.T) {
   b.bench(name="scalar_adler32_4096", fn() { b.keep(scalar_adler32(data)) })
   b.bench(name="simd_adler32_4096", fn() { b.keep(simd_adler32(data)) })
 }
+
+///|
+test "bench/min_max" (b : @bench.T) {
+  let arr = make_bench_int_array(1024)
+  b.bench(name="scalar_min_1024", fn() { b.keep(scalar_min(arr)) })
+  b.bench(name="simd_min_1024", fn() { b.keep(simd_min(arr)) })
+  b.bench(name="scalar_max_1024", fn() { b.keep(scalar_max(arr)) })
+  b.bench(name="simd_max_1024", fn() { b.keep(simd_max(arr)) })
+}
+
+///|
+test "bench/saxpy" (b : @bench.T) {
+  let a = make_bench_int_array(1024)
+  let b_arr = make_bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="scalar_saxpy_1024", fn() { scalar_saxpy(3, a, b_arr, out) })
+  b.bench(name="simd_saxpy_1024", fn() { simd_saxpy(3, a, b_arr, out) })
+}
+
+///|
+test "bench/popcount_bytes" (b : @bench.T) {
+  let data = make_bench_byte_array(4096)
+  b.bench(name="scalar_popcount_4096", fn() {
+    b.keep(scalar_popcount_bytes(data))
+  })
+  b.bench(name="simd_popcount_4096", fn() {
+    b.keep(simd_popcount_bytes(data))
+  })
+}
+
+///|
+test "bench/memcpy_bytes" (b : @bench.T) {
+  let src = make_bench_byte_array(4096)
+  let dst = FixedArray::make(4096, b'\x00')
+  b.bench(name="scalar_memcpy_4096", fn() {
+    scalar_memcpy_bytes(src, 0, dst, 0, 4096)
+  })
+  b.bench(name="simd_memcpy_4096", fn() {
+    simd_memcpy_bytes(src, 0, dst, 0, 4096)
+  })
+}
+
+///|
+test "bench/memset_bytes" (b : @bench.T) {
+  let dst = FixedArray::make(4096, b'\x00')
+  b.bench(name="scalar_memset_4096", fn() {
+    scalar_memset_bytes(dst, 0, 4096, b'\x5a')
+  })
+  b.bench(name="simd_memset_4096", fn() {
+    simd_memset_bytes(dst, 0, 4096, b'\x5a')
+  })
+}
+
+///|
+test "bench/equal_bytes" (b : @bench.T) {
+  let a = make_bench_byte_array(4096)
+  let b_arr = make_bench_byte_array(4096)
+  b.bench(name="scalar_equal_4096", fn() {
+    b.keep(scalar_equal_bytes(a, b_arr, 4096))
+  })
+  b.bench(name="simd_equal_4096", fn() {
+    b.keep(simd_equal_bytes(a, b_arr, 4096))
+  })
+}
+
+///|
+test "bench/find_byte" (b : @bench.T) {
+  // homogeneous filler with a single needle near the end so both scalar
+  // and SIMD scans walk the whole buffer.
+  let data = FixedArray::make(4096, b'\x01')
+  data[4090] = b'\xaa'
+  b.bench(name="scalar_find_byte_4096", fn() {
+    b.keep(scalar_find_byte(data, b'\xaa'))
+  })
+  b.bench(name="simd_find_byte_4096", fn() {
+    b.keep(simd_find_byte(data, b'\xaa'))
+  })
+}
+
+///|
+test "bench/count_byte" (b : @bench.T) {
+  let data = make_bench_byte_array(4096)
+  b.bench(name="scalar_count_byte_4096", fn() {
+    b.keep(scalar_count_byte(data, b'\x07'))
+  })
+  b.bench(name="simd_count_byte_4096", fn() {
+    b.keep(simd_count_byte(data, b'\x07'))
+  })
+}
