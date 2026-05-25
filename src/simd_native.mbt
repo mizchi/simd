@@ -148,6 +148,75 @@ extern "C" fn simd_dot_f64_ffi(
 ) -> Double = "simd_dot_f64_ffi"
 
 ///|
+#borrow(a, out)
+extern "C" fn simd_neg_i32_ffi(
+  a : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_neg_i32_ffi"
+
+///|
+#borrow(a, out)
+extern "C" fn simd_abs_i32_ffi(
+  a : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_abs_i32_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_eq_i32_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_eq_i32_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_lt_i32_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_lt_i32_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_gt_i32_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_gt_i32_ffi"
+
+///|
+#borrow(mask, a, b, out)
+extern "C" fn simd_where_i32_ffi(
+  mask : FixedArray[Int],
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit = "simd_where_i32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_prod_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_prod_i32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_count_nonzero_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_count_nonzero_i32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_all_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_all_i32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_any_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_any_i32_ffi"
+
+///|
 #borrow(src, dst)
 extern "C" fn simd_memcpy_bytes_ffi(
   src : FixedArray[Byte],
@@ -506,12 +575,20 @@ pub fn mul_i32(
 
 ///|
 pub fn neg_i32(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
-  @internal.scalar_neg(a, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_neg_i32_ffi(a, out, len)
 }
 
 ///|
 pub fn abs_i32(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
-  @internal.scalar_abs(a, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_abs_i32_ffi(a, out, len)
 }
 
 ///|
@@ -546,7 +623,11 @@ pub fn eq_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_eq(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_eq_i32_ffi(a, b, out, len)
 }
 
 ///|
@@ -555,7 +636,11 @@ pub fn lt_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_lt(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_lt_i32_ffi(a, b, out, len)
 }
 
 ///|
@@ -564,7 +649,11 @@ pub fn gt_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_gt(a, b, out)
+  let len = a.length()
+  if len == 0 {
+    return
+  }
+  simd_gt_i32_ffi(a, b, out, len)
 }
 
 ///|
@@ -574,7 +663,11 @@ pub fn where_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  @internal.scalar_where(mask, a, b, out)
+  let len = mask.length()
+  if len == 0 {
+    return
+  }
+  simd_where_i32_ffi(mask, a, b, out, len)
 }
 
 ///|
@@ -612,7 +705,11 @@ pub fn transpose_f64(
 
 ///|
 pub fn prod_i32(arr : FixedArray[Int]) -> Int {
-  @internal.scalar_prod(arr)
+  let len = arr.length()
+  if len == 0 {
+    return 1
+  }
+  simd_prod_i32_ffi(arr, len)
 }
 
 ///|
@@ -627,17 +724,29 @@ pub fn var_f64(arr : FixedArray[Double]) -> Double {
 
 ///|
 pub fn count_nonzero_i32(arr : FixedArray[Int]) -> Int {
-  @internal.scalar_count_nonzero(arr)
+  let len = arr.length()
+  if len == 0 {
+    return 0
+  }
+  simd_count_nonzero_i32_ffi(arr, len)
 }
 
 ///|
 pub fn all_i32(arr : FixedArray[Int]) -> Bool {
-  @internal.scalar_all(arr)
+  let len = arr.length()
+  if len == 0 {
+    return true
+  }
+  simd_all_i32_ffi(arr, len) != 0
 }
 
 ///|
 pub fn any_i32(arr : FixedArray[Int]) -> Bool {
-  @internal.scalar_any(arr)
+  let len = arr.length()
+  if len == 0 {
+    return false
+  }
+  simd_any_i32_ffi(arr, len) != 0
 }
 
 ///|
