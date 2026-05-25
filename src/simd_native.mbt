@@ -148,6 +148,69 @@ extern "C" fn simd_dot_f64_ffi(
 ) -> Double = "simd_dot_f64_ffi"
 
 ///|
+#borrow(src, dst)
+extern "C" fn simd_memcpy_bytes_ffi(
+  src : FixedArray[Byte],
+  si : Int,
+  dst : FixedArray[Byte],
+  di : Int,
+  len : Int,
+) -> Unit = "simd_memcpy_bytes_ffi"
+
+///|
+#borrow(dst)
+extern "C" fn simd_memset_bytes_ffi(
+  dst : FixedArray[Byte],
+  off : Int,
+  len : Int,
+  value : Byte,
+) -> Unit = "simd_memset_bytes_ffi"
+
+///|
+#borrow(a, b)
+extern "C" fn simd_equal_bytes_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  len : Int,
+) -> Int = "simd_equal_bytes_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_find_byte_ffi(
+  data : FixedArray[Byte],
+  len : Int,
+  needle : Byte,
+) -> Int = "simd_find_byte_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_count_byte_ffi(
+  data : FixedArray[Byte],
+  len : Int,
+  needle : Byte,
+) -> Int = "simd_count_byte_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_popcount_bytes_ffi(data : FixedArray[Byte], len : Int) -> Int = "simd_popcount_bytes_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_is_ascii_ffi(data : FixedArray[Byte], len : Int) -> Int = "simd_is_ascii_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_to_lower_ascii_ffi(data : FixedArray[Byte], len : Int) -> Unit = "simd_to_lower_ascii_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_to_upper_ascii_ffi(data : FixedArray[Byte], len : Int) -> Unit = "simd_to_upper_ascii_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_first_non_ascii_chunk_ffi(data : FixedArray[Byte], len : Int) -> Int = "simd_first_non_ascii_chunk_ffi"
+
+///|
 #borrow(data)
 extern "C" fn simd_adler32_ffi(data : FixedArray[Byte], len : Int) -> UInt = "simd_adler32_ffi"
 
@@ -240,7 +303,11 @@ pub fn saxpy_i32(
 
 ///|
 pub fn popcount_bytes(data : FixedArray[Byte]) -> Int {
-  @internal.scalar_popcount_bytes(data)
+  let len = data.length()
+  if len == 0 {
+    return 0
+  }
+  simd_popcount_bytes_ffi(data, len)
 }
 
 ///|
@@ -251,7 +318,10 @@ pub fn memcpy_bytes(
   di : Int,
   len : Int,
 ) -> Unit {
-  @internal.scalar_memcpy_bytes(src, si, dst, di, len)
+  if len <= 0 {
+    return
+  }
+  simd_memcpy_bytes_ffi(src, si, dst, di, len)
 }
 
 ///|
@@ -261,7 +331,10 @@ pub fn memset_bytes(
   len : Int,
   value : Byte,
 ) -> Unit {
-  @internal.scalar_memset_bytes(dst, off, len, value)
+  if len <= 0 {
+    return
+  }
+  simd_memset_bytes_ffi(dst, off, len, value)
 }
 
 ///|
@@ -270,17 +343,28 @@ pub fn equal_bytes(
   b : FixedArray[Byte],
   len : Int,
 ) -> Bool {
-  @internal.scalar_equal_bytes(a, b, len)
+  if len <= 0 {
+    return true
+  }
+  simd_equal_bytes_ffi(a, b, len) != 0
 }
 
 ///|
 pub fn find_byte(data : FixedArray[Byte], needle : Byte) -> Int {
-  @internal.scalar_find_byte(data, needle)
+  let len = data.length()
+  if len == 0 {
+    return -1
+  }
+  simd_find_byte_ffi(data, len, needle)
 }
 
 ///|
 pub fn count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
-  @internal.scalar_count_byte(data, needle)
+  let len = data.length()
+  if len == 0 {
+    return 0
+  }
+  simd_count_byte_ffi(data, len, needle)
 }
 
 ///|
@@ -620,22 +704,40 @@ pub fn gather_i32(
 
 ///|
 pub fn is_ascii(data : FixedArray[Byte]) -> Bool {
-  @internal.scalar_is_ascii(data)
+  let len = data.length()
+  if len == 0 {
+    return true
+  }
+  simd_is_ascii_ffi(data, len) != 0
 }
 
 ///|
 pub fn to_lower_ascii(data : FixedArray[Byte]) -> Unit {
-  @internal.scalar_to_lower_ascii(data)
+  let len = data.length()
+  if len == 0 {
+    return
+  }
+  simd_to_lower_ascii_ffi(data, len)
 }
 
 ///|
 pub fn to_upper_ascii(data : FixedArray[Byte]) -> Unit {
-  @internal.scalar_to_upper_ascii(data)
+  let len = data.length()
+  if len == 0 {
+    return
+  }
+  simd_to_upper_ascii_ffi(data, len)
 }
 
 ///|
 pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
-  @internal.scalar_validate_utf8(data)
+  let len = data.length()
+  let start = if len >= 16 {
+    simd_first_non_ascii_chunk_ffi(data, len)
+  } else {
+    0
+  }
+  @internal.scalar_validate_utf8_from(data, start)
 }
 
 ///|

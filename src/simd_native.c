@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 #include <math.h>
 
 /* TCC (MoonBit default) doesn't support NEON/SSE intrinsics.
@@ -414,6 +415,143 @@ double simd_dot_f64_ffi(const double* a, const double* b, int32_t len) {
 #endif
   for (; i < len; i++) result += a[i] * b[i];
   return result;
+}
+
+// --- byte ops ---
+
+void simd_memcpy_bytes_ffi(const uint8_t* src, int32_t si, uint8_t* dst, int32_t di, int32_t len) {
+  memcpy(dst + di, src + si, (size_t)len);
+}
+
+void simd_memset_bytes_ffi(uint8_t* dst, int32_t off, int32_t len, uint8_t value) {
+  memset(dst + off, value, (size_t)len);
+}
+
+int32_t simd_equal_bytes_ffi(const uint8_t* a, const uint8_t* b, int32_t len) {
+  return memcmp(a, b, (size_t)len) == 0 ? 1 : 0;
+}
+
+int32_t simd_find_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {
+  const void* p = memchr(data, needle, (size_t)len);
+  return p ? (int32_t)((const uint8_t*)p - data) : -1;
+}
+
+int32_t simd_count_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {
+  int32_t count = 0;
+  int32_t i = 0;
+#if USE_NEON
+  uint8x16_t needle_v = vdupq_n_u8(needle);
+  uint8x16_t one_v = vdupq_n_u8(1);
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    uint8x16_t eq = vceqq_u8(vld1q_u8(data + i), needle_v);
+    count += vaddvq_u8(vandq_u8(eq, one_v));
+  }
+#elif USE_SSE2
+  __m128i needle_v = _mm_set1_epi8((char)needle);
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(data + i));
+    __m128i eq = _mm_cmpeq_epi8(v, needle_v);
+    count += __builtin_popcount(_mm_movemask_epi8(eq));
+  }
+#endif
+  for (; i < len; i++) {
+    if (data[i] == needle) count++;
+  }
+  return count;
+}
+
+int32_t simd_popcount_bytes_ffi(const uint8_t* data, int32_t len) {
+  int32_t total = 0;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    uint8x16_t v = vld1q_u8(data + i);
+    total += vaddvq_u8(vcntq_u8(v));
+  }
+#endif
+  for (; i < len; i++) total += __builtin_popcount(data[i]);
+  return total;
+}
+
+int32_t simd_is_ascii_ffi(const uint8_t* data, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end16 = (len / 16) * 16;
+  uint8x16_t hi = vdupq_n_u8(0x80);
+  for (; i < end16; i += 16) {
+    uint8x16_t v = vld1q_u8(data + i);
+    if (vmaxvq_u8(vandq_u8(v, hi)) != 0) return 0;
+  }
+#elif USE_SSE2
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(data + i));
+    if (_mm_movemask_epi8(v) != 0) return 0;
+  }
+#endif
+  for (; i < len; i++) {
+    if (data[i] & 0x80) return 0;
+  }
+  return 1;
+}
+
+void simd_to_lower_ascii_ffi(uint8_t* data, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  uint8x16_t a_v = vdupq_n_u8('A');
+  uint8x16_t z_v = vdupq_n_u8('Z');
+  uint8x16_t s_v = vdupq_n_u8(0x20);
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    uint8x16_t v = vld1q_u8(data + i);
+    uint8x16_t mask = vandq_u8(vcgeq_u8(v, a_v), vcleq_u8(v, z_v));
+    vst1q_u8(data + i, vaddq_u8(v, vandq_u8(mask, s_v)));
+  }
+#endif
+  for (; i < len; i++) {
+    if (data[i] >= 'A' && data[i] <= 'Z') data[i] += 0x20;
+  }
+}
+
+void simd_to_upper_ascii_ffi(uint8_t* data, int32_t len) {
+  int32_t i = 0;
+#if USE_NEON
+  uint8x16_t a_v = vdupq_n_u8('a');
+  uint8x16_t z_v = vdupq_n_u8('z');
+  uint8x16_t s_v = vdupq_n_u8(0x20);
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    uint8x16_t v = vld1q_u8(data + i);
+    uint8x16_t mask = vandq_u8(vcgeq_u8(v, a_v), vcleq_u8(v, z_v));
+    vst1q_u8(data + i, vsubq_u8(v, vandq_u8(mask, s_v)));
+  }
+#endif
+  for (; i < len; i++) {
+    if (data[i] >= 'a' && data[i] <= 'z') data[i] -= 0x20;
+  }
+}
+
+int32_t simd_first_non_ascii_chunk_ffi(const uint8_t* data, int32_t len) {
+  int32_t end16 = (len / 16) * 16;
+  int32_t i = 0;
+#if USE_NEON
+  uint8x16_t hi = vdupq_n_u8(0x80);
+  while (i < end16) {
+    uint8x16_t v = vld1q_u8(data + i);
+    if (vmaxvq_u8(vandq_u8(v, hi)) != 0) return i;
+    i += 16;
+  }
+#elif USE_SSE2
+  while (i < end16) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(data + i));
+    if (_mm_movemask_epi8(v) != 0) return i;
+    i += 16;
+  }
+#endif
+  return end16;
 }
 
 uint32_t simd_adler32_ffi(const uint8_t* data, int32_t len) {
