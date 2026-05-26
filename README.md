@@ -165,6 +165,15 @@ See `CLAUDE.md` for the deep dive: per-op bench tables, inline-WAT
 gotchas (the `i8x16.sub` stack-order trap, `f64.min` parser hole,
 wasm-gc tlsf collision), and the SimdBuffer capability matrix.
 
+## Examples
+
+- [`examples/cosine_similarity/`](examples/cosine_similarity/) —
+  vector / RAG search building block. Three implementations side by
+  side (scalar, naive SIMD, precomputed-norm SIMD) that double as a
+  worked example of when chaining SIMD primitives helps and when it
+  doesn't. precomputed variant gives 2-3.5× over scalar at the same
+  memory bandwidth.
+
 ## License
 
 MIT
