@@ -368,7 +368,11 @@ pub fn all_i32(arr : FixedArray[Int]) -> Bool {
 /// Hillis-Steele prefix sum on i32x4: two stages of (shuffle-left + add) per
 /// chunk, then add the running sum from the previous chunk via splat.
 #borrow(arr, out)
-fn cumsum_i32_v128(arr : FixedArray[Int], out : FixedArray[Int], len : Int) -> Unit =
+fn cumsum_i32_v128(
+  arr : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
   #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) i32.const 0 i32x4.splat local.set 6 i32.const 0 local.set 5 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 7 local.get 6 local.get 7 i8x16.shuffle 0 1 2 3 16 17 18 19 20 21 22 23 24 25 26 27 local.get 7 i32x4.add local.set 8 local.get 6 local.get 8 i8x16.shuffle 0 1 2 3 4 5 6 7 16 17 18 19 20 21 22 23 local.get 8 i32x4.add local.set 9 local.get 5 i32x4.splat local.get 9 i32x4.add local.set 7 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 7 v128.store local.get 7 i32x4.extract_lane 3 local.set 5 local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load i32.add local.set 5 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 5 i32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
 
 ///|
@@ -385,7 +389,11 @@ pub fn cumsum_i32(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
 /// "fill" lanes are 1 (identity for mul), the running accumulator starts at
 /// 1, and chunks combine via mul.
 #borrow(arr, out)
-fn cumprod_i32_v128(arr : FixedArray[Int], out : FixedArray[Int], len : Int) -> Unit =
+fn cumprod_i32_v128(
+  arr : FixedArray[Int],
+  out : FixedArray[Int],
+  len : Int,
+) -> Unit =
   #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) i32.const 1 i32x4.splat local.set 6 i32.const 1 local.set 5 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 7 local.get 6 local.get 7 i8x16.shuffle 0 1 2 3 16 17 18 19 20 21 22 23 24 25 26 27 local.get 7 i32x4.mul local.set 8 local.get 6 local.get 8 i8x16.shuffle 0 1 2 3 4 5 6 7 16 17 18 19 20 21 22 23 local.get 8 i32x4.mul local.set 9 local.get 5 i32x4.splat local.get 9 i32x4.mul local.set 7 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 7 v128.store local.get 7 i32x4.extract_lane 3 local.set 5 local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load i32.mul local.set 5 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 5 i32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
 
 ///|
@@ -740,10 +748,7 @@ pub fn div_i32(
 /// non-ASCII byte, or `(len/16)*16` if every aligned chunk is pure ASCII.
 /// Uses select-based tracking to record the first hit without early exit.
 #borrow(data)
-fn first_non_ascii_chunk_v128(
-  data : FixedArray[Byte],
-  len : Int,
-) -> Int =
+fn first_non_ascii_chunk_v128(data : FixedArray[Byte], len : Int) -> Int =
   #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local i32) local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 local.get 3 local.set 4 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 0 local.get 2 i32.add v128.load i8x16.bitmask local.set 5 local.get 2 local.get 4 local.get 4 local.get 3 i32.eq local.get 5 i32.mul select local.set 4 local.get 2 i32.const 16 i32.add local.set 2 br 0 end end local.get 4)
 
 ///|
@@ -754,11 +759,7 @@ fn first_non_ascii_chunk_v128(
 /// chunk).
 pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
   let len = data.length()
-  let start = if len >= 16 {
-    first_non_ascii_chunk_v128(data, len)
-  } else {
-    0
-  }
+  let start = if len >= 16 { first_non_ascii_chunk_v128(data, len) } else { 0 }
   @internal.scalar_validate_utf8_from(data, start)
 }
 
@@ -1016,7 +1017,14 @@ pub fn sort_i32(arr : FixedArray[Int]) -> Unit {
   if pos + 16 < n {
     let tail_total = n - pos
     @internal.scalar_merge2_int(
-      arr, pos, 16, arr, pos + 16, tail_total - 16, tmp, pos,
+      arr,
+      pos,
+      16,
+      arr,
+      pos + 16,
+      tail_total - 16,
+      tmp,
+      pos,
     )
     for k = pos; k < n; k = k + 1 {
       arr[k] = tmp[k]
@@ -1034,7 +1042,14 @@ pub fn sort_i32(arr : FixedArray[Int]) -> Unit {
   if pos2 + 32 < n {
     let tail_total = n - pos2
     @internal.scalar_merge2_int(
-      arr, pos2, 32, arr, pos2 + 32, tail_total - 32, tmp, pos2,
+      arr,
+      pos2,
+      32,
+      arr,
+      pos2 + 32,
+      tail_total - 32,
+      tmp,
+      pos2,
     )
     for k = pos2; k < n; k = k + 1 {
       arr[k] = tmp[k]
@@ -1065,11 +1080,25 @@ pub fn sort_i32(arr : FixedArray[Int]) -> Unit {
         }
       } else if src_is_arr {
         @internal.scalar_merge2_int(
-          arr, a_off, a_end - a_off, arr, b_off, b_end - b_off, tmp, a_off,
+          arr,
+          a_off,
+          a_end - a_off,
+          arr,
+          b_off,
+          b_end - b_off,
+          tmp,
+          a_off,
         )
       } else {
         @internal.scalar_merge2_int(
-          tmp, a_off, a_end - a_off, tmp, b_off, b_end - b_off, arr, a_off,
+          tmp,
+          a_off,
+          a_end - a_off,
+          tmp,
+          b_off,
+          b_end - b_off,
+          arr,
+          a_off,
         )
       }
       i = i + merged
@@ -1159,19 +1188,11 @@ pub fn div_f32(
 
 ///|
 #borrow(a, out)
-fn sqrt_f32_v128(
-  a : FixedArray[Byte],
-  out : FixedArray[Byte],
-  n : Int,
-) -> Unit =
+fn sqrt_f32_v128(a : FixedArray[Byte], out : FixedArray[Byte], n : Int) -> Unit =
   #|(func (param i32) (param i32) (param i32) (local i32) (local i32) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load f32x4.sqrt v128.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add f32.load f32.sqrt f32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
 
 ///|
-pub fn sqrt_f32(
-  a : FixedArray[Byte],
-  out : FixedArray[Byte],
-  n : Int,
-) -> Unit {
+pub fn sqrt_f32(a : FixedArray[Byte], out : FixedArray[Byte], n : Int) -> Unit {
   if n == 0 {
     return
   }
@@ -1264,19 +1285,11 @@ pub fn sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
 
 ///|
 #borrow(a, b)
-fn dot_f32_v128(
-  a : FixedArray[Byte],
-  b : FixedArray[Byte],
-  n : Int,
-) -> Float =
+fn dot_f32_v128(a : FixedArray[Byte], b : FixedArray[Byte], n : Int) -> Float =
   #|(func (param i32) (param i32) (param i32) (result f32) (local i32) (local i32) (local f32) (local v128) i32.const 0 f32.convert_i32_s f32x4.splat local.set 6 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 6 local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 3 i32.const 2 i32.shl i32.add v128.load f32x4.mul f32x4.add local.set 6 local.get 3 i32.const 4 i32.add local.set 3 br 0 end end local.get 6 f32x4.extract_lane 0 local.get 6 f32x4.extract_lane 1 f32.add local.get 6 f32x4.extract_lane 2 f32.add local.get 6 f32x4.extract_lane 3 f32.add local.set 5 block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.const 2 i32.shl i32.add f32.load local.get 1 local.get 3 i32.const 2 i32.shl i32.add f32.load f32.mul f32.add local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5)
 
 ///|
-pub fn dot_f32(
-  a : FixedArray[Byte],
-  b : FixedArray[Byte],
-  n : Int,
-) -> Float {
+pub fn dot_f32(a : FixedArray[Byte], b : FixedArray[Byte], n : Int) -> Float {
   if n == 0 {
     return (0.0 : Float)
   }
@@ -1467,10 +1480,7 @@ fn simd_dot_f64_v128(
   #|(func (param i32) (param i32) (param i32) (result f64) (local i32) (local i32) (local f64) (local v128) i32.const 0 f64.convert_i32_s f64x2.splat local.set 6 local.get 2 i32.const 1 i32.shr_s i32.const 1 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 6 local.get 0 local.get 3 i32.const 3 i32.shl i32.add v128.load local.get 1 local.get 3 i32.const 3 i32.shl i32.add v128.load f64x2.mul f64x2.add local.set 6 local.get 3 i32.const 2 i32.add local.set 3 br 0 end end local.get 6 f64x2.extract_lane 0 local.get 6 f64x2.extract_lane 1 f64.add local.set 5 block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.const 3 i32.shl i32.add f64.load local.get 1 local.get 3 i32.const 3 i32.shl i32.add f64.load f64.mul f64.add local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5)
 
 ///|
-pub fn dot_f64(
-  a : FixedArray[Double],
-  b : FixedArray[Double],
-) -> Double {
+pub fn dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
   let len = a.length()
   if len == 0 {
     return 0.0

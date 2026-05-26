@@ -259,7 +259,9 @@ test "popcount_bytes empty" {
 
 ///|
 test "memcpy_bytes basic" {
-  let src = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+  let src = make_byte_array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+  ])
   let dst = FixedArray::make(20, b'\x00')
   memcpy_bytes(src, 0, dst, 0, 20)
   for i in 0..<20 {
@@ -300,22 +302,34 @@ test "memset_bytes partial" {
 
 ///|
 test "equal_bytes true" {
-  let a = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
-  let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  let a = make_byte_array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+  ])
+  let b = make_byte_array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+  ])
   inspect(equal_bytes(a, b, 17), content="true")
 }
 
 ///|
 test "equal_bytes false at tail" {
-  let a = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 99])
-  let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  let a = make_byte_array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 99,
+  ])
+  let b = make_byte_array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+  ])
   inspect(equal_bytes(a, b, 17), content="false")
 }
 
 ///|
 test "equal_bytes false at first SIMD block" {
-  let a = make_byte_array([1, 2, 9, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
-  let b = make_byte_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17])
+  let a = make_byte_array([
+    1, 2, 9, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+  ])
+  let b = make_byte_array([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+  ])
   inspect(equal_bytes(a, b, 17), content="false")
 }
 
@@ -341,7 +355,10 @@ test "find_byte not found" {
 test "count_byte matches scalar" {
   let vals = Array::makei(50, fn(i) { if i % 3 == 0 { 7 } else { i % 256 } })
   let data = make_byte_array(vals)
-  assert_eq(count_byte(data, b'\x07'), @internal.scalar_count_byte(data, b'\x07'))
+  assert_eq(
+    count_byte(data, b'\x07'),
+    @internal.scalar_count_byte(data, b'\x07'),
+  )
 }
 
 // --- element-wise Int ops (B) ---
@@ -479,8 +496,8 @@ test "where_i32 end-to-end with lt_i32 as mask producer" {
 test "is_ascii true" {
   // "Hello, World! ABCDEFGHIJK" is all ASCII
   let data = make_byte_array([
-    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 65, 66, 67,
-    68, 69, 70,
+    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 65, 66, 67, 68,
+    69, 70,
   ])
   inspect(is_ascii(data), content="true")
 }
@@ -552,8 +569,8 @@ test "to_lower_ascii leaves non-letters alone" {
 ///|
 test "validate_utf8 pure ASCII" {
   let data = make_byte_array([
-    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 49, 50, 51,
-    52, 53, 54, 55, 56, 57, 48,
+    72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33, 32, 49, 50, 51, 52,
+    53, 54, 55, 56, 57, 48,
   ])
   inspect(validate_utf8(data), content="true")
 }
@@ -620,8 +637,8 @@ test "validate_utf8 long ASCII then invalid" {
 ///|
 test "validate_utf8 matches scalar on mixed input" {
   let data = make_byte_array([
-    72, 101, 108, 108, 111, 0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC, 32, 0xC3, 0xA9,
-    33, 0xF0, 0x9F, 0x98, 0x80,
+    72, 101, 108, 108, 111, 0xE6, 0x97, 0xA5, 0xE6, 0x9C, 0xAC, 32, 0xC3, 0xA9, 33,
+    0xF0, 0x9F, 0x98, 0x80,
   ])
   assert_eq(validate_utf8(data), @internal.scalar_validate_utf8(data))
 }
@@ -651,7 +668,7 @@ test "gather_i32 matches scalar (large)" {
   }
   let indices = FixedArray::make(50, 0)
   for i in 0..<50 {
-    indices[i] = (i * 7) % n
+    indices[i] = i * 7 % n
   }
   let out_s = FixedArray::make(50, 0)
   let out_r = FixedArray::make(50, 0)
@@ -959,7 +976,9 @@ test "bitonic_merge16_i32 matches scalar (random pairs)" {
   let cases = [
     [1, 5, 9, 13, 17, 21, 25, 29, 2, 6, 10, 14, 18, 22, 26, 30],
     [-10, -5, 0, 3, 7, 11, 15, 20, -8, -3, 1, 4, 8, 12, 16, 25],
-    [100, 200, 300, 400, 500, 600, 700, 800, 50, 150, 250, 350, 450, 550, 650, 750],
+    [
+      100, 200, 300, 400, 500, 600, 700, 800, 50, 150, 250, 350, 450, 550, 650, 750,
+    ],
     [1, 1, 2, 3, 4, 5, 6, 6, 1, 2, 2, 3, 4, 5, 6, 7],
   ]
   for c in cases {
@@ -975,7 +994,9 @@ test "bitonic_merge16_i32 matches scalar (random pairs)" {
 
 ///|
 test "sort16_i32 basic" {
-  let arr = make_int_array([15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4])
+  let arr = make_int_array([
+    15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4,
+  ])
   sort16_i32(arr, 0)
   for i in 0..<16 {
     assert_eq(arr[i], i)
@@ -1000,7 +1021,9 @@ test "sort16_i32 matches scalar (random)" {
 
 ///|
 test "sort16_i32 with offset surrounded by sentinels" {
-  let arr = make_int_array([99, 15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4, 88])
+  let arr = make_int_array([
+    99, 15, 7, 3, 11, 1, 13, 9, 5, 14, 6, 2, 10, 0, 12, 8, 4, 88,
+  ])
   sort16_i32(arr, 1)
   assert_eq(arr[0], 99)
   for i in 0..<16 {
@@ -1022,10 +1045,19 @@ fn make_f32_buf(vals : Array[Float]) -> FixedArray[Byte] {
 }
 
 ///|
-fn assert_f32_close(a : Float, b : Float, eps~ : Float = (1.0e-5 : Float)) -> Unit {
+fn assert_f32_close(
+  a : Float,
+  b : Float,
+  eps? : Float = (1.0e-5 : Float),
+) -> Unit {
   let d = (a - b).abs()
   if d > eps {
-    abort("expected ~" + b.to_double().to_string() + " got " + a.to_double().to_string())
+    abort(
+      "expected ~" +
+      b.to_double().to_string() +
+      " got " +
+      a.to_double().to_string(),
+    )
   }
 }
 
@@ -1042,8 +1074,24 @@ test "f32 buf round-trip" {
 
 ///|
 test "add_f32 matches scalar" {
-  let a = make_f32_buf([(1.5 : Float), (2.0 : Float), (3.25 : Float), (4.0 : Float), (5.5 : Float), (6.0 : Float), (7.125 : Float)])
-  let b = make_f32_buf([(10.0 : Float), (20.5 : Float), (30.0 : Float), (40.25 : Float), (50.0 : Float), (60.5 : Float), (70.0 : Float)])
+  let a = make_f32_buf([
+    (1.5 : Float),
+    (2.0 : Float),
+    (3.25 : Float),
+    (4.0 : Float),
+    (5.5 : Float),
+    (6.0 : Float),
+    (7.125 : Float),
+  ])
+  let b = make_f32_buf([
+    (10.0 : Float),
+    (20.5 : Float),
+    (30.0 : Float),
+    (40.25 : Float),
+    (50.0 : Float),
+    (60.5 : Float),
+    (70.0 : Float),
+  ])
   let out_s = f32_buf_alloc(7)
   let out_r = f32_buf_alloc(7)
   add_f32(a, b, out_s, 7)
@@ -1055,8 +1103,20 @@ test "add_f32 matches scalar" {
 
 ///|
 test "mul_f32 matches scalar" {
-  let a = make_f32_buf([(1.5 : Float), (2.0 : Float), (3.25 : Float), (4.0 : Float), (5.5 : Float)])
-  let b = make_f32_buf([(2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float), (6.0 : Float)])
+  let a = make_f32_buf([
+    (1.5 : Float),
+    (2.0 : Float),
+    (3.25 : Float),
+    (4.0 : Float),
+    (5.5 : Float),
+  ])
+  let b = make_f32_buf([
+    (2.0 : Float),
+    (3.0 : Float),
+    (4.0 : Float),
+    (5.0 : Float),
+    (6.0 : Float),
+  ])
   let out_s = f32_buf_alloc(5)
   let out_r = f32_buf_alloc(5)
   mul_f32(a, b, out_s, 5)
@@ -1068,15 +1128,33 @@ test "mul_f32 matches scalar" {
 
 ///|
 test "sum_f32" {
-  let a = make_f32_buf([(1.5 : Float), (2.5 : Float), (3.5 : Float), (4.5 : Float), (5.5 : Float)])
+  let a = make_f32_buf([
+    (1.5 : Float),
+    (2.5 : Float),
+    (3.5 : Float),
+    (4.5 : Float),
+    (5.5 : Float),
+  ])
   // 1.5+2.5+3.5+4.5+5.5 = 17.5
   assert_f32_close(sum_f32(a, 5), (17.5 : Float))
 }
 
 ///|
 test "dot_f32" {
-  let a = make_f32_buf([(1.0 : Float), (2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float)])
-  let b = make_f32_buf([(2.0 : Float), (3.0 : Float), (4.0 : Float), (5.0 : Float), (6.0 : Float)])
+  let a = make_f32_buf([
+    (1.0 : Float),
+    (2.0 : Float),
+    (3.0 : Float),
+    (4.0 : Float),
+    (5.0 : Float),
+  ])
+  let b = make_f32_buf([
+    (2.0 : Float),
+    (3.0 : Float),
+    (4.0 : Float),
+    (5.0 : Float),
+    (6.0 : Float),
+  ])
   // 2+6+12+20+30 = 70
   assert_f32_close(dot_f32(a, b, 5), (70.0 : Float))
 }
@@ -1084,10 +1162,18 @@ test "dot_f32" {
 ///|
 test "sub_f32 / div_f32 / sqrt_f32 match scalar" {
   let a = make_f32_buf([
-    (16.0 : Float), (25.0 : Float), (4.0 : Float), (9.0 : Float), (1.0 : Float),
+    (16.0 : Float),
+    (25.0 : Float),
+    (4.0 : Float),
+    (9.0 : Float),
+    (1.0 : Float),
   ])
   let b = make_f32_buf([
-    (2.0 : Float), (5.0 : Float), (2.0 : Float), (3.0 : Float), (1.0 : Float),
+    (2.0 : Float),
+    (5.0 : Float),
+    (2.0 : Float),
+    (3.0 : Float),
+    (1.0 : Float),
   ])
   let out_s = f32_buf_alloc(5)
   let out_r = f32_buf_alloc(5)
@@ -1111,10 +1197,18 @@ test "sub_f32 / div_f32 / sqrt_f32 match scalar" {
 ///|
 test "min_elem_f32 / max_elem_f32 element-wise" {
   let a = make_f32_buf([
-    (1.0 : Float), (5.0 : Float), (3.0 : Float), (8.0 : Float), (2.0 : Float),
+    (1.0 : Float),
+    (5.0 : Float),
+    (3.0 : Float),
+    (8.0 : Float),
+    (2.0 : Float),
   ])
   let b = make_f32_buf([
-    (4.0 : Float), (2.0 : Float), (7.0 : Float), (6.0 : Float), (9.0 : Float),
+    (4.0 : Float),
+    (2.0 : Float),
+    (7.0 : Float),
+    (6.0 : Float),
+    (9.0 : Float),
   ])
   let out = f32_buf_alloc(5)
   min_elem_f32(a, b, out, 5)
@@ -1301,7 +1395,7 @@ fn make_f64_array(vals : Array[Double]) -> FixedArray[Double] {
 }
 
 ///|
-fn assert_f64_close(a : Double, b : Double, eps~ : Double = 1.0e-9) -> Unit {
+fn assert_f64_close(a : Double, b : Double, eps? : Double = 1.0e-9) -> Unit {
   let d = (a - b).abs()
   if d > eps {
     abort("expected ~" + b.to_string() + " got " + a.to_string())

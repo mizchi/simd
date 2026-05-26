@@ -328,7 +328,10 @@ extern "C" fn simd_count_byte_ffi(
 
 ///|
 #borrow(data)
-extern "C" fn simd_popcount_bytes_ffi(data : FixedArray[Byte], len : Int) -> Int = "simd_popcount_bytes_ffi"
+extern "C" fn simd_popcount_bytes_ffi(
+  data : FixedArray[Byte],
+  len : Int,
+) -> Int = "simd_popcount_bytes_ffi"
 
 ///|
 #borrow(data)
@@ -336,15 +339,24 @@ extern "C" fn simd_is_ascii_ffi(data : FixedArray[Byte], len : Int) -> Int = "si
 
 ///|
 #borrow(data)
-extern "C" fn simd_to_lower_ascii_ffi(data : FixedArray[Byte], len : Int) -> Unit = "simd_to_lower_ascii_ffi"
+extern "C" fn simd_to_lower_ascii_ffi(
+  data : FixedArray[Byte],
+  len : Int,
+) -> Unit = "simd_to_lower_ascii_ffi"
 
 ///|
 #borrow(data)
-extern "C" fn simd_to_upper_ascii_ffi(data : FixedArray[Byte], len : Int) -> Unit = "simd_to_upper_ascii_ffi"
+extern "C" fn simd_to_upper_ascii_ffi(
+  data : FixedArray[Byte],
+  len : Int,
+) -> Unit = "simd_to_upper_ascii_ffi"
 
 ///|
 #borrow(data)
-extern "C" fn simd_first_non_ascii_chunk_ffi(data : FixedArray[Byte], len : Int) -> Int = "simd_first_non_ascii_chunk_ffi"
+extern "C" fn simd_first_non_ascii_chunk_ffi(
+  data : FixedArray[Byte],
+  len : Int,
+) -> Int = "simd_first_non_ascii_chunk_ffi"
 
 ///|
 #borrow(data)
@@ -542,10 +554,7 @@ pub fn div_f64(
 }
 
 ///|
-pub fn sqrt_f64(
-  a : FixedArray[Double],
-  out : FixedArray[Double],
-) -> Unit {
+pub fn sqrt_f64(a : FixedArray[Double], out : FixedArray[Double]) -> Unit {
   let len = a.length()
   if len == 0 {
     return
@@ -589,10 +598,7 @@ pub fn sum_f64(arr : FixedArray[Double]) -> Double {
 }
 
 ///|
-pub fn dot_f64(
-  a : FixedArray[Double],
-  b : FixedArray[Double],
-) -> Double {
+pub fn dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
   let len = a.length()
   if len == 0 {
     return 0.0
@@ -847,11 +853,7 @@ pub fn sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
 }
 
 ///|
-pub fn dot_f32(
-  a : FixedArray[Byte],
-  b : FixedArray[Byte],
-  n : Int,
-) -> Float {
+pub fn dot_f32(a : FixedArray[Byte], b : FixedArray[Byte], n : Int) -> Float {
   if n == 0 {
     return (0.0 : Float)
   }
@@ -885,11 +887,7 @@ pub fn div_f32(
 }
 
 ///|
-pub fn sqrt_f32(
-  a : FixedArray[Byte],
-  out : FixedArray[Byte],
-  n : Int,
-) -> Unit {
+pub fn sqrt_f32(a : FixedArray[Byte], out : FixedArray[Byte], n : Int) -> Unit {
   if n == 0 {
     return
   }

@@ -331,10 +331,7 @@ pub fn scalar_div(
 /// bytes, and rejects 0x80..0xC1 leading bytes and 0xF5..0xFF entirely.
 /// Does NOT reject overlong, surrogate, or > U+10FFFF codepoints — that's
 /// a stricter pass than this one.
-pub fn scalar_validate_utf8_from(
-  data : FixedArray[Byte],
-  start : Int,
-) -> Bool {
+pub fn scalar_validate_utf8_from(data : FixedArray[Byte], start : Int) -> Bool {
   let n = data.length()
   let mut i = start
   while i < n {
@@ -966,10 +963,7 @@ pub fn scalar_sum_f64(arr : FixedArray[Double]) -> Double {
 }
 
 ///|
-pub fn scalar_dot_f64(
-  a : FixedArray[Double],
-  b : FixedArray[Double],
-) -> Double {
+pub fn scalar_dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
   let len = a.length()
   let mut acc = 0.0
   for i in 0..<len {

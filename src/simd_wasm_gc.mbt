@@ -138,10 +138,7 @@ pub fn div_f64(
 }
 
 ///|
-pub fn sqrt_f64(
-  a : FixedArray[Double],
-  out : FixedArray[Double],
-) -> Unit {
+pub fn sqrt_f64(a : FixedArray[Double], out : FixedArray[Double]) -> Unit {
   @internal.scalar_sqrt_f64(a, out)
 }
 
@@ -169,10 +166,7 @@ pub fn sum_f64(arr : FixedArray[Double]) -> Double {
 }
 
 ///|
-pub fn dot_f64(
-  a : FixedArray[Double],
-  b : FixedArray[Double],
-) -> Double {
+pub fn dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
   @internal.scalar_dot_f64(a, b)
 }
 
@@ -358,11 +352,7 @@ pub fn sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
 }
 
 ///|
-pub fn dot_f32(
-  a : FixedArray[Byte],
-  b : FixedArray[Byte],
-  n : Int,
-) -> Float {
+pub fn dot_f32(a : FixedArray[Byte], b : FixedArray[Byte], n : Int) -> Float {
   @internal.scalar_dot_f32(a, b, n)
 }
 
@@ -387,11 +377,7 @@ pub fn div_f32(
 }
 
 ///|
-pub fn sqrt_f32(
-  a : FixedArray[Byte],
-  out : FixedArray[Byte],
-  n : Int,
-) -> Unit {
+pub fn sqrt_f32(a : FixedArray[Byte], out : FixedArray[Byte], n : Int) -> Unit {
   @internal.scalar_sqrt_f32(a, out, n)
 }
 
