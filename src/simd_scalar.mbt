@@ -1,43 +1,30 @@
 ///|
-/// native sum: scalar wins thanks to compiler auto-vectorization;
-/// going through ffi adds call overhead. The C kernel (simd_sum_ffi)
-/// is kept available for explicit use.
+/// Scalar fallbacks for targets without an inline-SIMD or FFI path
+/// (js, wasm-gc). All entries delegate straight to @internal.scalar_*.
 pub fn sum_i32(arr : FixedArray[Int]) -> Int {
   @internal.scalar_sum(arr)
 }
 
 ///|
-/// native dot: same story as sum — scalar auto-vec wins.
 pub fn dot_i32(a : FixedArray[Int], b : FixedArray[Int]) -> Int {
   @internal.scalar_dot_product(a, b)
 }
 
 ///|
-/// SIMD element-wise add - native target: C FFI (NEON/SSE).
 pub fn add_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_add_ffi(a, b, out, len)
+  @internal.scalar_add(a, b, out)
 }
 
 ///|
-/// SIMD Adler-32 - native target: optimized scalar with deferred modulo.
 pub fn adler32_bytes(data : FixedArray[Byte]) -> UInt {
-  let len = data.length()
-  if len == 0 {
-    return 1U
-  }
-  simd_adler32_ffi(data, len)
+  @internal.scalar_adler32(data)
 }
 
 ///|
-/// native min reduce: scalar auto-vec wins; reverted from C FFI.
 pub fn min_i32(arr : FixedArray[Int]) -> Int {
   @internal.scalar_min(arr)
 }
@@ -64,20 +51,12 @@ pub fn saxpy_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_saxpy_ffi(k, a, b, out, len)
+  @internal.scalar_saxpy(k, a, b, out)
 }
 
 ///|
 pub fn popcount_bytes(data : FixedArray[Byte]) -> Int {
-  let len = data.length()
-  if len == 0 {
-    return 0
-  }
-  simd_popcount_bytes_ffi(data, len)
+  @internal.scalar_popcount_bytes(data)
 }
 
 ///|
@@ -88,10 +67,7 @@ pub fn memcpy_bytes(
   di : Int,
   len : Int,
 ) -> Unit {
-  if len <= 0 {
-    return
-  }
-  simd_memcpy_bytes_ffi(src, si, dst, di, len)
+  @internal.scalar_memcpy_bytes(src, si, dst, di, len)
 }
 
 ///|
@@ -101,10 +77,7 @@ pub fn memset_bytes(
   len : Int,
   value : Byte,
 ) -> Unit {
-  if len <= 0 {
-    return
-  }
-  simd_memset_bytes_ffi(dst, off, len, value)
+  @internal.scalar_memset_bytes(dst, off, len, value)
 }
 
 ///|
@@ -113,28 +86,17 @@ pub fn equal_bytes(
   b : FixedArray[Byte],
   len : Int,
 ) -> Bool {
-  if len <= 0 {
-    return true
-  }
-  simd_equal_bytes_ffi(a, b, len) != 0
+  @internal.scalar_equal_bytes(a, b, len)
 }
 
 ///|
 pub fn find_byte(data : FixedArray[Byte], needle : Byte) -> Int {
-  let len = data.length()
-  if len == 0 {
-    return -1
-  }
-  simd_find_byte_ffi(data, len, needle)
+  @internal.scalar_find_byte(data, needle)
 }
 
 ///|
 pub fn count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
-  let len = data.length()
-  if len == 0 {
-    return 0
-  }
-  simd_count_byte_ffi(data, len, needle)
+  @internal.scalar_count_byte(data, needle)
 }
 
 ///|
@@ -143,11 +105,7 @@ pub fn add_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_add_f64_ffi(a, b, out, len)
+  @internal.scalar_add_f64(a, b, out)
 }
 
 ///|
@@ -156,11 +114,7 @@ pub fn sub_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_sub_f64_ffi(a, b, out, len)
+  @internal.scalar_sub_f64(a, b, out)
 }
 
 ///|
@@ -169,11 +123,7 @@ pub fn mul_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_mul_f64_ffi(a, b, out, len)
+  @internal.scalar_mul_f64(a, b, out)
 }
 
 ///|
@@ -182,20 +132,12 @@ pub fn div_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_div_f64_ffi(a, b, out, len)
+  @internal.scalar_div_f64(a, b, out)
 }
 
 ///|
 pub fn sqrt_f64(a : FixedArray[Double], out : FixedArray[Double]) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_sqrt_f64_ffi(a, out, len)
+  @internal.scalar_sqrt_f64(a, out)
 }
 
 ///|
@@ -204,11 +146,7 @@ pub fn min_elem_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_min_elem_f64_ffi(a, b, out, len)
+  @internal.scalar_min_f64(a, b, out)
 }
 
 ///|
@@ -217,29 +155,17 @@ pub fn max_elem_f64(
   b : FixedArray[Double],
   out : FixedArray[Double],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_max_elem_f64_ffi(a, b, out, len)
+  @internal.scalar_max_f64(a, b, out)
 }
 
 ///|
 pub fn sum_f64(arr : FixedArray[Double]) -> Double {
-  let len = arr.length()
-  if len == 0 {
-    return 0.0
-  }
-  simd_sum_f64_ffi(arr, len)
+  @internal.scalar_sum_f64(arr)
 }
 
 ///|
 pub fn dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
-  let len = a.length()
-  if len == 0 {
-    return 0.0
-  }
-  simd_dot_f64_ffi(a, b, len)
+  @internal.scalar_dot_f64(a, b)
 }
 
 ///|
@@ -248,11 +174,7 @@ pub fn sub_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_sub_ffi(a, b, out, len)
+  @internal.scalar_sub(a, b, out)
 }
 
 ///|
@@ -261,29 +183,17 @@ pub fn mul_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_mul_ffi(a, b, out, len)
+  @internal.scalar_mul(a, b, out)
 }
 
 ///|
 pub fn neg_i32(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_neg_i32_ffi(a, out, len)
+  @internal.scalar_neg(a, out)
 }
 
 ///|
 pub fn abs_i32(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_abs_i32_ffi(a, out, len)
+  @internal.scalar_abs(a, out)
 }
 
 ///|
@@ -292,11 +202,7 @@ pub fn min_elem_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_min_elem_ffi(a, b, out, len)
+  @internal.scalar_min_elem(a, b, out)
 }
 
 ///|
@@ -305,11 +211,7 @@ pub fn max_elem_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_max_elem_ffi(a, b, out, len)
+  @internal.scalar_max_elem(a, b, out)
 }
 
 ///|
@@ -318,11 +220,7 @@ pub fn eq_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_eq_i32_ffi(a, b, out, len)
+  @internal.scalar_eq(a, b, out)
 }
 
 ///|
@@ -331,11 +229,7 @@ pub fn lt_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_lt_i32_ffi(a, b, out, len)
+  @internal.scalar_lt(a, b, out)
 }
 
 ///|
@@ -344,11 +238,7 @@ pub fn gt_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = a.length()
-  if len == 0 {
-    return
-  }
-  simd_gt_i32_ffi(a, b, out, len)
+  @internal.scalar_gt(a, b, out)
 }
 
 ///|
@@ -358,11 +248,7 @@ pub fn where_i32(
   b : FixedArray[Int],
   out : FixedArray[Int],
 ) -> Unit {
-  let len = mask.length()
-  if len == 0 {
-    return
-  }
-  simd_where_i32_ffi(mask, a, b, out, len)
+  @internal.scalar_where(mask, a, b, out)
 }
 
 ///|
@@ -374,10 +260,7 @@ pub fn matmul_f64(
   k : Int,
   n : Int,
 ) -> Unit {
-  if m == 0 || n == 0 {
-    return
-  }
-  simd_matmul_f64_tile_ffi(a, b_t, c, m, k, n)
+  @internal.scalar_matmul_f64(a, b_t, c, m, k, n)
 }
 
 ///|
@@ -388,12 +271,7 @@ pub fn gemv_f64(
   m : Int,
   n : Int,
 ) -> Unit {
-  if m == 0 {
-    return
-  }
-  for i in 0..<m {
-    y[i] = simd_dot_f64_range_ffi(a, i * n, x, 0, n)
-  }
+  @internal.scalar_gemv_f64(a, x, y, m, n)
 }
 
 ///|
@@ -428,20 +306,12 @@ pub fn count_nonzero_i32(arr : FixedArray[Int]) -> Int {
 
 ///|
 pub fn all_i32(arr : FixedArray[Int]) -> Bool {
-  let len = arr.length()
-  if len == 0 {
-    return true
-  }
-  simd_all_i32_ffi(arr, len) != 0
+  @internal.scalar_all(arr)
 }
 
 ///|
 pub fn any_i32(arr : FixedArray[Int]) -> Bool {
-  let len = arr.length()
-  if len == 0 {
-    return false
-  }
-  simd_any_i32_ffi(arr, len) != 0
+  @internal.scalar_any(arr)
 }
 
 ///|
@@ -461,10 +331,7 @@ pub fn add_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  if n == 0 {
-    return
-  }
-  simd_add_f32_ffi(a, b, out, n)
+  @internal.scalar_add_f32(a, b, out, n)
 }
 
 ///|
@@ -474,26 +341,17 @@ pub fn mul_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  if n == 0 {
-    return
-  }
-  simd_mul_f32_ffi(a, b, out, n)
+  @internal.scalar_mul_f32(a, b, out, n)
 }
 
 ///|
 pub fn sum_f32(arr : FixedArray[Byte], n : Int) -> Float {
-  if n == 0 {
-    return (0.0 : Float)
-  }
-  simd_sum_f32_ffi(arr, n)
+  @internal.scalar_sum_f32(arr, n)
 }
 
 ///|
 pub fn dot_f32(a : FixedArray[Byte], b : FixedArray[Byte], n : Int) -> Float {
-  if n == 0 {
-    return (0.0 : Float)
-  }
-  simd_dot_f32_ffi(a, b, n)
+  @internal.scalar_dot_f32(a, b, n)
 }
 
 ///|
@@ -503,10 +361,7 @@ pub fn sub_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  if n == 0 {
-    return
-  }
-  simd_sub_f32_ffi(a, b, out, n)
+  @internal.scalar_sub_f32(a, b, out, n)
 }
 
 ///|
@@ -516,18 +371,12 @@ pub fn div_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  if n == 0 {
-    return
-  }
-  simd_div_f32_ffi(a, b, out, n)
+  @internal.scalar_div_f32(a, b, out, n)
 }
 
 ///|
 pub fn sqrt_f32(a : FixedArray[Byte], out : FixedArray[Byte], n : Int) -> Unit {
-  if n == 0 {
-    return
-  }
-  simd_sqrt_f32_ffi(a, out, n)
+  @internal.scalar_sqrt_f32(a, out, n)
 }
 
 ///|
@@ -537,10 +386,7 @@ pub fn min_elem_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  if n == 0 {
-    return
-  }
-  simd_min_elem_f32_ffi(a, b, out, n)
+  @internal.scalar_min_elem_f32(a, b, out, n)
 }
 
 ///|
@@ -550,10 +396,7 @@ pub fn max_elem_f32(
   out : FixedArray[Byte],
   n : Int,
 ) -> Unit {
-  if n == 0 {
-    return
-  }
-  simd_max_elem_f32_ffi(a, b, out, n)
+  @internal.scalar_max_elem_f32(a, b, out, n)
 }
 
 ///|
@@ -576,40 +419,22 @@ pub fn gather_i32(
 
 ///|
 pub fn is_ascii(data : FixedArray[Byte]) -> Bool {
-  let len = data.length()
-  if len == 0 {
-    return true
-  }
-  simd_is_ascii_ffi(data, len) != 0
+  @internal.scalar_is_ascii(data)
 }
 
 ///|
 pub fn to_lower_ascii(data : FixedArray[Byte]) -> Unit {
-  let len = data.length()
-  if len == 0 {
-    return
-  }
-  simd_to_lower_ascii_ffi(data, len)
+  @internal.scalar_to_lower_ascii(data)
 }
 
 ///|
 pub fn to_upper_ascii(data : FixedArray[Byte]) -> Unit {
-  let len = data.length()
-  if len == 0 {
-    return
-  }
-  simd_to_upper_ascii_ffi(data, len)
+  @internal.scalar_to_upper_ascii(data)
 }
 
 ///|
 pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
-  let len = data.length()
-  let start = if len >= 16 {
-    simd_first_non_ascii_chunk_ffi(data, len)
-  } else {
-    0
-  }
-  @internal.scalar_validate_utf8_from(data, start)
+  @internal.scalar_validate_utf8(data)
 }
 
 ///|

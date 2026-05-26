@@ -1,0 +1,21 @@
+import {
+  "moonbitlang/core/bench",
+  "mizchi/simd/src/internal",
+  "mizchi/simd/src/base64",
+}
+
+options(
+  targets: {
+    "simd_buffer.mbt": [ "wasm", "wasm-gc" ],
+    "simd_buffer_f64.mbt": [ "wasm", "wasm-gc" ],
+    "simd_buffer_f32.mbt": [ "wasm", "wasm-gc" ],
+    "simd_buffer_bytes.mbt": [ "wasm", "wasm-gc" ],
+    "simd_buffer_ring.mbt": [ "wasm", "wasm-gc" ],
+    "simd_buffer_sort.mbt": [ "wasm", "wasm-gc" ],
+    "simd_buffer_copy.mbt": [ "wasm", "wasm-gc" ],
+    "simd_buffer_scalar.mbt": [ "native", "js" ],
+    "simd_buffer_imports.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simd_buffer_test.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simd_buffer_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+  },
+)
