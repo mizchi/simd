@@ -11,14 +11,38 @@ just bench-wasm    # wasm benchmark
 just bench-native  # native benchmark
 ```
 
+## Install
+
+Add to your `moon.mod.json`:
+
+```json
+"deps": {
+  "mizchi/simd": "0.2.2"
+}
+```
+
+Then in the consuming package's `moon.pkg`, import the sub-packages you need:
+
+```
+import {
+  "mizchi/simd/src/simd_buffer",
+  "mizchi/simd/src/simdjson",
+  "mizchi/simd/src/base64",
+}
+```
+
+Each import is exposed under the last path component — `@simd_buffer`,
+`@simdjson`, `@base64`. The root `mizchi/simd/src` package exports the
+FixedArray-based API as `@simd`.
+
 ## Quick start (recommended)
 
 ```moonbit
 let a : FixedArray[Int] = [1, 2, 3, 4, 5, 6, 7, 8]
-let buf = @mizchi/simd/simd_buffer.SimdBuffer::from_array(a)
+let buf = @simd_buffer.SimdBuffer::from_array(a)
 let total = buf.sum()              // SIMD on wasm / wasm-gc / native, scalar on js
-let out = SimdBuffer::make(buf.length())
-SimdBuffer::add(buf, buf, out)
+let out = @simd_buffer.SimdBuffer::make(buf.length())
+@simd_buffer.SimdBuffer::add(buf, buf, out)
 let back : FixedArray[Int] = out.to_array()
 ```
 
@@ -62,6 +86,47 @@ The same code compiles and runs unchanged on every target.
 - Copy bridges: `from_array` / `to_array` / `copy_from_array` /
   `copy_to_array` for `FixedArray` ↔ `SimdBuffer` interop.
 
+## `@simdjson` — JSON byte classification
+
+Sub-package porting simdjson's `find_structural_bits` core to wasm SIMD.
+Operates on `@simd_buffer.SimdBufferBytes` input and produces i32
+bitmaps + structural-index arrays in `@simd_buffer.SimdBuffer`.
+
+```moonbit
+let input = @simd_buffer.SimdBufferBytes::from_array(json_bytes)
+let words = (input.length() + 31) / 32
+let structural = @simd_buffer.SimdBuffer::make(words)
+let quote_mask = @simd_buffer.SimdBuffer::make(words)
+let indices = @simd_buffer.SimdBuffer::make(input.length())
+let count = @simdjson.find_structural_indices_with_scratch(
+  input, structural, quote_mask, indices,
+)
+// indices.get(0..count) now hold byte offsets of `{ } [ ] , :` outside any string
+```
+
+Pipeline phases (each independently callable):
+
+| op | what it does | wasm vs native scalar |
+|---|---|---|
+| `classify_structural` | bitmask of `{ } [ ] , :` positions | **6.9×** |
+| `classify_numeric` | bitmask of `0-9 - + . e E` positions | **5.6×** |
+| `classify_quote_raw` | bitmask of `"` positions (raw, pre-escape) | **6.6×** |
+| `classify_backslash` | bitmask of `\` positions | similar |
+| `compute_quote_mask` | in-string mask honouring `\"` / `\\` escapes | **0.46×** (loses — see below) |
+| `extract_structural_indices` | bit-walk → byte offsets via `i32.ctz` | **11×** |
+| `find_structural_indices_with_scratch` | full pipeline | **1.27×** end-to-end |
+
+`compute_quote_mask` is the bottleneck: simdjson's x86 path uses CLMUL
+to prefix-XOR a 64-bit quote bitmap in one instruction, and wasm SIMD
+has no equivalent. The bit-walk stays scalar in inline-WAT (branchless
+`select`), so the per-byte FFI overhead is what loses to a native
+scalar tight loop. Until wasm grows CLMUL, that's the floor.
+
+Same portable shape as `@simd_buffer`: wasm / wasm-gc do inline-WAT
+v128 SIMD on the byte-classification phases; native / js fall back to
+the FixedArray scalar implementation. Public API identical across all
+four targets.
+
 ### Memory model gotcha (wasm-only)
 
 On `wasm` / `wasm-gc`, `SimdBuffer` storage comes from `memory.grow`
@@ -70,11 +135,11 @@ Long-running services should use `SimdBufferRing` and `reset()` to
 recycle a single grown region across calls.
 
 ```moonbit
-let ring = SimdBufferRing::make(65536)
+let ring = @simd_buffer.SimdBufferRing::make(65536)
 for input in inputs {
   ring.reset()
   let out = ring.alloc_bytes((input.length() + 2) / 3 * 4)
-  SimdBufferBytes::base64_encode_into(input, out)
+  @simd_buffer.SimdBufferBytes::base64_encode_into(input, out)
   // ... use out, then forget it ...
 }
 ```
@@ -89,7 +154,7 @@ GC-managed storage with no `memory.grow` lifecycle to manage:
 
 ```moonbit
 let arr : FixedArray[Int] = [1, 2, 3, 4, 5, 6, 7, 8]
-let total = @mizchi/simd.sum_i32(arr)            // wasm SIMD, scalar on others
+let total = @simd.sum_i32(arr)                   // wasm SIMD, scalar on others
 ```
 
 | target | acceleration |
@@ -141,18 +206,23 @@ lifecycle on wasm.
 
 ```
 src/
-  simd_wasm_{i32,f64,f32,bytes,sort}.mbt   # FixedArray-API: wasm inline-WAT v128
-  simd_native.mbt + simd_native_ffi.mbt    # FixedArray-API: native extern "C"
+  # FixedArray-API root package — imported as @simd
+  simd_wasm_{i32,f64,f32,bytes,sort}.mbt   # wasm inline-WAT v128
+  simd_native.mbt + simd_native_ffi.mbt    # native extern "C"
   simd_native.c                            # NEON / SSE intrinsics
-  simd_scalar.mbt                          # FixedArray-API: js + wasm-gc fallback
+  simd_scalar.mbt                          # js + wasm-gc fallback
   internal/scalar.mbt                      # shared scalar reference impls
 
-  base64/                                  # RFC 4648 sub-package
+  base64/                                  # @base64 — RFC 4648 sub-package
     base64_common.mbt                      # tables + scalar
     base64_wasm.mbt                        # wasm SIMD encode/decode
     base64_scalar.mbt                      # other targets
 
-  simd_buffer/                             # SimdBuffer family — portable API
+  simdjson/                                # @simdjson — JSON byte classification
+    simdjson_wasm.mbt                      # wasm + wasm-gc inline-WAT
+    simdjson_scalar.mbt                    # native + js scalar
+
+  simd_buffer/                             # @simd_buffer — portable API
     simd_buffer.mbt / _f32 / _f64 / _bytes / _sort / _ring / _copy.mbt
       # wasm + wasm-gc: linear-memory storage + inline-WAT v128
     simd_buffer_scalar.mbt
@@ -168,11 +238,13 @@ wasm-gc tlsf collision), and the SimdBuffer capability matrix.
 ## Examples
 
 - [`examples/cosine_similarity/`](examples/cosine_similarity/) —
-  vector / RAG search building block. Three implementations side by
-  side (scalar, naive SIMD, precomputed-norm SIMD) that double as a
-  worked example of when chaining SIMD primitives helps and when it
-  doesn't. precomputed variant gives 2-3.5× over scalar at the same
-  memory bandwidth.
+  vector / RAG search building block. **Four** implementations side by
+  side (scalar, naive SIMD chained, precomputed-norm SIMD, fused
+  inline-WAT) that double as a worked example of when chaining SIMD
+  primitives helps and when it doesn't. precomputed and fused variants
+  both land on the same memory-bandwidth × f64x2 ceiling (~4× scalar)
+  — the fused variant demonstrates `SimdBufferF64::raw_addr()` as an
+  escape hatch when the public ops can't compose efficiently.
 
 ## License
 
