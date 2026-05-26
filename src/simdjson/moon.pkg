@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/core/bench",
+  "mizchi/simd/src/simd_buffer",
+}
+
+options(
+  targets: {
+    "simdjson_wasm.mbt": [ "wasm", "wasm-gc" ],
+    "simdjson_scalar.mbt": [ "native", "js" ],
+    "simdjson_test.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdjson_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+  },
+)

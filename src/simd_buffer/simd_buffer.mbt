@@ -43,6 +43,14 @@ pub fn SimdBuffer::length(self : SimdBuffer) -> Int {
 }
 
 ///|
+/// Linear-memory address of element 0. wasm + wasm-gc only — gives
+/// downstream packages (e.g. `@simdjson`) a way to plug inline-WAT
+/// kernels on top of SimdBuffer without exposing the struct internals.
+pub fn SimdBuffer::raw_addr(self : SimdBuffer) -> Int {
+  self.addr
+}
+
+///|
 pub fn SimdBuffer::get(self : SimdBuffer, i : Int) -> Int {
   if i < 0 || i >= self.len {
     abort("SimdBuffer.get: index out of bounds")

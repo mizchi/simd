@@ -17,6 +17,7 @@ Target-specific SIMD implementations with scalar fallback.
   - `src/simd_native.c` - C SIMD intrinsics (NEON/SSE)
 - `src/simd_scalar.mbt` - shared scalar fallback for `js` and `wasm-gc` targets (FixedArray-on-GC-heap means `v128.load` is unusable on wasm-gc)
 - `src/base64/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
+- `src/simdjson/` - sub-package porting simdjson's `find_structural_bits` byte-classification pipeline to wasm SIMD. Operates on `@simd_buffer.SimdBufferBytes`. wasm / wasm-gc use inline-WAT (`i8x16.eq` + `i8x16.bitmask`); native / js use FixedArray scalar. See the "src/simdjson/ sub-package" section below.
 - `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@base64` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
 
 ## Key Findings
@@ -301,46 +302,76 @@ The `to_lower` bench includes a per-iteration copy back to a scratch buffer
 (both paths pay the same cost), which compresses the visible SIMD ratio; the
 pure transform inside is closer to a 16x speedup.
 
-## JSON byte classification (simdjson-style structural indexer)
+## `src/simdjson/` sub-package — JSON structural indexer
 
-`SimdBufferBytes` exposes a four-phase pipeline that mirrors simdjson's
-`find_structural_bits` stage — the part of simdjson that locates `{ } [
-] , :` outside any string literal and emits their byte offsets:
+`src/simdjson/` is a separate sub-package (mirrors `src/base64/`) that
+ports the SIMD core of simdjson — `find_structural_bits` — to wasm and
+its scalar fallback to native / js. Layout:
 
-1. `classify_json_structural(out)` — bit `i` of `out` set iff byte `i` ∈
-   `{ } [ ] , :`. 16 bytes/iter via 6 × `i8x16.eq` + chained `v128.or` +
-   `i8x16.bitmask`, OR'd into the output i32 bitmap.
-2. `classify_json_numeric(out)` — bit `i` set iff byte `i` ∈ `0-9 - + .
-   e E`. One unsigned range check (digits) + 5 × `i8x16.eq`, same
+```
+src/simdjson/
+  moon.pkg                  # imports @simd_buffer + @bench
+  simdjson_wasm.mbt         # targets [wasm, wasm-gc] — inline-WAT v128
+  simdjson_scalar.mbt       # targets [native, js] — FixedArray scalar
+  simdjson_test.mbt         # all targets
+  simdjson_bench.mbt        # all targets
+```
+
+The package operates on `@simd_buffer.SimdBufferBytes` (input) and
+`@simd_buffer.SimdBuffer` (i32 bitmap / indices output), accessed
+cross-package via `raw_addr()` on wasm / wasm-gc and `backing()` on
+native / js (newly added accessors on the SimdBuffer family).
+
+Public surface (identical on all four targets):
+
+1. `classify_structural(input, out)` — bit `i` of `out` set iff byte
+   `i` ∈ `{ } [ ] , :`. 16 bytes/iter via 6 × `i8x16.eq` + chained
+   `v128.or` + `i8x16.bitmask`, OR-in semantics.
+2. `classify_numeric(input, out)` — bit `i` set iff byte `i` ∈ `0-9 -
+   + . e E`. One unsigned range check (digits) + 5 × `i8x16.eq`, same
    bitmask shape.
-3. `compute_quote_mask(out)` — bit `i` set iff byte `i` lies strictly
-   inside a `"..."` string literal (exclusive of the delimiting `"`s).
-   Honours `\"` and `\\` escapes. **Stays scalar** — wasm SIMD has no
-   CLMUL, so the prefix-XOR over quote positions runs as a branchless
-   `select`-driven bit-walk in inline-WAT.
-4. `json_extract_structural_indices(structural, quote_mask, n, indices)`
+3. `classify_quote_raw(input, out)` — bit `i` set iff byte `i` == `"`
+   (raw, no escape resolution). Single-needle `i8x16.eq` SIMD.
+4. `classify_backslash(input, out)` — same shape for `\`.
+5. `compute_quote_mask(input, out)` — bit `i` set iff byte `i` lies
+   strictly inside a `"..."` string literal, exclusive of the
+   delimiting `"`s. Honours `\"` and `\\` escapes. **Stays scalar** —
+   wasm SIMD has no CLMUL, so the prefix-XOR over quote positions runs
+   as a branchless `select`-driven bit-walk in inline-WAT.
+6. `extract_structural_indices(structural, quote_mask, n, indices)`
    → `Int` — walks `structural & ~quote_mask` word-by-word, emits the
    ascending byte offsets via `i32.ctz` + `effective &= effective - 1`.
 
 Plus a one-shot convenience wrapper
-`find_json_structural_indices_with_scratch(structural, quote_mask,
-indices)` that chains all four, and a scratch-allocating
-`find_json_structural_indices(indices)` for one-off calls (allocates two
-`SimdBuffer`s per call via `memory.grow` — use the scratch variant in
-hot loops or pair with `SimdBufferRing`).
+`find_structural_indices_with_scratch(input, struct_scratch,
+quote_scratch, indices)` that chains the pipeline, and a
+scratch-allocating `find_structural_indices(input, indices)` for
+one-off calls (allocates two `SimdBuffer`s per call via `memory.grow`
+— use the scratch variant in hot loops or pair with `SimdBufferRing`).
+
+Usage (any target):
+
+```moonbit
+let input = @simd_buffer.SimdBufferBytes::from_array(json_bytes)
+let words = (input.length() + 31) / 32
+let structural = @simd_buffer.SimdBuffer::make(words)
+let quote_mask = @simd_buffer.SimdBuffer::make(words)
+let indices = @simd_buffer.SimdBuffer::make(input.length())
+let count = @simdjson.find_structural_indices_with_scratch(
+  input, structural, quote_mask, indices,
+)
+```
 
 ### Bench (V8, 4096-byte JSON, M-class Apple Silicon)
 
-Headline numbers — wasm SIMD vs native scalar baseline:
-
 | op | wasm | wasm-gc | native scalar | wasm vs native |
 |---|---|---|---|---|
-| `classify_json_structural` | 428 ns | 383 ns | 2.94 µs | **6.9x** |
-| `classify_json_numeric` | 462 ns | 400 ns | 2.60 µs | **5.6x** |
-| `classify_json_quote_raw` | 309 ns | 261 ns | 2.04 µs | **6.6x** |
+| `classify_structural` | 428 ns | 383 ns | 2.94 µs | **6.9x** |
+| `classify_numeric` | 462 ns | 400 ns | 2.60 µs | **5.6x** |
+| `classify_quote_raw` | 309 ns | 261 ns | 2.04 µs | **6.6x** |
 | `compute_quote_mask` | 7.16 µs | 7.24 µs | 3.28 µs | **0.46x** (loss) |
 | `extract_structural_indices` | 434 ns | 432 ns | 4.79 µs | **11x** |
-| `find_json_structural_indices_with_scratch` | 8.10 µs | 8.33 µs | 10.25 µs | **1.27x** |
+| `find_structural_indices_with_scratch` | 8.10 µs | 8.33 µs | 10.25 µs | **1.27x** |
 
 The byte-classification phases (`classify_*`) are 5–7× on wasm thanks to
 straightforward `i8x16.eq` lane-parallelism. `extract_structural_indices`
@@ -371,7 +402,7 @@ serial bit-level dependencies don't get a free lunch from packed lanes.
 
 ### Inline-WAT gotcha caught here
 
-The first pass had `find_json_structural_indices` allocate its two
+The first pass had `find_structural_indices` allocate its two
 scratch `SimdBuffer`s with `SimdBuffer::make` per call. That's two
 `memory.grow` calls per invocation — ~400 µs each in the bench harness,
 making the wrapper 100× slower than the sum of its parts. The fix is
