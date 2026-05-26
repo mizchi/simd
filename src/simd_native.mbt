@@ -168,6 +168,17 @@ extern "C" fn simd_dot_f64_range_ffi(
 ) -> Double = "simd_dot_f64_range_ffi"
 
 ///|
+#borrow(a, b_t, c)
+extern "C" fn simd_matmul_f64_tile_ffi(
+  a : FixedArray[Double],
+  b_t : FixedArray[Double],
+  c : FixedArray[Double],
+  m : Int,
+  k : Int,
+  n : Int,
+) -> Unit = "simd_matmul_f64_tile_ffi"
+
+///|
 #borrow(a, out)
 extern "C" fn simd_neg_i32_ffi(
   a : FixedArray[Int],
@@ -680,12 +691,7 @@ pub fn matmul_f64(
   if m == 0 || n == 0 {
     return
   }
-  for i in 0..<m {
-    let a_off = i * k
-    for j in 0..<n {
-      c[i * n + j] = simd_dot_f64_range_ffi(a, a_off, b_t, j * k, k)
-    }
-  }
+  simd_matmul_f64_tile_ffi(a, b_t, c, m, k, n)
 }
 
 ///|

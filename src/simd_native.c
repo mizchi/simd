@@ -497,6 +497,103 @@ double simd_dot_f64_range_ffi(const double* a, int32_t a_off, const double* b, i
   return simd_dot_f64_ffi(a + a_off, b + b_off, k);
 }
 
+// 4x4 register-block matmul: walks 4-row x 4-col tiles, accumulating 16 f64x2
+// FMAs per K-pair iteration. Tail tiles (when m or n isn't a multiple of 4)
+// and the leftover odd K element fall through to a scalar inner loop.
+void simd_matmul_f64_tile_ffi(
+  const double* a,
+  const double* b_t,
+  double* c,
+  int32_t m,
+  int32_t k,
+  int32_t n
+) {
+  int32_t i = 0;
+#if USE_NEON
+  for (; i + 4 <= m; i += 4) {
+    int32_t j = 0;
+    for (; j + 4 <= n; j += 4) {
+      float64x2_t c00 = vdupq_n_f64(0), c01 = vdupq_n_f64(0), c02 = vdupq_n_f64(0), c03 = vdupq_n_f64(0);
+      float64x2_t c10 = vdupq_n_f64(0), c11 = vdupq_n_f64(0), c12 = vdupq_n_f64(0), c13 = vdupq_n_f64(0);
+      float64x2_t c20 = vdupq_n_f64(0), c21 = vdupq_n_f64(0), c22 = vdupq_n_f64(0), c23 = vdupq_n_f64(0);
+      float64x2_t c30 = vdupq_n_f64(0), c31 = vdupq_n_f64(0), c32 = vdupq_n_f64(0), c33 = vdupq_n_f64(0);
+      const double* a0 = a + (i + 0) * k;
+      const double* a1 = a + (i + 1) * k;
+      const double* a2 = a + (i + 2) * k;
+      const double* a3 = a + (i + 3) * k;
+      const double* b0 = b_t + (j + 0) * k;
+      const double* b1 = b_t + (j + 1) * k;
+      const double* b2 = b_t + (j + 2) * k;
+      const double* b3 = b_t + (j + 3) * k;
+      int32_t p = 0;
+      for (; p + 2 <= k; p += 2) {
+        float64x2_t va0 = vld1q_f64(a0 + p);
+        float64x2_t va1 = vld1q_f64(a1 + p);
+        float64x2_t va2 = vld1q_f64(a2 + p);
+        float64x2_t va3 = vld1q_f64(a3 + p);
+        float64x2_t vb0 = vld1q_f64(b0 + p);
+        float64x2_t vb1 = vld1q_f64(b1 + p);
+        float64x2_t vb2 = vld1q_f64(b2 + p);
+        float64x2_t vb3 = vld1q_f64(b3 + p);
+        c00 = vfmaq_f64(c00, va0, vb0);
+        c01 = vfmaq_f64(c01, va0, vb1);
+        c02 = vfmaq_f64(c02, va0, vb2);
+        c03 = vfmaq_f64(c03, va0, vb3);
+        c10 = vfmaq_f64(c10, va1, vb0);
+        c11 = vfmaq_f64(c11, va1, vb1);
+        c12 = vfmaq_f64(c12, va1, vb2);
+        c13 = vfmaq_f64(c13, va1, vb3);
+        c20 = vfmaq_f64(c20, va2, vb0);
+        c21 = vfmaq_f64(c21, va2, vb1);
+        c22 = vfmaq_f64(c22, va2, vb2);
+        c23 = vfmaq_f64(c23, va2, vb3);
+        c30 = vfmaq_f64(c30, va3, vb0);
+        c31 = vfmaq_f64(c31, va3, vb1);
+        c32 = vfmaq_f64(c32, va3, vb2);
+        c33 = vfmaq_f64(c33, va3, vb3);
+      }
+      double s00 = vaddvq_f64(c00), s01 = vaddvq_f64(c01), s02 = vaddvq_f64(c02), s03 = vaddvq_f64(c03);
+      double s10 = vaddvq_f64(c10), s11 = vaddvq_f64(c11), s12 = vaddvq_f64(c12), s13 = vaddvq_f64(c13);
+      double s20 = vaddvq_f64(c20), s21 = vaddvq_f64(c21), s22 = vaddvq_f64(c22), s23 = vaddvq_f64(c23);
+      double s30 = vaddvq_f64(c30), s31 = vaddvq_f64(c31), s32 = vaddvq_f64(c32), s33 = vaddvq_f64(c33);
+      // odd k tail
+      for (; p < k; p++) {
+        double va0 = a0[p], va1 = a1[p], va2 = a2[p], va3 = a3[p];
+        double vb0 = b0[p], vb1 = b1[p], vb2 = b2[p], vb3 = b3[p];
+        s00 += va0 * vb0; s01 += va0 * vb1; s02 += va0 * vb2; s03 += va0 * vb3;
+        s10 += va1 * vb0; s11 += va1 * vb1; s12 += va1 * vb2; s13 += va1 * vb3;
+        s20 += va2 * vb0; s21 += va2 * vb1; s22 += va2 * vb2; s23 += va2 * vb3;
+        s30 += va3 * vb0; s31 += va3 * vb1; s32 += va3 * vb2; s33 += va3 * vb3;
+      }
+      c[(i + 0) * n + j + 0] = s00; c[(i + 0) * n + j + 1] = s01; c[(i + 0) * n + j + 2] = s02; c[(i + 0) * n + j + 3] = s03;
+      c[(i + 1) * n + j + 0] = s10; c[(i + 1) * n + j + 1] = s11; c[(i + 1) * n + j + 2] = s12; c[(i + 1) * n + j + 3] = s13;
+      c[(i + 2) * n + j + 0] = s20; c[(i + 2) * n + j + 1] = s21; c[(i + 2) * n + j + 2] = s22; c[(i + 2) * n + j + 3] = s23;
+      c[(i + 3) * n + j + 0] = s30; c[(i + 3) * n + j + 1] = s31; c[(i + 3) * n + j + 2] = s32; c[(i + 3) * n + j + 3] = s33;
+    }
+    // tail cols: scalar
+    for (; j < n; j++) {
+      for (int32_t ii = 0; ii < 4; ii++) {
+        double acc = 0.0;
+        for (int32_t p = 0; p < k; p++) {
+          acc += a[(i + ii) * k + p] * b_t[j * k + p];
+        }
+        c[(i + ii) * n + j] = acc;
+      }
+    }
+  }
+#endif
+  // tail rows: scalar
+  for (; i < m; i++) {
+    for (int32_t j = 0; j < n; j++) {
+      double acc = 0.0;
+      for (int32_t p = 0; p < k; p++) {
+        acc += a[i * k + p] * b_t[j * k + p];
+      }
+      c[i * n + j] = acc;
+    }
+  }
+}
+
 // --- Int element-wise + reduce ---
 
 void simd_neg_i32_ffi(const int32_t* a, int32_t* out, int32_t len) {
