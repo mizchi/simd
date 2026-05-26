@@ -1,0 +1,28 @@
+name: simd
+version: 0.2.2
+description: APM project for mizchi/simd
+author: mizchi
+targets:
+  - claude
+dependencies:
+  apm:
+    # MoonBit language
+    - mizchi/skills/lang/moonbit-practice
+    - moonbitlang/moonbit-agent-guide/moonbit-refactoring
+    - moonbitlang/moonbit-agent-guide/moonbit-c-binding
+    - mizchi/js.mbt/.claude/skills/mooncheat
+
+    # Build / lint / similarity
+    - mizchi/skills/tooling/justfile
+    - mizchi/skills/tooling/ast-grep-practice
+    - mizchi/similarity/.claude/skills/check-similarity-mbt
+
+    # APM / nix
+    - mizchi/skills/tooling/apm-usage
+    - mizchi/skills/tooling/nix-setup
+
+    # Knowledge codification + mnemo persistent memory
+    - mizchi/skills/meta/retrospective-codify
+    - mizchi/mnemo/skills/mnemo-cmd
+  mcp: []
+scripts: {}

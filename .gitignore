@@ -1,3 +1,9 @@
 target/
 _build/
 .mooncakes/
+
+
+# APM dependencies + deploy targets (reproduce via `apm install --frozen-lockfile`)
+apm_modules/
+.claude/skills/
+.agents/skills/

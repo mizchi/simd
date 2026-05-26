@@ -1,0 +1,114 @@
+lockfile_version: '1'
+generated_at: '2026-05-26T11:33:22.003496+00:00'
+apm_version: 0.12.4
+dependencies:
+- repo_url: mizchi/js.mbt
+  host: github.com
+  resolved_commit: aa3630fa15f7f7466620dae3a3e7a3c2a2a0884d
+  virtual_path: .claude/skills/mooncheat
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/mooncheat
+  - .claude/skills/mooncheat
+  content_hash: sha256:6840f7a97d80be6600d3b6d9d7013b14d8290c4167284735ac476480c479e805
+- repo_url: mizchi/mnemo
+  host: github.com
+  resolved_commit: b785fc4c1f2fb1c7322e275c784138c0835ca5cc
+  virtual_path: skills/mnemo-cmd
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/mnemo-cmd
+  - .claude/skills/mnemo-cmd
+  content_hash: sha256:6103dd35e6d09524d7473fee6356e602e71ef33c21c4ecdae7a8e990d3b638b7
+- repo_url: mizchi/similarity
+  host: github.com
+  resolved_commit: 36568489d462aa70d383eab566345d525c0ad726
+  virtual_path: .claude/skills/check-similarity-mbt
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/check-similarity-mbt
+  - .claude/skills/check-similarity-mbt
+  content_hash: sha256:32064ad4126f8670ec5535570398d31db4c05c93e744c82f8aa0956dc433911d
+- repo_url: mizchi/skills
+  host: github.com
+  resolved_commit: f48b1d07ddac1021f74d782fdb514a146d7e22d0
+  virtual_path: lang/moonbit-practice
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/moonbit-practice
+  - .claude/skills/moonbit-practice
+  content_hash: sha256:aaa7bfce94c3cb1bff9c2199423f26c345b99eb281ffb109574187725b0ea317
+- repo_url: mizchi/skills
+  host: github.com
+  resolved_commit: f48b1d07ddac1021f74d782fdb514a146d7e22d0
+  virtual_path: meta/retrospective-codify
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/retrospective-codify
+  - .claude/skills/retrospective-codify
+  content_hash: sha256:077f9ae3bbf4289fe518e3ad928a6e802d402539ff2e644a7967e3cfbcd443bf
+- repo_url: mizchi/skills
+  host: github.com
+  resolved_commit: f48b1d07ddac1021f74d782fdb514a146d7e22d0
+  virtual_path: tooling/apm-usage
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/apm-usage
+  - .claude/skills/apm-usage
+  content_hash: sha256:5ca113f215eb4433e6420abbdfbcbbb05166ec9325c810e5cc27bc9acbf7a5d9
+- repo_url: mizchi/skills
+  host: github.com
+  resolved_commit: f48b1d07ddac1021f74d782fdb514a146d7e22d0
+  virtual_path: tooling/ast-grep-practice
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/ast-grep-practice
+  - .claude/skills/ast-grep-practice
+  content_hash: sha256:5b3281c9b87bf483168c78d788be0f820d21dae0054f32fbd16f3905ce436df5
+- repo_url: mizchi/skills
+  host: github.com
+  resolved_commit: f48b1d07ddac1021f74d782fdb514a146d7e22d0
+  virtual_path: tooling/justfile
+  is_virtual: true
+  package_type: marketplace_plugin
+  deployed_files:
+  - .agents/skills/justfile
+  - .claude/skills/justfile
+  content_hash: sha256:f395821b69d50b1c9790b488398b43fdeddb6c17500efa4403d5d44ae749a80d
+- repo_url: mizchi/skills
+  host: github.com
+  resolved_commit: f48b1d07ddac1021f74d782fdb514a146d7e22d0
+  virtual_path: tooling/nix-setup
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/nix-setup
+  - .claude/skills/nix-setup
+  content_hash: sha256:c6c87ae690abb363cea93c0cdfef1cd54d6769acf4e26f3bd36388cdac59bdae
+- repo_url: moonbitlang/moonbit-agent-guide
+  host: github.com
+  resolved_commit: e71ff0f4e8049c147f66fe06dd8e000cff69ace9
+  virtual_path: moonbit-c-binding
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/moonbit-c-binding
+  - .claude/skills/moonbit-c-binding
+  content_hash: sha256:94fba0820e0aab0ffa36362f9a5fba07918882dfb516ce50784c62bdedd1da3f
+- repo_url: moonbitlang/moonbit-agent-guide
+  host: github.com
+  resolved_commit: e71ff0f4e8049c147f66fe06dd8e000cff69ace9
+  virtual_path: moonbit-refactoring
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/moonbit-refactoring
+  - .claude/skills/moonbit-refactoring
+  content_hash: sha256:1a20bd55385e0a076b78cf502b0bb957d2c71a3e637055b6653a678c89b1231b
