@@ -2,3 +2,11 @@ import {
   "moonbitlang/core/bench",
   "mizchi/simd/src/simd_buffer",
 }
+
+options(
+  targets: {
+    "cosine_similarity_fused.mbt": [ "wasm", "wasm-gc" ],
+    "cosine_similarity_fused_test.mbt": [ "wasm", "wasm-gc" ],
+    "cosine_similarity_fused_bench.mbt": [ "wasm", "wasm-gc" ],
+  },
+)

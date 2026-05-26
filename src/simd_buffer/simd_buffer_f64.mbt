@@ -21,6 +21,19 @@ pub fn SimdBufferF64::length(self : SimdBufferF64) -> Int {
 }
 
 ///|
+/// Raw linear-memory address of element 0. Available **only on wasm and
+/// wasm-gc** — the address is meaningful as an `i32` linear-memory
+/// pointer that the user can feed to their own inline-WAT kernels (e.g.
+/// fused multi-accumulator loops that the public ops can't express).
+/// On native / js, `SimdBufferF64` is backed by a `FixedArray` and has
+/// no linear-memory address — this method is intentionally not defined
+/// there, so calling it makes the call site wasm-target-only by
+/// construction.
+pub fn SimdBufferF64::raw_addr(self : SimdBufferF64) -> Int {
+  self.addr
+}
+
+///|
 pub fn SimdBufferF64::get(self : SimdBufferF64, i : Int) -> Double {
   if i < 0 || i >= self.len {
     abort("SimdBufferF64.get: index out of bounds")
