@@ -17,7 +17,7 @@ Add to your `moon.mod.json`:
 
 ```json
 "deps": {
-  "mizchi/simd": "0.2.2"
+  "mizchi/simd": "0.2.3"
 }
 ```
 
