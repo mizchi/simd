@@ -997,6 +997,150 @@ pub fn scalar_max_f64(
   }
 }
 
+// --- JSON byte classification (simdjson core, scalar) ---
+
+///|
+/// OR into `out` a bit for each byte position `i` where `data[i]` is a
+/// JSON structural character (`{ } [ ] , :`). Bit `i % 32` of
+/// `out[i / 32]` is set. Caller must size `out` to `(len + 31) / 32` and
+/// zero it beforehand if a fresh mask is desired.
+pub fn scalar_classify_json_structural(
+  data : FixedArray[Byte],
+  out : FixedArray[Int],
+) -> Unit {
+  let n = data.length()
+  for i in 0..<n {
+    let b = data[i].to_int()
+    if b == 0x7B ||
+      b == 0x7D ||
+      b == 0x5B ||
+      b == 0x5D ||
+      b == 0x2C ||
+      b == 0x3A {
+      let word = i >> 5
+      let bit = i & 31
+      out[word] = out[word] | (1 << bit)
+    }
+  }
+}
+
+///|
+/// OR into `out` a bit at position `i` for every byte equal to `needle`.
+/// Used for raw `"` and `\\` maps before escape resolution.
+pub fn scalar_classify_byte_eq(
+  data : FixedArray[Byte],
+  needle : Byte,
+  out : FixedArray[Int],
+) -> Unit {
+  let n = data.length()
+  for i in 0..<n {
+    if data[i] == needle {
+      let word = i >> 5
+      let bit = i & 31
+      out[word] = out[word] | (1 << bit)
+    }
+  }
+}
+
+///|
+/// Compute the JSON in-string bitmask: bit `i % 32` of `out[i / 32]` is
+/// 1 iff byte `i` lies strictly inside a string literal (between an
+/// opening `"` and its matching closing `"`, exclusive of both). `\"` and
+/// `\\` escapes are honoured — the byte immediately after a `\` inside a
+/// string is treated as content, never as a closing quote.
+///
+/// **Overwrites** `out` (does not OR in). The caller does not need to
+/// clear the buffer first.
+///
+/// wasm SIMD has no CLMUL, so this stays scalar in the bit-walk. The
+/// equivalent on x86 simdjson runs the prefix XOR via `_mm_clmulepi64`
+/// — until wasm grows a CLMUL extension that's the theoretical ceiling
+/// we're missing.
+pub fn scalar_compute_quote_mask(
+  data : FixedArray[Byte],
+  out : FixedArray[Int],
+) -> Unit {
+  let n = data.length()
+  let words = (n + 31) / 32
+  for w in 0..<words {
+    out[w] = 0
+  }
+  let mut in_string = false
+  let mut escape_pending = false
+  for i in 0..<n {
+    let b = data[i].to_int()
+    let mut bit_set = false
+    if escape_pending {
+      escape_pending = false
+      bit_set = in_string
+    } else if b == 0x22 {
+      // " — delimiter. The quote byte itself is NOT in_string.
+      in_string = !in_string
+    } else if b == 0x5C && in_string {
+      // \ — initiates escape for the next byte
+      escape_pending = true
+      bit_set = true
+    } else {
+      bit_set = in_string
+    }
+    if bit_set {
+      out[i >> 5] = out[i >> 5] | (1 << (i & 31))
+    }
+  }
+}
+
+///|
+/// Walk a pre-computed `structural` bitmap minus `quote_mask` and write
+/// the byte offsets of remaining bits into `indices`. Returns the count
+/// written. `indices.length()` must be >= the number of structural
+/// characters outside any string in the input.
+pub fn scalar_extract_structural_indices(
+  structural : FixedArray[Int],
+  quote_mask : FixedArray[Int],
+  n : Int,
+  indices : FixedArray[Int],
+) -> Int {
+  let mut count = 0
+  let mut w = 0
+  let words = (n + 31) / 32
+  while w < words {
+    let mut word = structural[w] & quote_mask[w].lnot()
+    while word != 0 {
+      // Trailing-zero count manually.
+      let mut x = word
+      let mut bit = 0
+      while (x & 1) == 0 {
+        x = x >> 1
+        bit = bit + 1
+      }
+      indices[count] = w * 32 + bit
+      count = count + 1
+      word = word & (word - 1)
+    }
+    w = w + 1
+  }
+  count
+}
+
+///|
+/// OR into `out` a bit for each byte that could appear inside a JSON
+/// number (`0-9 - + . e E`).
+pub fn scalar_classify_json_numeric(
+  data : FixedArray[Byte],
+  out : FixedArray[Int],
+) -> Unit {
+  let n = data.length()
+  for i in 0..<n {
+    let b = data[i].to_int()
+    let is_digit = b >= 0x30 && b <= 0x39
+    if is_digit || b == 0x2D || b == 0x2E || b == 0x2B || b == 0x65 || b == 0x45 {
+      let word = i >> 5
+      let bit = i & 31
+      out[word] = out[word] | (1 << bit)
+    }
+  }
+}
+
 ///|
 /// Adler-32 checksum (scalar).
 pub fn scalar_adler32(data : FixedArray[Byte]) -> UInt {

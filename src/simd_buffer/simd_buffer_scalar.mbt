@@ -786,6 +786,133 @@ pub fn SimdBufferBytes::adler32(self : SimdBufferBytes) -> UInt {
 }
 
 ///|
+pub fn SimdBufferBytes::classify_json_structural(
+  self : SimdBufferBytes,
+  out : SimdBuffer,
+) -> Unit {
+  let n = self.data.length()
+  let words = (n + 31) / 32
+  if out.data.length() < words {
+    abort("SimdBufferBytes.classify_json_structural: out too small")
+  }
+  @internal.scalar_classify_json_structural(self.data, out.data)
+}
+
+///|
+pub fn SimdBufferBytes::classify_json_quote_raw(
+  self : SimdBufferBytes,
+  out : SimdBuffer,
+) -> Unit {
+  let n = self.data.length()
+  let words = (n + 31) / 32
+  if out.data.length() < words {
+    abort("SimdBufferBytes.classify_json_quote_raw: out too small")
+  }
+  @internal.scalar_classify_byte_eq(self.data, b'\x22', out.data)
+}
+
+///|
+pub fn SimdBufferBytes::classify_json_backslash(
+  self : SimdBufferBytes,
+  out : SimdBuffer,
+) -> Unit {
+  let n = self.data.length()
+  let words = (n + 31) / 32
+  if out.data.length() < words {
+    abort("SimdBufferBytes.classify_json_backslash: out too small")
+  }
+  @internal.scalar_classify_byte_eq(self.data, b'\x5C', out.data)
+}
+
+///|
+pub fn SimdBufferBytes::classify_json_numeric(
+  self : SimdBufferBytes,
+  out : SimdBuffer,
+) -> Unit {
+  let n = self.data.length()
+  let words = (n + 31) / 32
+  if out.data.length() < words {
+    abort("SimdBufferBytes.classify_json_numeric: out too small")
+  }
+  @internal.scalar_classify_json_numeric(self.data, out.data)
+}
+
+///|
+pub fn SimdBufferBytes::compute_quote_mask(
+  self : SimdBufferBytes,
+  out : SimdBuffer,
+) -> Unit {
+  let n = self.data.length()
+  let words = (n + 31) / 32
+  if out.data.length() < words {
+    abort("SimdBufferBytes.compute_quote_mask: out too small")
+  }
+  @internal.scalar_compute_quote_mask(self.data, out.data)
+}
+
+///|
+pub fn json_extract_structural_indices(
+  structural : SimdBuffer,
+  quote_mask : SimdBuffer,
+  n : Int,
+  indices : SimdBuffer,
+) -> Int {
+  let words = (n + 31) / 32
+  if structural.data.length() < words || quote_mask.data.length() < words {
+    abort("json_extract_structural_indices: bitmap buffers too small")
+  }
+  @internal.scalar_extract_structural_indices(
+    structural.data,
+    quote_mask.data,
+    n,
+    indices.data,
+  )
+}
+
+///|
+pub fn SimdBufferBytes::find_json_structural_indices(
+  self : SimdBufferBytes,
+  indices : SimdBuffer,
+) -> Int {
+  let n = self.data.length()
+  if n == 0 {
+    return 0
+  }
+  let words = (n + 31) / 32
+  let structural = SimdBuffer::make(words)
+  let quote_mask = SimdBuffer::make(words)
+  self.find_json_structural_indices_with_scratch(
+    structural, quote_mask, indices,
+  )
+}
+
+///|
+pub fn SimdBufferBytes::find_json_structural_indices_with_scratch(
+  self : SimdBufferBytes,
+  structural_scratch : SimdBuffer,
+  quote_mask_scratch : SimdBuffer,
+  indices : SimdBuffer,
+) -> Int {
+  let n = self.data.length()
+  if n == 0 {
+    return 0
+  }
+  let words = (n + 31) / 32
+  if structural_scratch.data.length() < words ||
+    quote_mask_scratch.data.length() < words {
+    abort("find_json_structural_indices_with_scratch: scratch too small")
+  }
+  for w in 0..<words {
+    structural_scratch.data[w] = 0
+  }
+  self.classify_json_structural(structural_scratch)
+  self.compute_quote_mask(quote_mask_scratch)
+  json_extract_structural_indices(
+    structural_scratch, quote_mask_scratch, n, indices,
+  )
+}
+
+///|
 pub fn SimdBufferBytes::base64_encode(
   input : SimdBufferBytes,
 ) -> SimdBufferBytes {

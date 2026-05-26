@@ -379,3 +379,67 @@ test "bench/ASCII case (4096)" (bb : @bench.T) {
   bb.bench(name="simd_to_lower_4096", fn() { a.to_lower_ascii() })
   bb.bench(name="simd_to_upper_4096", fn() { a.to_upper_ascii() })
 }
+
+///|
+/// Build a JSON-shaped buffer of ~`target` bytes by repeating a fixed
+/// template. Used by the JSON byte-classification benches below.
+fn bench_json_buf(target : Int) -> SimdBufferBytes {
+  let chunk = "{\"id\":1234,\"name\":\"alice\",\"tags\":[\"a\",\"bb\",\"ccc\"],\"meta\":{\"k\":\"v\",\"n\":-1.5e+10},\"path\":\"/x/y\\\\z\\\"q\"},"
+  let buf = StringBuilder::new()
+  while buf.to_string().length() < target {
+    buf.write_string(chunk)
+  }
+  let s = buf.to_string()
+  let n = if s.length() > target { target } else { s.length() }
+  let arr : FixedArray[Byte] = FixedArray::make(n, b'\x00')
+  for i in 0..<n {
+    arr[i] = s.unsafe_get(i).to_byte()
+  }
+  SimdBufferBytes::from_array(arr)
+}
+
+///|
+test "bench/json classify (4096 bytes)" (bb : @bench.T) {
+  let buf = bench_json_buf(4096)
+  let words = (buf.length() + 31) / 32
+  let out = SimdBuffer::make(words)
+  bb.bench(name="simd_classify_json_structural_4096", fn() {
+    out.clear()
+    buf.classify_json_structural(out)
+  })
+  bb.bench(name="simd_classify_json_numeric_4096", fn() {
+    out.clear()
+    buf.classify_json_numeric(out)
+  })
+  bb.bench(name="simd_classify_json_quote_raw_4096", fn() {
+    out.clear()
+    buf.classify_json_quote_raw(out)
+  })
+}
+
+///|
+test "bench/json quote_mask + structural_indices (4096 bytes)" (bb : @bench.T) {
+  let buf = bench_json_buf(4096)
+  let n = buf.length()
+  let words = (n + 31) / 32
+  let structural = SimdBuffer::make(words)
+  let quote_mask = SimdBuffer::make(words)
+  let indices = SimdBuffer::make(n)
+  bb.bench(name="simd_compute_quote_mask_4096", fn() {
+    buf.compute_quote_mask(quote_mask)
+  })
+  // For the indices bench, prebuild the inputs so we only measure extract.
+  structural.clear()
+  buf.classify_json_structural(structural)
+  buf.compute_quote_mask(quote_mask)
+  bb.bench(name="simd_extract_structural_indices_4096", fn() {
+    bb.keep(json_extract_structural_indices(structural, quote_mask, n, indices))
+  })
+  bb.bench(name="simd_find_json_structural_indices_with_scratch_4096", fn() {
+    bb.keep(
+      buf.find_json_structural_indices_with_scratch(
+        structural, quote_mask, indices,
+      ),
+    )
+  })
+}

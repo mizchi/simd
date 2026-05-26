@@ -301,6 +301,84 @@ The `to_lower` bench includes a per-iteration copy back to a scratch buffer
 (both paths pay the same cost), which compresses the visible SIMD ratio; the
 pure transform inside is closer to a 16x speedup.
 
+## JSON byte classification (simdjson-style structural indexer)
+
+`SimdBufferBytes` exposes a four-phase pipeline that mirrors simdjson's
+`find_structural_bits` stage — the part of simdjson that locates `{ } [
+] , :` outside any string literal and emits their byte offsets:
+
+1. `classify_json_structural(out)` — bit `i` of `out` set iff byte `i` ∈
+   `{ } [ ] , :`. 16 bytes/iter via 6 × `i8x16.eq` + chained `v128.or` +
+   `i8x16.bitmask`, OR'd into the output i32 bitmap.
+2. `classify_json_numeric(out)` — bit `i` set iff byte `i` ∈ `0-9 - + .
+   e E`. One unsigned range check (digits) + 5 × `i8x16.eq`, same
+   bitmask shape.
+3. `compute_quote_mask(out)` — bit `i` set iff byte `i` lies strictly
+   inside a `"..."` string literal (exclusive of the delimiting `"`s).
+   Honours `\"` and `\\` escapes. **Stays scalar** — wasm SIMD has no
+   CLMUL, so the prefix-XOR over quote positions runs as a branchless
+   `select`-driven bit-walk in inline-WAT.
+4. `json_extract_structural_indices(structural, quote_mask, n, indices)`
+   → `Int` — walks `structural & ~quote_mask` word-by-word, emits the
+   ascending byte offsets via `i32.ctz` + `effective &= effective - 1`.
+
+Plus a one-shot convenience wrapper
+`find_json_structural_indices_with_scratch(structural, quote_mask,
+indices)` that chains all four, and a scratch-allocating
+`find_json_structural_indices(indices)` for one-off calls (allocates two
+`SimdBuffer`s per call via `memory.grow` — use the scratch variant in
+hot loops or pair with `SimdBufferRing`).
+
+### Bench (V8, 4096-byte JSON, M-class Apple Silicon)
+
+Headline numbers — wasm SIMD vs native scalar baseline:
+
+| op | wasm | wasm-gc | native scalar | wasm vs native |
+|---|---|---|---|---|
+| `classify_json_structural` | 428 ns | 383 ns | 2.94 µs | **6.9x** |
+| `classify_json_numeric` | 462 ns | 400 ns | 2.60 µs | **5.6x** |
+| `classify_json_quote_raw` | 309 ns | 261 ns | 2.04 µs | **6.6x** |
+| `compute_quote_mask` | 7.16 µs | 7.24 µs | 3.28 µs | **0.46x** (loss) |
+| `extract_structural_indices` | 434 ns | 432 ns | 4.79 µs | **11x** |
+| `find_json_structural_indices_with_scratch` | 8.10 µs | 8.33 µs | 10.25 µs | **1.27x** |
+
+The byte-classification phases (`classify_*`) are 5–7× on wasm thanks to
+straightforward `i8x16.eq` lane-parallelism. `extract_structural_indices`
+is 11× because the scalar baseline does manual `ctz` while the inline-WAT
+gets a single `i32.ctz` instruction.
+
+But the **pipeline as a whole is only 1.27×**, because
+`compute_quote_mask` dominates and *loses* to scalar. That's the
+simdjson lesson: without CLMUL there's no way to vectorise the prefix
+XOR over quote positions, so the inline-WAT bit-walk pays the per-byte
+inline-WAT-call overhead while the native scalar runs in a single tight
+loop the compiler can auto-vectorise where possible.
+
+### Why the full pipeline is bandwidth-bound by `compute_quote_mask`
+
+simdjson's x86 path uses `_mm_clmulepi64_si128` (CLMUL) to prefix-XOR a
+64-bit quote bitmap in one instruction. Wasm SIMD has no equivalent —
+`v128` has no `clmul` family. So the quote-tracking state machine runs
+scalar: one byte read + 6 `select`s + one i32 store per input byte. At
+4096 bytes that's ~24,000 inline-WAT ops, dominating the 6 × 16-byte
+SIMD passes (~256 ops each for classify_structural / classify_numeric /
+classify_quote_raw).
+
+Until wasm grows a CLMUL extension, the bit-walk is the floor. The
+educational takeaway lines up with the cosine-similarity example: SIMD
+primitives help where the algorithm is SIMD-shaped; algorithms with
+serial bit-level dependencies don't get a free lunch from packed lanes.
+
+### Inline-WAT gotcha caught here
+
+The first pass had `find_json_structural_indices` allocate its two
+scratch `SimdBuffer`s with `SimdBuffer::make` per call. That's two
+`memory.grow` calls per invocation — ~400 µs each in the bench harness,
+making the wrapper 100× slower than the sum of its parts. The fix is
+the `_with_scratch` variant (same pattern as `base64_encode_into`):
+caller pre-allocates the bitmaps and reuses them. Same trade-off as
+the `SimdBufferRing` pattern.
+
 ## More parser surface that works
 
 Added during these passes:
