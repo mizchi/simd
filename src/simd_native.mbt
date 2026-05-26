@@ -1,16 +1,4 @@
 ///|
-#borrow(arr)
-extern "C" fn simd_sum_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_sum_ffi"
-
-///|
-#borrow(a, b)
-extern "C" fn simd_dot_product_ffi(
-  a : FixedArray[Int],
-  b : FixedArray[Int],
-  len : Int,
-) -> Int = "simd_dot_product_ffi"
-
-///|
 #borrow(a, b, out)
 extern "C" fn simd_add_ffi(
   a : FixedArray[Int],
@@ -54,14 +42,6 @@ extern "C" fn simd_max_elem_ffi(
   out : FixedArray[Int],
   len : Int,
 ) -> Unit = "simd_max_elem_ffi"
-
-///|
-#borrow(arr)
-extern "C" fn simd_min_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_min_ffi"
-
-///|
-#borrow(arr)
-extern "C" fn simd_max_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_max_ffi"
 
 ///|
 #borrow(a, b, out)
@@ -242,14 +222,6 @@ extern "C" fn simd_where_i32_ffi(
 
 ///|
 #borrow(arr)
-extern "C" fn simd_prod_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_prod_i32_ffi"
-
-///|
-#borrow(arr)
-extern "C" fn simd_count_nonzero_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_count_nonzero_i32_ffi"
-
-///|
-#borrow(arr)
 extern "C" fn simd_all_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_all_i32_ffi"
 
 ///|
@@ -324,23 +296,17 @@ extern "C" fn simd_first_non_ascii_chunk_ffi(data : FixedArray[Byte], len : Int)
 extern "C" fn simd_adler32_ffi(data : FixedArray[Byte], len : Int) -> UInt = "simd_adler32_ffi"
 
 ///|
-/// SIMD sum - native target: C FFI (NEON/SSE).
+/// native sum: scalar wins thanks to compiler auto-vectorization;
+/// going through ffi adds call overhead. The C kernel (simd_sum_ffi)
+/// is kept available for explicit use.
 pub fn sum_i32(arr : FixedArray[Int]) -> Int {
-  let len = arr.length()
-  if len == 0 {
-    return 0
-  }
-  simd_sum_ffi(arr, len)
+  @internal.scalar_sum(arr)
 }
 
 ///|
-/// SIMD dot product - native target: C FFI (NEON/SSE).
+/// native dot: same story as sum — scalar auto-vec wins.
 pub fn dot_i32(a : FixedArray[Int], b : FixedArray[Int]) -> Int {
-  let len = a.length()
-  if len == 0 {
-    return 0
-  }
-  simd_dot_product_ffi(a, b, len)
+  @internal.scalar_dot_product(a, b)
 }
 
 ///|
@@ -368,22 +334,14 @@ pub fn adler32_bytes(data : FixedArray[Byte]) -> UInt {
 }
 
 ///|
-/// native min reduce: C FFI (NEON / SSE4.1).
+/// native min reduce: scalar auto-vec wins; reverted from C FFI.
 pub fn min_i32(arr : FixedArray[Int]) -> Int {
-  let len = arr.length()
-  if len == 0 {
-    return 0
-  }
-  simd_min_ffi(arr, len)
+  @internal.scalar_min(arr)
 }
 
 ///|
 pub fn max_i32(arr : FixedArray[Int]) -> Int {
-  let len = arr.length()
-  if len == 0 {
-    return 0
-  }
-  simd_max_ffi(arr, len)
+  @internal.scalar_max(arr)
 }
 
 ///|
@@ -758,11 +716,7 @@ pub fn transpose_f64(
 
 ///|
 pub fn prod_i32(arr : FixedArray[Int]) -> Int {
-  let len = arr.length()
-  if len == 0 {
-    return 1
-  }
-  simd_prod_i32_ffi(arr, len)
+  @internal.scalar_prod(arr)
 }
 
 ///|
@@ -777,11 +731,7 @@ pub fn var_f64(arr : FixedArray[Double]) -> Double {
 
 ///|
 pub fn count_nonzero_i32(arr : FixedArray[Int]) -> Int {
-  let len = arr.length()
-  if len == 0 {
-    return 0
-  }
-  simd_count_nonzero_i32_ffi(arr, len)
+  @internal.scalar_count_nonzero(arr)
 }
 
 ///|
