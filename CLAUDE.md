@@ -4,12 +4,20 @@
 
 Target-specific SIMD implementations with scalar fallback.
 
-- `src/scalar.mbt` - Scalar implementations (all targets)
-- `src/simd_wasm.mbt` - wasm: inline WAT with v128 (i32x4 / i8x16 / i16x8)
-- `src/simd_wasm_gc.mbt` - wasm-gc: scalar fallback (FixedArray is a GC array, v128.load only works on linear memory)
-- `src/simd_native.mbt` - native: extern "C" FFI
-- `src/simd_native.c` - C SIMD intrinsics (NEON/SSE)
-- `src/simd_js.mbt` - js: scalar fallback
+- `src/internal/scalar.mbt` - Scalar implementations (shared across all targets via `@internal.scalar_*`)
+- wasm (target `wasm`) — inline WAT with v128 (i32x4 / i8x16 / i16x8 / f64x2 / f32x4). Split by category:
+  - `src/simd_wasm_i32.mbt` - i32 reductions / element-wise / comparisons / cum / gather / scatter
+  - `src/simd_wasm_f64.mbt` - f64 element-wise + reductions + linear algebra (matmul / gemv / transpose)
+  - `src/simd_wasm_f32.mbt` - f32 ops over byte-buffer representation (f32x4)
+  - `src/simd_wasm_bytes.mbt` - byte / string / UTF-8 / Adler-32
+  - `src/simd_wasm_sort.mbt` - sort networks + bitonic merges + general-purpose sort
+- native (target `native`):
+  - `src/simd_native.mbt` - public wrappers
+  - `src/simd_native_ffi.mbt` - `extern "C"` FFI declarations
+  - `src/simd_native.c` - C SIMD intrinsics (NEON/SSE)
+- `src/simd_scalar.mbt` - shared scalar fallback for `js` and `wasm-gc` targets (FixedArray-on-GC-heap means `v128.load` is unusable on wasm-gc)
+- `src/base64/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
+- `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@base64` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
 
 ## Key Findings
 
@@ -319,6 +327,404 @@ Added during these passes:
   trip the parser's int-decoder. Synthesize via `i32.const N f64.convert_i32_s`
   (and `f64x2.splat` for vectors); load shuffle / lookup tables from a
   `FixedArray[Byte]` via `v128.load`.
+
+## Base64 (RFC 4648) sub-package
+
+Demonstrator built on the same wasm SIMD inline-WAT discipline. Lives in
+`src/base64/` and exposes `encode(input) -> FixedArray[Byte]` and
+`decode(input) -> FixedArray[Byte]?`. Standard alphabet only, with `=`
+padding.
+
+### Algorithm
+
+- **Encode** processes 12 input bytes → 16 output bytes per chunk:
+  1. `i8x16.shuffle [1,0,2,1, …]` lays out per 4-byte lane as `[b1,b0,b2,b1]`.
+  2. Per-lane bit extraction via 4 `i16x8.shr_u`/`shl` + per-byte mask + OR
+     produces 4 × 6-bit indices.
+  3. ASCII offset stage is arithmetic, not a lookup: 5 chained
+     `i8x16.ge_s` + `v128.and` + `i8x16.add`/`sub` apply the right delta per
+     range (`A-Z`/`a-z`/`0-9`/`+`/`/`).
+- **Decode** processes 16 ASCII bytes → 12 output bytes per chunk:
+  1. Range masks (`i8x16.ge_s`/`le_s`/`eq`) classify each byte into one of
+     five Base64 ranges; their `v128.or` is the validity bitmask.
+  2. Decoded 6-bit values come from `b + (mask & offset)` summed over the
+     five ranges (mutually-exclusive masks → at most one offset adds).
+  3. Pack 4 × 6 → 24 bits per lane via 6 `i32x4.shl`/`shr_u` + byte-position
+     masks (`0xFC` / `0x03` / `0xF0` / `0x0F` / `0xC0` / `0x3F`); a final
+     `i8x16.shuffle` compacts the 12 valid bytes into the low 12 lanes for
+     `v128.store`.
+- Last 4-char input quad (where `=` padding may appear) always falls through
+  to scalar — keeps the SIMD path branch-free.
+
+### Speedup on wasm (V8, 4096-byte input, M-class Apple Silicon)
+
+| op | size | scalar | simd | x |
+|---|---|---|---|---|
+| encode | 4096 B | 7.45 µs | 2.06 µs | **3.6** |
+| decode | 5460 B | 7.97 µs | 2.28 µs | **3.5** |
+
+### Inline-WAT gotcha caught here
+
+`i8x16.sub` (and by extension every `iNxM.sub`) is **non-commutative** and
+pops in the standard wasm stack order: stack `[..., a, b]` (with `b` on top)
+produces `a - b`. So to compute `acc -= delta`, push `acc` FIRST and `delta`
+SECOND, not the other way around. First pass of the encode WAT had them
+reversed and produced garbage only for byte values ≥ 128 — the all-ASCII
+test cases passed coincidentally because the subtraction happened to wrap
+through the same modulus.
+
+## SimdBuffer: portable SIMD across all four targets
+
+`src/simd_buffer/` is the recommended portable API. The public surface —
+`SimdBuffer` / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` /
+`SimdBufferRing` and ~50 ops — is **identical on `wasm`, `wasm-gc`,
+`native`, and `js`**. Internally:
+
+- **`wasm` / `wasm-gc`**: backing store is raw linear memory allocated
+  via `memory.grow`; ops are inline-WAT `v128.*` (the wins listed
+  below). This is the only path that gets SIMD on `wasm-gc` — the
+  FixedArray-based API falls back to scalar there because GC-ref FFI
+  blocks `v128.load`.
+- **`native`**: backing store is `FixedArray[T]`; ops delegate to
+  `@internal.scalar_*` / `@base64.*`, which themselves dispatch to the
+  existing native C FFI fast paths (NEON / SSE) where one exists. No
+  new C code; the native target re-uses the FixedArray-API stack
+  underneath. Practical perf: parity with the FixedArray-based native
+  API.
+- **`js`**: backing store is `FixedArray[T]`, ops are scalar via
+  `@internal`. **No SIMD acceleration on js** — MoonBit's js backend
+  has no SIMD escape hatch. SimdBuffer is offered on js purely so
+  caller code stays portable; throughput-critical js workloads should
+  keep data in JS-native typed arrays and call into wasm.
+
+```
+src/simd_buffer/
+  # wasm + wasm-gc (linear memory + inline-WAT v128)
+  simd_buffer.mbt        # SimdBuffer (i32) + page-per-buffer allocator + all
+                         #   i32 ops (sum / dot / add / sub / mul / neg / abs /
+                         #   min_elem / max_elem / eq / lt / gt / where_ / saxpy /
+                         #   min / max / argmin / argmax / prod / count_nonzero /
+                         #   any / all / cumsum / cumprod / div / gather / scatter)
+  simd_buffer_f32.mbt    # SimdBufferF32 + add / sub / mul / div / sqrt /
+                         #   min_elem / max_elem / sum / dot
+  simd_buffer_f64.mbt    # SimdBufferF64 + add / sub / mul / div / sqrt /
+                         #   min_elem / max_elem / sum / dot / mean / variance /
+                         #   matmul / gemv / transpose
+  simd_buffer_bytes.mbt  # SimdBufferBytes + popcount / memcpy / memset / equal /
+                         #   find_byte / count_byte / is_ascii / to_lower /
+                         #   to_upper / validate_utf8 / adler32 / base64
+  simd_buffer_sort.mbt   # SimdBuffer::sort4 / sort16 / bitonic_merge8/16/32/64 /
+                         #   sort (full merge sort with caller-supplied scratch)
+  simd_buffer_ring.mbt   # SimdBufferRing — single-arena bump allocator over a
+                         #   pre-grown page (cheap reset, no per-buffer memory.grow)
+  simd_buffer_copy.mbt   # FixedArray ↔ SimdBuffer bridges
+
+  # native + js (FixedArray wrappers; same public API, delegates to @internal / @base64)
+  simd_buffer_scalar.mbt # All of the above types + methods, scalar / C-FFI backed.
+                         # native: bottoms out in NEON / SSE / clang auto-vec.
+                         # js: scalar only, no SIMD escape hatch.
+
+  # cross-target stub: keeps @base64 / @internal imports "used" on wasm targets
+  simd_buffer_imports.mbt
+```
+
+### Probe findings
+
+Verified by isolated wasm-gc probes (now removed from the tree):
+
+- `FixedArray[Byte]` is rejected at the inline-WAT FFI on wasm-gc with
+  `Invalid stub type`.
+- `FixedArray[Int]` / `Bytes` *are* accepted at the FFI, but arrive as
+  `(ref N)`. Linking fails with `expected i32, found (ref N)` if the WAT
+  signature uses `(param i32)`.
+- `(param anyref)` *is* accepted, but `array.get` needs a concrete type
+  index that inline-WAT cannot reference, so we can't read elements through
+  the GC ref — and even if we could, building a `v128` from 4 scalar reads
+  + 4 `i32x4.replace_lane` costs ~9 ops vs 4 for plain scalar add, killing
+  the SIMD win for memory-bound ops.
+- `i32.store` / `i32.load` / `v128.load` *do* work inside inline-WAT on
+  wasm-gc — wasm-gc modules still have linear memory. The blocker is
+  getting a linear-memory address out of MoonBit, not the SIMD ops
+  themselves.
+
+### Allocation: `memory.grow` per buffer
+
+```
+fn buf_alloc(size : Int) -> Int =
+  #|(func (param i32) (result i32)
+       local.get 0 i32.const 65535 i32.add i32.const 16 i32.shr_u
+       memory.grow
+       i32.const 16 i32.shl)
+```
+
+Each `SimdBuffer::make` rounds `size` up to a multiple of the wasm page
+size (64 KiB), grows linear memory by that many pages, and returns the new
+region's base address. Each allocation owns its own pages, so there is no
+shared bump pointer to collide with the host MoonBit runtime's tlsf
+allocator on the `wasm` target.
+
+Trade-offs of this allocator:
+
+- **No free**: pages stay allocated for the lifetime of the wasm instance.
+  Fine for batch workloads (offline data pipelines, request-scoped
+  decoding); not fine for long-running services that allocate per-request.
+- **Up to 64 KiB wasted per small allocation**: pages are the granularity.
+- **`memory.grow` is a slow host call**: ~hundreds of microseconds per
+  call. Allocating per hot-path call dominates the measured time.
+  See "the `_into` pattern" below.
+
+### The `_into` pattern
+
+Because allocation is expensive, every non-trivial op that produces a new
+buffer has an in-place sibling that writes into a caller-supplied output:
+
+```
+base64_encode(input)              → SimdBufferBytes        // allocates
+base64_encode_into(input, out)    → Unit                   // no alloc, hot path
+base64_decode(input)              → SimdBufferBytes?
+base64_decode_into(input, out)    → Int?  // bytes written
+```
+
+Bench (4096-byte input on wasm-gc) showing the allocator cost dominating:
+
+| variant | time |
+|---|---|
+| `base64_encode` (allocates output via `memory.grow`) | 395 µs |
+| `base64_encode_into` (output pre-allocated) | 657 ns |
+
+Same compute, 600× difference. **Use the `_into` variant whenever the
+buffer can be reused.** Pool / reuse output buffers across calls.
+
+### `SimdBufferRing`: arena allocator for the per-request pattern
+
+When the workload needs a *fresh* output each call but the buffers all
+share a lifetime (one HTTP request, one packet, one decode iteration),
+the page-per-buffer allocator's `memory.grow` cost dominates everything.
+`SimdBufferRing` carves several sub-buffers out of one pre-grown region:
+
+```moonbit
+let ring = SimdBufferRing::make(65536)  // one page, paid once
+for _ in iterations {
+  ring.reset()                           // O(1), invalidates all subs
+  let out = ring.alloc_bytes(target_len)
+  SimdBufferBytes::base64_encode_into(input, out)
+  // ... use `out` ...
+}
+```
+
+Bench (alloc 1024 bytes per call on wasm-gc):
+
+| variant | per-call cost |
+|---|---|
+| `SimdBufferBytes::make(1024)` (one `memory.grow`) | 118 µs |
+| `ring.alloc_bytes(1024)` (after `reset()`) | **8 ns** |
+
+~15 000× cheaper. End-to-end base64 encode 4096 B with Ring reset is
+702 ns — within noise of the `_into` baseline (690 ns), so the Ring
+recovers the full SIMD win for the per-call-allocates pattern.
+
+**Invariant:** `reset()` silently invalidates every sub-buffer carved
+out of the Ring. There is no runtime tag — caller enforces it.
+
+### Bench: full op surface on wasm-gc (V8, M-class Apple Silicon)
+
+All `SimdBuffer*` ops on n = 1024 (vectors) / 4096 B (bytes) / 64×64 (mat).
+Times are per-call wall clock; smaller is better.
+
+#### i32 (`SimdBuffer`)
+
+| op | time | op | time |
+|---|---|---|---|
+| `sum` | 105.7 ns | `min` | 106.1 ns |
+| `add` | 117.6 ns | `max` | 105.4 ns |
+| `sub` | 118.6 ns | `argmin` | 410.5 ns |
+| `mul` | 118.7 ns | `argmax` | 447.7 ns |
+| `neg` | 103.2 ns | `count_nonzero` | 198.1 ns |
+| `abs` | 94.1 ns | `prod` (from lib bench) | ~700 ns |
+| `min_elem` | 119.1 ns | `cumsum` | 850.0 ns |
+| `max_elem` | 121.5 ns | `cumprod` | 943.6 ns |
+| `eq` | 122.3 ns | `div` (f64x2 round-trip) | 422.7 ns |
+| `lt` | 119.1 ns | `dot` | 177.3 ns |
+| `gt` | 120.2 ns | `saxpy` | 124.4 ns |
+| `sort` (1024, leaf + merge) | 10.4 µs | | |
+
+#### f32 (`SimdBufferF32`)
+
+| op | time |
+|---|---|
+| `add` | 127.4 ns |
+| `mul` | 127.1 ns |
+| `sqrt` | 160.1 ns |
+| `sum` | 129.9 ns |
+| `dot` | 147.9 ns |
+
+#### f64 (`SimdBufferF64`)
+
+| op | time | op | time |
+|---|---|---|---|
+| `add` | 229.3 ns | `sum` | 270.7 ns |
+| `sub` | 229.4 ns | `mean` | 272.1 ns |
+| `mul` | 229.3 ns | `variance` | 593.9 ns |
+| `div` | 229.9 ns | `gemv` 256×256 | 18.2 µs |
+| `sqrt` | 239.5 ns | `transpose` 128×128 | 8.2 µs |
+| | | `matmul` 64×64 | 57.9 µs |
+
+#### bytes (`SimdBufferBytes`)
+
+| op (4096 B) | time | op (4096 B) | time |
+|---|---|---|---|
+| `popcount` | 290.6 ns | `is_ascii` | 125.5 ns |
+| `memcpy` | 100.2 ns | `to_lower_ascii` | 105.1 ns |
+| `memset` | 59.4 ns | `to_upper_ascii` | 118.7 ns |
+| `equal` | 170.8 ns | `validate_utf8` (ASCII) | 157.1 ns |
+| `find_byte` | 229.6 ns | `adler32` | 329.0 ns |
+| `count_byte` | 165.1 ns | `base64_encode_into` | 647.4 ns |
+| | | `base64_decode_into` (5460 B) | 1.57 µs |
+
+### Headline ratios (wasm-gc, SimdBuffer SIMD vs scalar fallback via `FixedArray`)
+
+These are the speedups a wasm-gc user gets by porting a hot path from the
+FixedArray-based API (which falls back to scalar on wasm-gc) to the
+SimdBuffer family. Scalar baselines come from running the same ops via
+`@internal.scalar_*` on the FixedArray path.
+
+| op | size | scalar (wasm-gc fallback) | SimdBuffer SIMD | x |
+|---|---|---|---|---|
+| `sum_i32` | 1024 | 344 ns | 106 ns | **3.2** |
+| `add_i32` | 1024 | 413 ns | 118 ns | **3.5** |
+| `popcount_bytes` | 4096 | 6.91 µs | 291 ns | **23.7** |
+| `memcpy_bytes` | 4096 | 1.17 µs | 100 ns | **11.7** |
+| `memset_bytes` | 4096 | 1.00 µs | 59 ns | **16.9** |
+| `find_byte` | 4096 | 1.16 µs | 230 ns | **5.0** |
+| `adler32_bytes` | 4096 | 9.23 µs | 329 ns | **28.1** |
+| `matmul_f64` | 64×64 | (see note) | 57.9 µs | ~3-5 |
+| `base64_encode` | 4096 B (into) | n/a (scalar via base64 sub-pkg) | 647 ns | — |
+
+Byte ops show the biggest wins because the scalar fallback pays per-byte
+function-call overhead, while the SIMD path processes 16 bytes per
+`v128.load`. Numeric reductions and element-wise i32 ops sit in the 3-4×
+range — still substantial.
+
+Scalar `get(i) / set(i, v)` on SimdBuffer is **slower** than
+`FixedArray[Int]` element access because each `get` goes through an
+inline-WAT FFI call (no inlining). So SimdBuffer is only worth it when
+the SIMD op dominates over the scalar pre/post processing. For
+scalar-only access, FixedArray remains faster — see the
+`from_array` / `to_array` copy helpers in `simd_buffer_copy.mbt` for the
+hybrid pattern (build / consume via FixedArray, copy into SimdBuffer for
+the SIMD phase only).
+
+### When to use which
+
+- **`SimdBuffer` family — recommended default.** Same code compiles on
+  all four targets. SIMD acceleration on three (`wasm` / `wasm-gc` /
+  `native`); scalar on `js` for API portability. Use this unless you
+  have a specific reason to prefer FixedArray.
+- **`FixedArray[Int]` + `simd_wasm_*.mbt` API** — when you specifically
+  want GC-managed storage with no `memory.grow` lifecycle to think
+  about, and you don't need wasm-gc SIMD. Note this API falls back to
+  scalar on `wasm-gc` and `js`.
+
+### Inline-WAT gotcha caught here (wasm-target collision)
+
+The first SimdBuffer prototype put its bump pointer at linear-memory
+address 0. That collides with the host MoonBit runtime's tlsf allocator
+on the `wasm` target — every test that allocated a SimdBuffer triggered
+`memory access out of bounds` inside `tlsf/removeBlock`. The fix was to
+abandon shared bookkeeping entirely and have each allocation grow its
+own pages via `memory.grow`.
+
+### Capability matrix
+
+What SimdBuffer can and can't do today. "Easy port" = same inline-WAT
+shape as something already in `src/simd_wasm_*.mbt`, just rewrap with
+`(addr : Int, len : Int)` params. "Hard port" = needs algorithmic
+rework or extra storage gymnastics. "Out of scope" = doesn't fit the
+linear-memory model or the current MoonBit / wasm-gc toolchain.
+
+#### Can do (already shipped — full parity with the wasm FixedArray API)
+
+- i32: `sum`, `dot`, `add`, `sub`, `mul`, `neg`, `abs`, `min_elem`,
+  `max_elem`, `eq`, `lt`, `gt`, `where_`, `saxpy`, `min`, `max`,
+  `argmin`, `argmax`, `prod`, `count_nonzero`, `any`, `all`, `cumsum`,
+  `cumprod`, `div`, `gather`, `scatter`, `sort4`, `sort16`,
+  `bitonic_merge8 / 16 / 32 / 64`, `sort` (with caller-supplied scratch
+  buffer)
+- f32: `add`, `sub`, `mul`, `div`, `sqrt`, `min_elem`, `max_elem`,
+  `sum`, `dot`
+- f64: `add`, `sub`, `mul`, `div`, `sqrt`, `min_elem`, `max_elem`,
+  `sum`, `dot`, `mean`, `var`, `matmul`, `gemv`, `transpose`
+- bytes: `popcount`, `memcpy`, `memset`, `equal`, `find_byte`,
+  `count_byte`, `is_ascii`, `to_lower_ascii`, `to_upper_ascii`,
+  `validate_utf8`, `adler32`, `base64_encode` / `base64_decode`
+  (+ `_into` in-place variants)
+- Arena allocator: `SimdBufferRing::make / reset / alloc_i32 / alloc_f32 /
+  alloc_f64 / alloc_bytes` — cheap per-call alloc when the lifetime is
+  shared
+- 16-byte aligned linear-memory storage, `v128.load` / `v128.store` directly
+- Separate `addr` ⇒ matmul-style 3-buffer ops (no aliasing checks; caller's
+  responsibility)
+- Per-buffer page ownership via `memory.grow` ⇒ no collision with the
+  host MoonBit runtime's tlsf allocator on the wasm target
+- Works on both `wasm` and `wasm-gc` from identical inline-WAT bodies
+
+#### Easy ports (none remaining — all ops covered above)
+
+#### Harder ports notes (now shipped, but worth remembering)
+
+- `div_i32` — `i32 / i32` via `f64x2.div` round-trip. The 16-byte slack
+  in `SimdBuffer::make` covers the conversion's lookahead.
+- `cumsum` / `cumprod` — Hillis-Steele prefix carry threaded across
+  chunks via an `i32x4.splat(running)` step at each chunk boundary.
+- `gather` / `scatter` — gather lifts the store side to SIMD (4 stores
+  fused via `i32x4.replace_lane` + `v128.store`); scatter stays scalar
+  (no SIMD conflict detection in wasm).
+- `transpose_f64` (2×2 block) — row/col strides as params; odd
+  dimensions fall through to a scalar element-copy loop.
+- `sort` — bottom-up merge sort with SIMD `sort16` leaf +
+  `bitonic_merge32` and `bitonic_merge64` ladder. **Requires a
+  caller-supplied scratch SimdBuffer of equal length**, because the
+  internal `memory.grow` would dominate the cost otherwise. Pair with
+  `SimdBufferRing` for cheap scratch allocation.
+
+#### Out of scope / not viable on current MoonBit + wasm-gc
+
+- **Free / deallocate**: bump-only allocator. Pages stay until the wasm
+  instance dies. No `SimdBuffer::drop`. Long-running services need a real
+  allocator (free list / slab) — not built
+- **Resize in place**: `make` a new one, copy via a scalar loop
+- **Read elements from inline-WAT against a GC `FixedArray`**: would need
+  the array's module-internal type index, which inline-WAT can't name
+- **`native` target**: needs `malloc` / `free` + C FFI. Different code
+  path, not implemented. `native` keeps the FixedArray API
+- **`js` target**: no linear memory exposed from MoonBit; SimdBuffer
+  doesn't compile here. `js` keeps the FixedArray API + scalar fallback
+- **Threading / `SharedArrayBuffer`**: current MoonBit wasm-gc target is
+  single-threaded, no `memory.atomic.*` exercised
+- **Multiple wasm memories**: only `memory 0` accessible from inline-WAT
+- **Bounds checks at the WAT layer**: `buf_load_*` / `buf_store_*` trust
+  the caller. Bounds are only enforced inside the MoonBit `get` / `set`
+  wrappers. The SIMD primitive bodies (e.g., `buf_sum_i32(addr, len)`)
+  walk the buffer without any guard — pass a bogus `len` and you walk
+  off the page
+- **Cross-instance / cross-module sharing**: addresses are
+  instance-local; do not try to serialise a `SimdBuffer.addr` across the
+  JS / wasm boundary
+
+#### Open questions worth verifying when needed
+
+- Whether SimdBuffer-style buffers can be passed as views to host JS
+  code via wasm-bindgen-style mechanisms (probably yes if MoonBit
+  exports `memory`; not tried)
+- Whether wasm threads / atomics survive MoonBit's current wasm-gc
+  toolchain
+- Whether `memory64` (i64 addresses) lands in MoonBit; current code
+  assumes 32-bit addresses everywhere
+- Whether a `SimdBufferRing` (one big page, multiple sub-allocations
+  with a shared bump pointer at the page header) gives a useful middle
+  ground between "one page per buffer" and "real allocator". The
+  trade-off is that all sub-buffers in the same page have the same
+  lifetime, which fits many request-scoped workloads
 
 ## Commands
 

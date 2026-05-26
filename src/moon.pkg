@@ -7,9 +7,13 @@ import {
 options(
   "native-stub": [ "simd_native.c" ],
   targets: {
-    "simd_js.mbt": [ "js" ],
+    "simd_scalar.mbt": [ "js", "wasm-gc" ],
     "simd_native.mbt": [ "native" ],
-    "simd_wasm.mbt": [ "wasm" ],
-    "simd_wasm_gc.mbt": [ "wasm-gc" ],
+    "simd_native_ffi.mbt": [ "native" ],
+    "simd_wasm_i32.mbt": [ "wasm" ],
+    "simd_wasm_f64.mbt": [ "wasm" ],
+    "simd_wasm_f32.mbt": [ "wasm" ],
+    "simd_wasm_bytes.mbt": [ "wasm" ],
+    "simd_wasm_sort.mbt": [ "wasm" ],
   },
 )

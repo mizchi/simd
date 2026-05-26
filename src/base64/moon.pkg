@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/core/bench",
+}
+
+options(
+  targets: {
+    "base64_wasm.mbt": [ "wasm" ],
+    "base64_scalar.mbt": [ "js", "wasm-gc", "native" ],
+  },
+)

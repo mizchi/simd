@@ -1,17 +1,16 @@
 ///|
-/// SIMD sum - js target: scalar fallback.
+/// Scalar fallbacks for targets without an inline-SIMD or FFI path
+/// (js, wasm-gc). All entries delegate straight to @internal.scalar_*.
 pub fn sum_i32(arr : FixedArray[Int]) -> Int {
   @internal.scalar_sum(arr)
 }
 
 ///|
-/// SIMD dot product - js target: scalar fallback.
 pub fn dot_i32(a : FixedArray[Int], b : FixedArray[Int]) -> Int {
   @internal.scalar_dot_product(a, b)
 }
 
 ///|
-/// SIMD element-wise add - js target: scalar fallback.
 pub fn add_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],
@@ -21,7 +20,6 @@ pub fn add_i32(
 }
 
 ///|
-/// SIMD Adler-32 - js target: scalar fallback.
 pub fn adler32_bytes(data : FixedArray[Byte]) -> UInt {
   @internal.scalar_adler32(data)
 }
