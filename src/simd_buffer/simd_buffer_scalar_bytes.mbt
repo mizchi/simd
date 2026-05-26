@@ -208,3 +208,272 @@ pub fn SimdBufferBytes::copy_to_array(
     dst[i] = self.data[i]
   }
 }
+// ---- byte binary arithmetic (Tier 1 — 0.3.0) ----
+
+///|
+pub fn SimdBufferBytes::byte_add(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.data.length() != b.data.length() || a.data.length() != out.data.length() {
+    abort("SimdBufferBytes.byte_add: length mismatch")
+  }
+  for i in 0..<a.data.length() {
+    out.data[i] = ((a.data[i].to_int() + b.data[i].to_int()) & 0xFF).to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::byte_sub(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.data.length() != b.data.length() || a.data.length() != out.data.length() {
+    abort("SimdBufferBytes.byte_sub: length mismatch")
+  }
+  for i in 0..<a.data.length() {
+    out.data[i] = ((a.data[i].to_int() - b.data[i].to_int()) & 0xFF).to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::byte_avg(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.data.length() != b.data.length() || a.data.length() != out.data.length() {
+    abort("SimdBufferBytes.byte_avg: length mismatch")
+  }
+  for i in 0..<a.data.length() {
+    out.data[i] = (((a.data[i].to_int() + b.data[i].to_int() + 1) >> 1) & 0xFF).to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::sat_add(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.data.length() != b.data.length() || a.data.length() != out.data.length() {
+    abort("SimdBufferBytes.sat_add: length mismatch")
+  }
+  for i in 0..<a.data.length() {
+    let s = a.data[i].to_int() + b.data[i].to_int()
+    out.data[i] = (if s > 255 { 255 } else { s }).to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::sat_sub(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.data.length() != b.data.length() || a.data.length() != out.data.length() {
+    abort("SimdBufferBytes.sat_sub: length mismatch")
+  }
+  for i in 0..<a.data.length() {
+    let s = a.data[i].to_int() - b.data[i].to_int()
+    out.data[i] = (if s < 0 { 0 } else { s }).to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::clamp(
+  self : SimdBufferBytes,
+  lo : Byte,
+  hi : Byte,
+  out : SimdBufferBytes,
+) -> Unit {
+  if self.data.length() != out.data.length() {
+    abort("SimdBufferBytes.clamp: length mismatch")
+  }
+  let lo_i = lo.to_int()
+  let hi_i = hi.to_int()
+  for i in 0..<self.data.length() {
+    let v = self.data[i].to_int()
+    let clamped = if v < lo_i { lo_i } else if v > hi_i { hi_i } else { v }
+    out.data[i] = clamped.to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::byte_sub_offset(
+  src : SimdBufferBytes,
+  stride : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  if src.data.length() != out.data.length() {
+    abort("SimdBufferBytes.byte_sub_offset: length mismatch")
+  }
+  if stride <= 0 {
+    abort("SimdBufferBytes.byte_sub_offset: stride must be >= 1")
+  }
+  let n = src.data.length()
+  for i in 0..<n {
+    let a = src.data[i].to_int()
+    let b = if i >= stride { src.data[i - stride].to_int() } else { 0 }
+    out.data[i] = ((a - b) & 0xFF).to_byte()
+  }
+}
+
+// ---- image / pixel ops (Tier 2 — 0.3.0) ----
+
+///|
+pub fn SimdBufferBytes::rgb_to_rgba(
+  src : SimdBufferBytes,
+  alpha : Byte,
+  out : SimdBufferBytes,
+) -> Unit {
+  let src_len = src.data.length()
+  if src_len % 3 != 0 {
+    abort("SimdBufferBytes.rgb_to_rgba: src must be a multiple of 3 bytes")
+  }
+  let n = src_len / 3
+  if out.data.length() != n * 4 {
+    abort("SimdBufferBytes.rgb_to_rgba: out length must be src/3 * 4")
+  }
+  for i in 0..<n {
+    out.data[i * 4] = src.data[i * 3]
+    out.data[i * 4 + 1] = src.data[i * 3 + 1]
+    out.data[i * 4 + 2] = src.data[i * 3 + 2]
+    out.data[i * 4 + 3] = alpha
+  }
+}
+
+///|
+pub fn SimdBufferBytes::rgba_to_grayscale(
+  src : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  let src_len = src.data.length()
+  if src_len % 4 != 0 {
+    abort(
+      "SimdBufferBytes.rgba_to_grayscale: src must be a multiple of 4 bytes",
+    )
+  }
+  let n = src_len / 4
+  if out.data.length() != n {
+    abort("SimdBufferBytes.rgba_to_grayscale: out length must be src/4")
+  }
+  for i in 0..<n {
+    let r = src.data[i * 4].to_int()
+    let g = src.data[i * 4 + 1].to_int()
+    let b = src.data[i * 4 + 2].to_int()
+    out.data[i] = ((77 * r + 150 * g + 29 * b) >> 8).to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::channel_extract(
+  src : SimdBufferBytes,
+  ch : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  if ch < 0 || ch >= 4 {
+    abort("SimdBufferBytes.channel_extract: ch must be 0..3")
+  }
+  let src_len = src.data.length()
+  if src_len % 4 != 0 {
+    abort("SimdBufferBytes.channel_extract: src must be a multiple of 4 bytes")
+  }
+  let n = src_len / 4
+  if out.data.length() != n {
+    abort("SimdBufferBytes.channel_extract: out length must be src/4")
+  }
+  for i in 0..<n {
+    out.data[i] = src.data[i * 4 + ch]
+  }
+}
+
+///|
+pub fn SimdBufferBytes::channel_merge(
+  r : SimdBufferBytes,
+  g : SimdBufferBytes,
+  b : SimdBufferBytes,
+  a : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  let n = r.data.length()
+  if g.data.length() != n || b.data.length() != n || a.data.length() != n {
+    abort("SimdBufferBytes.channel_merge: input lengths must match")
+  }
+  if out.data.length() != n * 4 {
+    abort("SimdBufferBytes.channel_merge: out length must be n * 4")
+  }
+  for i in 0..<n {
+    out.data[i * 4] = r.data[i]
+    out.data[i * 4 + 1] = g.data[i]
+    out.data[i * 4 + 2] = b.data[i]
+    out.data[i * 4 + 3] = a.data[i]
+  }
+}
+
+///|
+pub fn SimdBufferBytes::lerp(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  t : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.data.length() != b.data.length() || a.data.length() != out.data.length() {
+    abort("SimdBufferBytes.lerp: length mismatch")
+  }
+  let t_clamped = if t < 0 { 0 } else if t > 256 { 256 } else { t }
+  let inv_t = 256 - t_clamped
+  for i in 0..<a.data.length() {
+    let av = a.data[i].to_int()
+    let bv = b.data[i].to_int()
+    out.data[i] = ((av * inv_t + bv * t_clamped) >> 8).to_byte()
+  }
+}
+
+///|
+pub fn SimdBufferBytes::histogram(
+  self : SimdBufferBytes,
+  bins : SimdBuffer,
+) -> Unit {
+  if bins.data.length() < 256 {
+    abort("SimdBufferBytes.histogram: bins must have at least 256 slots")
+  }
+  for i in 0..<self.data.length() {
+    let v = self.data[i].to_int()
+    bins.data[v] = bins.data[v] + 1
+  }
+}
+
+///|
+pub fn SimdBufferBytes::alpha_blend_solid(
+  dst : SimdBufferBytes,
+  src_r : Int,
+  src_g : Int,
+  src_b : Int,
+  src_a : Int,
+) -> Unit {
+  let dst_len = dst.data.length()
+  if dst_len % 4 != 0 {
+    abort(
+      "SimdBufferBytes.alpha_blend_solid: dst must be a multiple of 4 bytes",
+    )
+  }
+  let inv_a = 255 - src_a
+  let n = dst_len / 4
+  for i in 0..<n {
+    let dr = dst.data[i * 4].to_int()
+    let dg = dst.data[i * 4 + 1].to_int()
+    let db = dst.data[i * 4 + 2].to_int()
+    let da = dst.data[i * 4 + 3].to_int()
+    let nr = src_r + dr * inv_a / 255
+    let ng = src_g + dg * inv_a / 255
+    let nb = src_b + db * inv_a / 255
+    let na = src_a + da * inv_a / 255
+    dst.data[i * 4] = (if nr > 255 { 255 } else { nr }).to_byte()
+    dst.data[i * 4 + 1] = (if ng > 255 { 255 } else { ng }).to_byte()
+    dst.data[i * 4 + 2] = (if nb > 255 { 255 } else { nb }).to_byte()
+    dst.data[i * 4 + 3] = (if na > 255 { 255 } else { na }).to_byte()
+  }
+}

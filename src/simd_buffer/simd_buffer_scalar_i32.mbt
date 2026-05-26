@@ -309,3 +309,23 @@ pub fn SimdBuffer::copy_to_array(
     dst[i] = self.data[i]
   }
 }
+
+///|
+pub fn SimdBuffer::array_equal(
+  a : SimdBuffer,
+  b : SimdBuffer,
+  len : Int,
+) -> Bool {
+  if len <= 0 {
+    return true
+  }
+  if len > a.data.length() || len > b.data.length() {
+    abort("SimdBuffer.array_equal: len exceeds buffer")
+  }
+  for i in 0..<len {
+    if a.data[i] != b.data[i] {
+      return false
+    }
+  }
+  true
+}

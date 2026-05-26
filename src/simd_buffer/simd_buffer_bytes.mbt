@@ -478,6 +478,325 @@ pub fn SimdBufferBytes::to_lower_ascii(self : SimdBufferBytes) -> Unit {
   buf_to_lower_ascii(self.addr, self.len)
 }
 
+// ---- image / pixel ops (Tier 2 — 0.3.0) ----
+
+///|
+/// Expand a 3-byte-per-pixel RGB buffer into a 4-byte-per-pixel RGBA buffer
+/// with constant `alpha`. `src.length() == n * 3` and `out.length() == n * 4`
+/// where `n` is the pixel count. Use 0xFF for fully opaque.
+pub fn SimdBufferBytes::rgb_to_rgba(
+  src : SimdBufferBytes,
+  alpha : Byte,
+  out : SimdBufferBytes,
+) -> Unit {
+  if src.len % 3 != 0 {
+    abort("SimdBufferBytes.rgb_to_rgba: src must be a multiple of 3 bytes")
+  }
+  let n = src.len / 3
+  if out.len != n * 4 {
+    abort("SimdBufferBytes.rgb_to_rgba: out length must be src/3 * 4")
+  }
+  let a_int = alpha.to_int()
+  for i in 0..<n {
+    buf_store_byte(out.addr + i * 4, buf_load_byte(src.addr + i * 3))
+    buf_store_byte(out.addr + i * 4 + 1, buf_load_byte(src.addr + i * 3 + 1))
+    buf_store_byte(out.addr + i * 4 + 2, buf_load_byte(src.addr + i * 3 + 2))
+    buf_store_byte(out.addr + i * 4 + 3, a_int)
+  }
+}
+
+///|
+/// Convert RGBA → grayscale Y via fixed-point weighted sum:
+/// `Y = (77 * R + 150 * G + 29 * B) / 256`, an integer approximation of
+/// `0.299*R + 0.587*G + 0.114*B` (Rec. 601). Alpha is dropped.
+/// `src.length() == n * 4`, `out.length() == n` for pixel count `n`.
+pub fn SimdBufferBytes::rgba_to_grayscale(
+  src : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if src.len % 4 != 0 {
+    abort(
+      "SimdBufferBytes.rgba_to_grayscale: src must be a multiple of 4 bytes",
+    )
+  }
+  let n = src.len / 4
+  if out.len != n {
+    abort("SimdBufferBytes.rgba_to_grayscale: out length must be src/4")
+  }
+  for i in 0..<n {
+    let r = buf_load_byte(src.addr + i * 4)
+    let g = buf_load_byte(src.addr + i * 4 + 1)
+    let b = buf_load_byte(src.addr + i * 4 + 2)
+    buf_store_byte(out.addr + i, (77 * r + 150 * g + 29 * b) >> 8)
+  }
+}
+
+///|
+/// Extract one channel from an interleaved RGBA buffer. `ch ∈ 0..3`.
+/// `src.length() == n * 4`, `out.length() == n`.
+pub fn SimdBufferBytes::channel_extract(
+  src : SimdBufferBytes,
+  ch : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  if ch < 0 || ch >= 4 {
+    abort("SimdBufferBytes.channel_extract: ch must be 0..3")
+  }
+  if src.len % 4 != 0 {
+    abort("SimdBufferBytes.channel_extract: src must be a multiple of 4 bytes")
+  }
+  let n = src.len / 4
+  if out.len != n {
+    abort("SimdBufferBytes.channel_extract: out length must be src/4")
+  }
+  for i in 0..<n {
+    buf_store_byte(out.addr + i, buf_load_byte(src.addr + i * 4 + ch))
+  }
+}
+
+///|
+/// Interleave 4 planar byte streams into an RGBA buffer. Each input has the
+/// same pixel count `n`; output is `n * 4` bytes.
+pub fn SimdBufferBytes::channel_merge(
+  r : SimdBufferBytes,
+  g : SimdBufferBytes,
+  b : SimdBufferBytes,
+  a : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  let n = r.len
+  if g.len != n || b.len != n || a.len != n {
+    abort("SimdBufferBytes.channel_merge: input lengths must match")
+  }
+  if out.len != n * 4 {
+    abort("SimdBufferBytes.channel_merge: out length must be n * 4")
+  }
+  for i in 0..<n {
+    buf_store_byte(out.addr + i * 4, buf_load_byte(r.addr + i))
+    buf_store_byte(out.addr + i * 4 + 1, buf_load_byte(g.addr + i))
+    buf_store_byte(out.addr + i * 4 + 2, buf_load_byte(b.addr + i))
+    buf_store_byte(out.addr + i * 4 + 3, buf_load_byte(a.addr + i))
+  }
+}
+
+///|
+/// Byte-wise linear interpolation: `out[i] = (a[i] * (256 - t) + b[i] * t) / 256`
+/// where `t` is the integer interpolation factor in `0..=256` (0 → a only,
+/// 256 → b only). Three buffers must have the same length.
+pub fn SimdBufferBytes::lerp(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  t : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.len != b.len || a.len != out.len {
+    abort("SimdBufferBytes.lerp: length mismatch")
+  }
+  let t_clamped = if t < 0 { 0 } else if t > 256 { 256 } else { t }
+  let inv_t = 256 - t_clamped
+  for i in 0..<a.len {
+    let av = buf_load_byte(a.addr + i)
+    let bv = buf_load_byte(b.addr + i)
+    buf_store_byte(out.addr + i, (av * inv_t + bv * t_clamped) >> 8)
+  }
+}
+
+///|
+/// 256-bin byte histogram. `bins.length() == 256`; each `bins[v]` is
+/// incremented by the count of bytes equal to `v` in `self`. Scalar (wasm
+/// SIMD has no efficient scatter for unbounded bin counts).
+pub fn SimdBufferBytes::histogram(
+  self : SimdBufferBytes,
+  bins : SimdBuffer,
+) -> Unit {
+  if bins.len < 256 {
+    abort("SimdBufferBytes.histogram: bins must have at least 256 slots")
+  }
+  for i in 0..<self.len {
+    let v = buf_load_byte(self.addr + i)
+    let addr = bins.addr + v * 4
+    buf_store_i32(addr, buf_load_i32(addr) + 1)
+  }
+}
+
+///|
+/// Premultiplied source-over alpha blend with a single solid source color,
+/// in-place over an RGBA8 destination buffer. Each `src_*` is `0..=255`.
+/// For non-premultiplied input, the caller should pre-multiply
+/// `src_r/g/b` by `src_a/255`.
+///
+/// Formula (per channel + per pixel): `out = src + dst * (255 - src_a) / 255`,
+/// with saturation at 255. This is the standard "Porter-Duff source-over"
+/// composition for premultiplied alpha; faster than the unpremultiplied
+/// formula (no per-pixel divide).
+///
+/// Scalar for now; a SIMD i16x8 variant is planned for 0.4.0.
+pub fn SimdBufferBytes::alpha_blend_solid(
+  dst : SimdBufferBytes,
+  src_r : Int,
+  src_g : Int,
+  src_b : Int,
+  src_a : Int,
+) -> Unit {
+  if dst.len % 4 != 0 {
+    abort(
+      "SimdBufferBytes.alpha_blend_solid: dst must be a multiple of 4 bytes",
+    )
+  }
+  let inv_a = 255 - src_a
+  let n = dst.len / 4
+  for i in 0..<n {
+    let dr = buf_load_byte(dst.addr + i * 4)
+    let dg = buf_load_byte(dst.addr + i * 4 + 1)
+    let db = buf_load_byte(dst.addr + i * 4 + 2)
+    let da = buf_load_byte(dst.addr + i * 4 + 3)
+    let nr = src_r + dr * inv_a / 255
+    let ng = src_g + dg * inv_a / 255
+    let nb = src_b + db * inv_a / 255
+    let na = src_a + da * inv_a / 255
+    buf_store_byte(dst.addr + i * 4, if nr > 255 { 255 } else { nr })
+    buf_store_byte(dst.addr + i * 4 + 1, if ng > 255 { 255 } else { ng })
+    buf_store_byte(dst.addr + i * 4 + 2, if nb > 255 { 255 } else { nb })
+    buf_store_byte(dst.addr + i * 4 + 3, if na > 255 { 255 } else { na })
+  }
+}
+
+// ---- byte-wise binary arithmetic (Tier 1 — 0.3.0) ----
+
+///|
+/// Element-wise byte add (mod 256): `out[i] = (a[i] + b[i]) & 0xFF`.
+/// Three buffers must have the same length.
+pub fn SimdBufferBytes::byte_add(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.len != b.len || a.len != out.len {
+    abort("SimdBufferBytes.byte_add: length mismatch")
+  }
+  if a.len == 0 {
+    return
+  }
+  buf_byte_add(a.addr, b.addr, out.addr, a.len)
+}
+
+///|
+/// Element-wise byte subtract (mod 256): `out[i] = (a[i] - b[i]) & 0xFF`.
+pub fn SimdBufferBytes::byte_sub(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.len != b.len || a.len != out.len {
+    abort("SimdBufferBytes.byte_sub: length mismatch")
+  }
+  if a.len == 0 {
+    return
+  }
+  buf_byte_sub(a.addr, b.addr, out.addr, a.len)
+}
+
+///|
+/// Element-wise byte average with rounding: `out[i] = (a[i] + b[i] + 1) / 2`.
+/// Maps directly to `i8x16.avgr_u`. Useful for box blur, PNG Average filter,
+/// midpoint color computation.
+pub fn SimdBufferBytes::byte_avg(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.len != b.len || a.len != out.len {
+    abort("SimdBufferBytes.byte_avg: length mismatch")
+  }
+  if a.len == 0 {
+    return
+  }
+  buf_byte_avg(a.addr, b.addr, out.addr, a.len)
+}
+
+///|
+/// Saturating unsigned byte add: `out[i] = min(255, a[i] + b[i])`.
+/// `i8x16.add_sat_u`. Useful for accumulator-style ops (AA coverage,
+/// audio mixing) where overflow should clamp instead of wrap.
+pub fn SimdBufferBytes::sat_add(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.len != b.len || a.len != out.len {
+    abort("SimdBufferBytes.sat_add: length mismatch")
+  }
+  if a.len == 0 {
+    return
+  }
+  buf_sat_add(a.addr, b.addr, out.addr, a.len)
+}
+
+///|
+/// Saturating unsigned byte subtract: `out[i] = max(0, a[i] - b[i])`.
+/// `i8x16.sub_sat_u`.
+pub fn SimdBufferBytes::sat_sub(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  if a.len != b.len || a.len != out.len {
+    abort("SimdBufferBytes.sat_sub: length mismatch")
+  }
+  if a.len == 0 {
+    return
+  }
+  buf_sat_sub(a.addr, b.addr, out.addr, a.len)
+}
+
+///|
+/// Clamp each byte to `[lo, hi]`. SIMD chains `i8x16.max_u(lo)` then
+/// `i8x16.min_u(hi)`. Useful for image normalization, audio limiting.
+pub fn SimdBufferBytes::clamp(
+  self : SimdBufferBytes,
+  lo : Byte,
+  hi : Byte,
+  out : SimdBufferBytes,
+) -> Unit {
+  if self.len != out.len {
+    abort("SimdBufferBytes.clamp: length mismatch")
+  }
+  if self.len == 0 {
+    return
+  }
+  buf_clamp_u8(self.addr, lo.to_int(), hi.to_int(), out.addr, self.len)
+}
+
+///|
+/// Subtract a shifted view of the same buffer from itself: `out[i] = (src[i] -
+/// src[i - stride]) & 0xFF` for `i >= stride`, with `out[i] = src[i]` for
+/// `i < stride`. This is PNG's Sub filter pattern; the SIMD body reads two
+/// `v128.load`s offset by `stride`, with a scalar head + tail.
+pub fn SimdBufferBytes::byte_sub_offset(
+  src : SimdBufferBytes,
+  stride : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  if src.len != out.len {
+    abort("SimdBufferBytes.byte_sub_offset: length mismatch")
+  }
+  if stride <= 0 {
+    abort("SimdBufferBytes.byte_sub_offset: stride must be >= 1")
+  }
+  let n = src.len
+  if n == 0 {
+    return
+  }
+  // Head: i < stride → out[i] = src[i].
+  let head = if stride > n { n } else { stride }
+  for i in 0..<head {
+    buf_store_byte(out.addr + i, buf_load_byte(src.addr + i))
+  }
+  if n > stride {
+    buf_byte_sub_offset(src.addr, stride, out.addr, n)
+  }
+}
+
 ///|
 /// In-place ASCII a-z → A-Z.
 pub fn SimdBufferBytes::to_upper_ascii(self : SimdBufferBytes) -> Unit {
@@ -664,6 +983,48 @@ fn buf_adler32_chunks(
   b : Int,
 ) -> Int64 =
   #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (param i32) (result i64) (local i32) (local i32) (local i32) (local i32) (local v128) (local v128) (local v128) local.get 3 v128.load local.set 10 local.get 1 local.get 2 i32.const 4 i32.shl i32.add local.set 7 local.get 1 local.set 6 block loop local.get 6 local.get 7 i32.ge_s br_if 1 local.get 0 local.get 6 i32.add v128.load local.set 11 local.get 11 i16x8.extadd_pairwise_i8x16_u i32x4.extadd_pairwise_i16x8_u local.set 12 local.get 12 i32x4.extract_lane 0 local.get 12 i32x4.extract_lane 1 i32.add local.get 12 i32x4.extract_lane 2 i32.add local.get 12 i32x4.extract_lane 3 i32.add local.set 8 local.get 11 local.get 10 i16x8.extmul_low_i8x16_u i32x4.extadd_pairwise_i16x8_u local.get 11 local.get 10 i16x8.extmul_high_i8x16_u i32x4.extadd_pairwise_i16x8_u i32x4.add local.set 12 local.get 12 i32x4.extract_lane 0 local.get 12 i32x4.extract_lane 1 i32.add local.get 12 i32x4.extract_lane 2 i32.add local.get 12 i32x4.extract_lane 3 i32.add local.set 9 local.get 5 local.get 4 i32.const 4 i32.shl i32.add local.get 9 i32.add local.set 5 local.get 4 local.get 8 i32.add local.set 4 local.get 6 i32.const 16 i32.add local.set 6 br 0 end end local.get 5 i64.extend_i32_u i64.const 32 i64.shl local.get 4 i64.extend_i32_u i64.or)
+
+// ---- byte binary arithmetic (Tier 1 — 0.3.0) ----
+//
+// All six functions below share the same inline-WAT skeleton:
+//   * Locals: 4 = vec_end (= len & ~15), 5 = i
+//   * 16-byte chunk: v128.load a, v128.load b, OP, v128.store out
+//   * Scalar tail: byte load, byte op, byte store
+// Only the SIMD op (i8x16.{add,sub,avgr_u,add_sat_u,sub_sat_u}) and the
+// scalar tail equivalent differ.
+
+///|
+fn buf_byte_add(a : Int, b : Int, out : Int, len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.add v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.add i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
+fn buf_byte_sub(a : Int, b : Int, out : Int, len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.sub v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.sub i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
+fn buf_byte_avg(a : Int, b : Int, out : Int, len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.avgr_u v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.add i32.const 1 i32.add i32.const 1 i32.shr_u i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
+fn buf_sat_add(a : Int, b : Int, out : Int, len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.add_sat_u v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.add local.tee 6 i32.const 255 i32.const 255 local.get 6 i32.gt_s select local.set 6 local.get 2 local.get 5 i32.add local.get 6 i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
+fn buf_sat_sub(a : Int, b : Int, out : Int, len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 1 local.get 5 i32.add v128.load i8x16.sub_sat_u v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 0 local.get 5 i32.add i32.load8_u local.get 1 local.get 5 i32.add i32.load8_u i32.sub local.set 6 local.get 6 i32.const 0 local.get 6 i32.const 0 i32.ge_s select local.set 6 local.get 2 local.get 5 i32.add local.get 6 i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
+/// Clamp: `out[i] = min(hi, max(lo, src[i]))` byte-wise.
+/// Locals: 5 = vec_end, 6 = i, 7 = byte_tmp, 8 = lo_splat (v128), 9 = hi_splat (v128).
+fn buf_clamp_u8(src : Int, lo : Int, hi : Int, out : Int, len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local v128) (local v128) local.get 1 i8x16.splat local.set 8 local.get 2 i8x16.splat local.set 9 local.get 4 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 5 block loop local.get 6 local.get 5 i32.ge_s br_if 1 local.get 3 local.get 6 i32.add local.get 0 local.get 6 i32.add v128.load local.get 8 i8x16.max_u local.get 9 i8x16.min_u v128.store local.get 6 i32.const 16 i32.add local.set 6 br 0 end end block loop local.get 6 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 6 i32.add i32.load8_u local.set 7 local.get 7 local.get 1 local.get 7 local.get 1 i32.ge_s select local.set 7 local.get 7 local.get 2 local.get 7 local.get 2 i32.le_s select local.set 7 local.get 3 local.get 6 i32.add local.get 7 i32.store8 local.get 6 i32.const 1 i32.add local.set 6 br 0 end end)
+
+///|
+/// Shifted-self subtraction (PNG Sub filter): for i in stride..<len,
+/// `out[i] = (src[i] - src[i - stride]) & 0xFF`.
+/// Locals: 4 = vec_end (= ((len - stride) & ~15) + stride), 5 = i.
+fn buf_byte_sub_offset(src : Int, stride : Int, out : Int, len : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 local.get 1 i32.sub i32.const 4 i32.shr_s i32.const 4 i32.shl local.get 1 i32.add local.set 4 local.get 1 local.set 5 block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add v128.load local.get 0 local.get 5 i32.add local.get 1 i32.sub v128.load i8x16.sub v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 5 i32.add local.get 0 local.get 5 i32.add i32.load8_u local.get 0 local.get 5 i32.add local.get 1 i32.sub i32.load8_u i32.sub i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
 
 // (Import keep-alive lives in simd_buffer_imports.mbt so it applies on
 // every target including js, where no other simd_buffer file is built.)

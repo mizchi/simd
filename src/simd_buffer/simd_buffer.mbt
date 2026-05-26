@@ -226,6 +226,26 @@ pub fn SimdBuffer::eq(a : SimdBuffer, b : SimdBuffer, out : SimdBuffer) -> Unit 
 }
 
 ///|
+/// Bool reduction: `true` iff `a[0..len] == b[0..len]` element-wise. SIMD
+/// path via `i32x4.eq` + `i8x16.bitmask` with branchless mismatch
+/// accumulation. Useful for fast equality fast-paths over i32-packed
+/// data (e.g. RGBA stored as i32 channels — pixelmatch-style row
+/// prefilter).
+pub fn SimdBuffer::array_equal(
+  a : SimdBuffer,
+  b : SimdBuffer,
+  len : Int,
+) -> Bool {
+  if len <= 0 {
+    return true
+  }
+  if len > a.len || len > b.len {
+    abort("SimdBuffer.array_equal: len exceeds buffer")
+  }
+  buf_array_equal_i32(a.addr, b.addr, len) != 0
+}
+
+///|
 pub fn SimdBuffer::lt(a : SimdBuffer, b : SimdBuffer, out : SimdBuffer) -> Unit {
   i32_bin_check(a, b, out, "lt")
   if a.len == 0 {
@@ -534,3 +554,12 @@ fn buf_div_i32(a : Int, b : Int, out : Int, len : Int) -> Unit =
 ///|
 fn buf_gather_i32(arr : Int, indices : Int, out : Int, n : Int) -> Unit =
   #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add i32.const 0 i32x4.splat local.get 0 local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 0 local.get 0 local.get 1 local.get 4 i32.const 1 i32.add i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 1 local.get 0 local.get 1 local.get 4 i32.const 2 i32.add i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 2 local.get 0 local.get 1 local.get 4 i32.const 3 i32.add i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32x4.replace_lane 3 v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.const 2 i32.shl i32.add i32.load i32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+/// Returns 1 iff all elements equal, 0 otherwise. Branchless mismatch
+/// accumulation via i32x4.eq + i8x16.bitmask comparison against 65535.
+/// Tail walks element-by-element.
+///
+/// Locals: 4 = vec_end (= len & ~3), 5 = i, 6 = mismatch flag.
+fn buf_array_equal_i32(a : Int, b : Int, len : Int) -> Int =
+  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 3 block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load i32x4.eq i8x16.bitmask i32.const 65535 i32.ne i32.or local.set 5 local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 4 i32.const 2 i32.shl i32.add i32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add i32.load i32.ne i32.or local.set 5 local.get 4 i32.const 1 i32.add local.set 4 br 0 end end local.get 5 i32.eqz)

@@ -1081,3 +1081,250 @@ test "SimdBufferBytes ↔ FixedArray round-trip" {
     }
   }
 }
+
+// ---- 0.3.0 Tier 1 + Tier 2 ops ----
+
+///|
+test "byte_add / byte_sub / byte_avg (mod 256, rounding)" {
+  let a = SimdBufferBytes::from_array([b'\x10', b'\x80', b'\xFF', b'\x05'])
+  let b = SimdBufferBytes::from_array([b'\x20', b'\x80', b'\x01', b'\x0A'])
+  let out = SimdBufferBytes::make(4)
+  SimdBufferBytes::byte_add(a, b, out)
+  // (0x10+0x20, 0x80+0x80=0 mod 256, 0xFF+0x01=0, 0x05+0x0A=0x0F)
+  let r = out.to_array()
+  inspect(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
+    content="(48, 0, 0, 15)",
+  )
+  SimdBufferBytes::byte_sub(a, b, out)
+  // (0x10-0x20=-0x10=0xF0, 0x80-0x80=0, 0xFF-0x01=0xFE, 0x05-0x0A=-5=0xFB)
+  let r2 = out.to_array()
+  inspect(
+    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int(), r2[3].to_int()),
+    content="(240, 0, 254, 251)",
+  )
+  SimdBufferBytes::byte_avg(a, b, out)
+  // ((0x10+0x20+1)/2=0x18, (0x80+0x80+1)/2=0x80, (0xFF+0x01+1)/2=0x80, (5+10+1)/2=8)
+  let r3 = out.to_array()
+  inspect(
+    (r3[0].to_int(), r3[1].to_int(), r3[2].to_int(), r3[3].to_int()),
+    content="(24, 128, 128, 8)",
+  )
+}
+
+///|
+test "sat_add / sat_sub clamp at 255 / 0" {
+  let a = SimdBufferBytes::from_array([b'\xFA', b'\x10', b'\x80', b'\x00'])
+  let b = SimdBufferBytes::from_array([b'\x10', b'\xFA', b'\x10', b'\xFF'])
+  let out = SimdBufferBytes::make(4)
+  SimdBufferBytes::sat_add(a, b, out)
+  let r = out.to_array()
+  inspect(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
+    content="(255, 255, 144, 255)",
+  )
+  SimdBufferBytes::sat_sub(a, b, out)
+  let r2 = out.to_array()
+  inspect(
+    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int(), r2[3].to_int()),
+    content="(234, 0, 112, 0)",
+  )
+}
+
+///|
+test "clamp byte-wise" {
+  let src = SimdBufferBytes::from_array([b'\x00', b'\x40', b'\x80', b'\xFF'])
+  let out = SimdBufferBytes::make(4)
+  src.clamp(b'\x20', b'\xC0', out)
+  let r = out.to_array()
+  inspect(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
+    content="(32, 64, 128, 192)",
+  )
+}
+
+///|
+test "byte_sub_offset (PNG Sub-filter pattern, stride 1)" {
+  let src = SimdBufferBytes::from_array([b'\x0A', b'\x1E', b'\x32'])
+  let out = SimdBufferBytes::make(3)
+  SimdBufferBytes::byte_sub_offset(src, 1, out)
+  // i=0: src[0]=10 (head, no sub)
+  // i=1: src[1]-src[0]=30-10=20
+  // i=2: src[2]-src[1]=50-30=20
+  let r = out.to_array()
+  inspect((r[0].to_int(), r[1].to_int(), r[2].to_int()), content="(10, 20, 20)")
+}
+
+///|
+test "SimdBuffer::array_equal" {
+  let a = SimdBuffer::from_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  let b = SimdBuffer::from_array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  if !SimdBuffer::array_equal(a, b, 10) {
+    abort("array_equal: identical arrays should match")
+  }
+  let c = SimdBuffer::from_array([1, 2, 3, 4, 99, 6, 7, 8, 9, 10])
+  if SimdBuffer::array_equal(a, c, 10) {
+    abort("array_equal: should detect 5th-element mismatch")
+  }
+  if !SimdBuffer::array_equal(a, c, 4) {
+    abort("array_equal: prefix of 4 should match")
+  }
+}
+
+///|
+test "rgb_to_rgba" {
+  let rgb = SimdBufferBytes::from_array([
+    b'\xFF', b'\x00', b'\x00', // red
+     b'\x00', b'\xFF', b'\x00', // green
+     b'\x00', b'\x00', b'\xFF', // blue
+  ])
+  let rgba = SimdBufferBytes::make(12)
+  SimdBufferBytes::rgb_to_rgba(rgb, b'\xFF', rgba)
+  let r = rgba.to_array()
+  inspect(
+    (
+      r[0].to_int(),
+      r[1].to_int(),
+      r[2].to_int(),
+      r[3].to_int(),
+      r[4].to_int(),
+      r[5].to_int(),
+      r[6].to_int(),
+      r[7].to_int(),
+      r[8].to_int(),
+      r[9].to_int(),
+      r[10].to_int(),
+      r[11].to_int(),
+    ),
+    content="(255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255)",
+  )
+}
+
+///|
+test "rgba_to_grayscale" {
+  let rgba = SimdBufferBytes::from_array([
+    b'\xFF', b'\xFF', b'\xFF', b'\xFF', // white → ~255
+     b'\x00', b'\x00', b'\x00', b'\xFF', // black → 0
+     b'\xFF', b'\x00', b'\x00', b'\xFF', // red → 77*255/256 ≈ 76
+  ])
+  let gray = SimdBufferBytes::make(3)
+  SimdBufferBytes::rgba_to_grayscale(rgba, gray)
+  let g = gray.to_array()
+  // 77+150+29 = 256, so white = (77+150+29)*255/256 = 255
+  // red = 77*255/256 = 76 (rounded down)
+  inspect((g[0].to_int(), g[1].to_int(), g[2].to_int()), content="(255, 0, 76)")
+}
+
+///|
+test "channel_extract / channel_merge round-trip" {
+  let original = SimdBufferBytes::from_array([
+    b'\x01', b'\x02', b'\x03', b'\x04', b'\x05', b'\x06', b'\x07', b'\x08',
+  ])
+  let r_ch = SimdBufferBytes::make(2)
+  let g_ch = SimdBufferBytes::make(2)
+  let b_ch = SimdBufferBytes::make(2)
+  let a_ch = SimdBufferBytes::make(2)
+  SimdBufferBytes::channel_extract(original, 0, r_ch)
+  SimdBufferBytes::channel_extract(original, 1, g_ch)
+  SimdBufferBytes::channel_extract(original, 2, b_ch)
+  SimdBufferBytes::channel_extract(original, 3, a_ch)
+  let rebuilt = SimdBufferBytes::make(8)
+  SimdBufferBytes::channel_merge(r_ch, g_ch, b_ch, a_ch, rebuilt)
+  for i in 0..<8 {
+    if rebuilt.get(i) != original.get(i) {
+      abort("channel round-trip mismatch at " + i.to_string())
+    }
+  }
+}
+
+///|
+test "lerp at t=0, t=128, t=256" {
+  let a = SimdBufferBytes::from_array([b'\x00', b'\x10', b'\xFF'])
+  let b = SimdBufferBytes::from_array([b'\xFF', b'\x80', b'\x00'])
+  let out = SimdBufferBytes::make(3)
+  SimdBufferBytes::lerp(a, b, 0, out)
+  // t=0 → all a
+  let r0 = out.to_array()
+  inspect(
+    (r0[0].to_int(), r0[1].to_int(), r0[2].to_int()),
+    content="(0, 16, 255)",
+  )
+  SimdBufferBytes::lerp(a, b, 256, out)
+  // t=256 → all b
+  let r1 = out.to_array()
+  inspect(
+    (r1[0].to_int(), r1[1].to_int(), r1[2].to_int()),
+    content="(255, 128, 0)",
+  )
+  SimdBufferBytes::lerp(a, b, 128, out)
+  // t=128 → midpoint, (a + b) / 2 approximately
+  // (0*128+255*128)/256=127, (16*128+128*128)/256=72, (255*128+0*128)/256=127
+  let r2 = out.to_array()
+  inspect(
+    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int()),
+    content="(127, 72, 127)",
+  )
+}
+
+///|
+test "histogram counts byte occurrences" {
+  let data = SimdBufferBytes::from_array([
+    b'\x00', b'\x05', b'\x05', b'\xFF', b'\x05',
+  ])
+  let bins = SimdBuffer::make(256)
+  bins.clear()
+  data.histogram(bins)
+  if bins.get(0) != 1 {
+    abort("histogram[0] should be 1")
+  }
+  if bins.get(5) != 3 {
+    abort("histogram[5] should be 3")
+  }
+  if bins.get(255) != 1 {
+    abort("histogram[255] should be 1")
+  }
+}
+
+///|
+test "alpha_blend_solid: src over transparent dst" {
+  let dst = SimdBufferBytes::from_array([
+    b'\x00', b'\x00', b'\x00', b'\x00', // transparent
+     b'\xFF', b'\xFF', b'\xFF', b'\xFF', // opaque white
+  ])
+  SimdBufferBytes::alpha_blend_solid(dst, 255, 0, 0, 255) // opaque red
+  let r = dst.to_array()
+  // pixel 0: dst was transparent (0,0,0,0), src is (255,0,0,255), inv_a=0
+  //   out = src + dst*0 = (255, 0, 0, 255)
+  // pixel 1: dst was white (255,255,255,255), src is (255,0,0,255), inv_a=0
+  //   out = (255, 0, 0, 255)
+  inspect(
+    (
+      r[0].to_int(),
+      r[1].to_int(),
+      r[2].to_int(),
+      r[3].to_int(),
+      r[4].to_int(),
+      r[5].to_int(),
+      r[6].to_int(),
+      r[7].to_int(),
+    ),
+    content="(255, 0, 0, 255, 255, 0, 0, 255)",
+  )
+}
+
+///|
+test "alpha_blend_solid: half-alpha src over white" {
+  let dst = SimdBufferBytes::from_array([b'\xFF', b'\xFF', b'\xFF', b'\xFF'])
+  // src = premultiplied red at 50% alpha: (128, 0, 0, 128)
+  SimdBufferBytes::alpha_blend_solid(dst, 128, 0, 0, 128)
+  let r = dst.to_array()
+  // inv_a = 255-128 = 127
+  // out.r = 128 + 255*127/255 = 128 + 127 = 255
+  // out.g = 0 + 255*127/255 = 127
+  // out.b = 0 + 255*127/255 = 127
+  // out.a = 128 + 255*127/255 = 255
+  inspect(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
+    content="(255, 127, 127, 255)",
+  )
+}

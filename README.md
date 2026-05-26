@@ -17,7 +17,7 @@ Add to your `moon.mod.json`:
 
 ```json
 "deps": {
-  "mizchi/simd": "0.2.3"
+  "mizchi/simd": "0.3.0"
 }
 ```
 
@@ -79,6 +79,14 @@ The same code compiles and runs unchanged on every target.
   `find_byte`, `count_byte`, `is_ascii`, `to_lower_ascii`,
   `to_upper_ascii`, `validate_utf8`, `adler32`, `base64_encode` /
   `base64_decode` (+ `_into` in-place variants)
+- **0.3.0 byte arithmetic** (`SimdBufferBytes`): `byte_add`,
+  `byte_sub`, `byte_avg`, `sat_add`, `sat_sub`, `clamp`,
+  `byte_sub_offset` (PNG Sub-filter pattern)
+- **0.3.0 image / pixel** (`SimdBufferBytes`): `rgb_to_rgba`,
+  `rgba_to_grayscale`, `channel_extract`, `channel_merge`, `lerp`,
+  `histogram` (256-bin), `alpha_blend_solid` (premultiplied source-over)
+- **0.3.0 i32**: `SimdBuffer::array_equal(a, b, len) -> Bool` —
+  SIMD all-equal reduction
 - `SimdBufferRing`: single-arena bump allocator. On wasm/wasm-gc it
   amortises `memory.grow` across sub-allocations (~120 µs → 8 ns per
   alloc). On native/js it's a thin shell — `alloc_*` just calls
