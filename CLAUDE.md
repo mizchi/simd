@@ -410,6 +410,68 @@ the `_with_scratch` variant (same pattern as `base64_encode_into`):
 caller pre-allocates the bitmaps and reuses them. Same trade-off as
 the `SimdBufferRing` pattern.
 
+## 0.3.0: byte arithmetic + image / pixel ops
+
+Added to `SimdBufferBytes` (Tier 1, SIMD on wasm + wasm-gc) and
+`SimdBuffer` (i32) — plus a Tier-2 image batch with API + scalar impl
+landed in 0.3.0; their SIMD inline-WAT bodies are queued for 0.4.0.
+
+### Tier 1 — byte-wise binary arithmetic (SIMD shipped)
+
+| op | wasm SIMD instruction | use case |
+|---|---|---|
+| `SimdBufferBytes::byte_add(a, b, out)` | `i8x16.add` (mod 256) | PNG decode Up reconstruction, audio mix |
+| `SimdBufferBytes::byte_sub(a, b, out)` | `i8x16.sub` | PNG encode Up filter, pixel diff |
+| `SimdBufferBytes::byte_avg(a, b, out)` | `i8x16.avgr_u` (rounding +1) | midpoint color, blur kernel |
+| `SimdBufferBytes::sat_add(a, b, out)` | `i8x16.add_sat_u` | font AA coverage accumulation |
+| `SimdBufferBytes::sat_sub(a, b, out)` | `i8x16.sub_sat_u` | clamp-sub, audio limiting |
+| `SimdBufferBytes::clamp(lo, hi, out)` | `i8x16.max_u` + `i8x16.min_u` | image normalization, audio limit |
+| `SimdBufferBytes::byte_sub_offset(src, stride, out)` | shifted `v128.load` + `i8x16.sub` | PNG Sub filter (`buf[i] = src[i] - src[i - stride]`) |
+| `SimdBuffer::array_equal(a, b, len) -> Bool` | `i32x4.eq` + `i8x16.bitmask` fold | pixelmatch row prefilter |
+
+All six byte ops share the same 16-byte chunk inline-WAT skeleton:
+`v128.load a → v128.load b → OP → v128.store`, plus a per-byte scalar
+tail. The `clamp` variant pre-splats `lo` / `hi` once into v128 locals
+outside the loop.
+
+`byte_sub_offset` is the only one with non-trivial structure: scalar
+head for `i < stride`, then SIMD body that loads `data + i` and
+`data + i - stride` (16 bytes each) and subtracts. Used by image-mbt's
+PNG Sub encoder, which is the pattern that motivated bundling it
+in-simd rather than re-porting per consumer.
+
+### Tier 2 — image / pixel ops (API + scalar; SIMD in 0.4.0)
+
+`SimdBufferBytes` methods:
+
+- `rgb_to_rgba(src, alpha, out)` — 3-byte/pixel → 4-byte/pixel with
+  broadcast alpha. SIMD shape: `i8x16.shuffle` from 12-byte input to
+  16-byte output with α slots; not yet shipped.
+- `rgba_to_grayscale(src, out)` — Rec. 601 fixed-point
+  `Y = (77*R + 150*G + 29*B) >> 8` (weights sum to 256). SIMD path
+  requires `i16x8.extmul` for the weighted sum across 4 pixels.
+- `channel_extract(src, ch, out)` / `channel_merge(r, g, b, a, out)` —
+  interleaved RGBA ↔ planar. SIMD shape: `i8x16.shuffle` for the
+  de-interleave and 4-way `i8x16.shuffle` interleave.
+- `lerp(a, b, t, out)` — `out[i] = (a[i]*(256-t) + b[i]*t) >> 8`, `t ∈
+  0..=256`. SIMD shape: `i16x8.mul` + add, requires lane width split.
+- `histogram(self, bins[256])` — 256-bin scalar (wasm SIMD has no
+  scatter; this stays scalar).
+- `alpha_blend_solid(dst, sr, sg, sb, sa)` — premultiplied
+  source-over, in-place over an RGBA8 destination. Scalar formula
+  `out = src + dst * (255 - sa) / 255` with saturation. SIMD path
+  requires fixed-point i16x8 (the canvas blend rewrite from this
+  session's audit — deferred to 0.4.0).
+
+### Why image ops aren't SIMD-shipped in 0.3.0
+
+The byte binary ops are mechanical 16-byte-chunk-with-different-SIMD-op
+skeletons. The image ops each need their own inline-WAT structure
+(shuffle patterns, lane-width conversions, fixed-point rescaling). The
+API surface is shipped in 0.3.0 so consumer repos can call them with
+forward-compatible signatures; the 0.4.0 release fills in the wasm SIMD
+bodies behind the same API.
+
 ## More parser surface that works
 
 Added during these passes:
@@ -436,6 +498,26 @@ Added during these passes:
   trip the parser's int-decoder. Synthesize via `i32.const N f64.convert_i32_s`
   (and `f64x2.splat` for vectors); load shuffle / lookup tables from a
   `FixedArray[Byte]` via `v128.load`.
+- `select` push order is **val_if_true (deeper), val_if_false (shallower),
+  cond (top)**. The wasm spec phrases it `[v2 v1 c] → v2 if c≠0 else v1`,
+  so v2 (val_if_true) is pushed FIRST. Get this wrong and the branch
+  inverts: `i8x16.sub_sat_u`'s scalar tail in 0.3.0 returned the negative
+  underflow value instead of 0 because the original pushed `0` then
+  `(a-b)`, making `(a-b)` end up in the val_if_true slot.
+- `local.tee N` leaves the value on stack AND copies it into local `N`.
+  Subsequent stack manipulation must account for that residual value
+  — easy to miss when reading the WAT as if it were SSA. The clamp /
+  sat_sub 0.3.0 bugs came from mixing tee with later pushes and finding
+  the wrong slot consumed by `select`. Safer pattern when ambiguous:
+  `local.set N` (clears stack), then `local.get N` exactly where each
+  value is needed.
+- MoonBit `Array[T]` has no `resize_uninit(n)` to grow without
+  initialising the new range. "Pre-extend with N zero-pushes, then
+  index-write the real values" doubles the push count and is **slower**
+  than the original `output.push(value)` per element. Confirmed empirically
+  in the inflate LZ77 refactor experiment (4.02 → 4.57 ms, 14 % regression).
+  Real SIMD memcpy into the inflate output needs a custom growable byte
+  buffer with manual capacity tracking; documented for a future PR.
 
 ## Base64 (RFC 4648) sub-package
 
@@ -834,6 +916,106 @@ linear-memory model or the current MoonBit / wasm-gc toolchain.
   ground between "one page per buffer" and "real allocator". The
   trade-off is that all sub-buffers in the same page have the same
   lifetime, which fits many request-scoped workloads
+
+## Downstream integrations (case studies)
+
+How three mizchi repos picked up wasm SIMD by vendoring inline-WAT
+helpers (rather than depending on `@simd_buffer` and paying the
+copy-hop between their native types and `SimdBufferBytes`):
+
+### mizchi/zlib (0.4.6 + 0.4.7)
+
+Two SIMD ops landed via target-conditional `_simd.mbt` / `_scalar.mbt`
+files mirroring this repo's layout:
+
+- **adler32** (0.4.6): port of `simd_wasm_bytes.mbt`'s
+  `adler32_chunks` inline-WAT, taking `Bytes` directly (`Bytes`-direct
+  FFI works on wasm; rejected on wasm-gc, which falls through to
+  scalar). Bench: 256 KB **166 µs → 21 µs ≈ 7.9×**.
+- **crc32** (0.4.7): slicing-by-8 algorithm in both scalar and SIMD
+  variants. Scalar version uses nested `FixedArray[FixedArray[UInt]]`
+  (8 × 256 entries) for ~2.4× scalar. SIMD version uses a flattened
+  `FixedArray[Int]` of 2048 entries with all 8 table lookups inlined
+  as `i32.load` ops, plus `i32.load` for the input bytes (skips
+  MoonBit's per-byte `Bytes[i].to_int().reinterpret_as_uint()`).
+  Bench: 256 KB **728 µs → 145 µs ≈ 5.0×**.
+
+The pattern: a `_simd.mbt` file targeted to `wasm` only that wraps the
+hot inner loop in inline-WAT. wasm-gc / native / js share the
+`_scalar.mbt` algorithm. **CLMUL is absent on wasm SIMD**, so slicing-
+by-8 is the realistic ceiling — pure SIMD CRC32 without CLMUL is
+nontrivial and we didn't pursue it.
+
+### mizchi/pixelmatch (0.6.1)
+
+`pixelmatch_simple_prefilter` walks rows of `FixedArray[Int]` looking
+for byte-identical scanlines (the common case in VRT). The
+per-element scalar walk replaced by a single inline-WAT call doing
+`i32x4.eq + i8x16.bitmask` with branchless mismatch accumulation —
+same pattern that lives in this repo as
+`SimdBuffer::array_equal`. Bench (V8, Apple Silicon):
+
+- identical 200×200: 195 µs → 29 µs ≈ 6.7×
+- identical 500×500: 1.23 ms → 191 µs ≈ 6.4×
+- 5 % diff 200×200: 215 µs → 49 µs ≈ 4.4×
+
+### mizchi/image (0.4.2)
+
+PNG encoder filters Up + Sub vendored as wasm-only inline-WAT:
+
+- `apply_filter_up` (encode): `buf[i] = row[i] - prev[i]` → `i8x16.sub`
+  on 16-byte chunks with scalar tail.
+- `apply_filter_sub` (encode): `buf[i] = row[i] - row[i - bpp]` →
+  scalar head (i < bpp), then SIMD body reading `row + i` and
+  `row + i - bpp`, scalar tail.
+- `reconstruct_row` decoder filter 2 (Up): `buf[i] = (row[i] +
+  prev[i]) mod 256` → `i8x16.add`, same shape as encoder Up.
+
+Average + Paeth stay scalar — Average needs floor-rounding rather
+than `i8x16.avgr_u`'s round-up, Paeth has per-byte branching.
+
+Bench (V8, 64×64 RGBA PNG): decode 894 → 700 µs (~1.3×), encode
+3.02 → 2.2 ms (~1.4×). Combined with the 0.4.6 SIMD adler32 carried
+through mizchi/zlib.
+
+### What's NOT integrated (and why)
+
+- **canvas-mbt**: blend_over per-pixel f64 math. SIMD with f64x2
+  gives ≤ 2× due to byte↔f64 conversion overhead. Real 4-8× win
+  requires fixed-point i16x8 blend rewrite — invasive, deferred to
+  0.4.0 simd alpha_blend SIMD path + canvas refactor PR.
+- **mizchi/font rasterizer**: delegates to `mizchi/svg`, so the
+  SIMD-able coverage accumulation lives there, not in font itself.
+- **zlib inflate LZ77 memcpy**: attempted 0.4.8 with custom
+  `ByteBuf` growable-FixedArray-backed type — measured **14 %
+  regression** because (a) the synthesised buffer's `push` is no
+  faster than MoonBit's tuned `Array.push`, (b) `to_bytes()` adds a
+  full-buffer copy at the end, (c) typical LZ77 matches are 3-30
+  bytes so SIMD memcpy's 16-byte chunk barely helps. A proper win
+  needs either `Array::resize_uninit` upstream support or a deeper
+  refactor that swaps the inflate output type end-to-end.
+
+### Common pattern: vendor inline-WAT rather than add `@simd_buffer` dep
+
+All three integrations use copy-paste inline-WAT (`_simd.mbt` file +
+`_scalar.mbt` fallback) targeted via `moon.pkg`'s `targets:` map. None
+declare a `mizchi/simd` dep. Rationale:
+
+- The consumer types are `Bytes` / `FixedArray[Byte]` / `FixedArray[Int]`,
+  not `SimdBufferBytes`. Funneling them through `@simd_buffer`'s
+  SimdBufferBytes API costs a copy hop that erases the SIMD win
+  (confirmed in the zlib adler32 prototype: copy-hop variant was
+  **slower** than scalar).
+- inline-WAT in a single file is ~10-30 lines per op. Vendoring is
+  cheaper than maintaining a wider public Bytes-direct API in
+  `mizchi/simd` and managing dep version bumps across 5 repos.
+- mizchi/simd remains the **reference impl + algorithm catalog**.
+  Downstream repos read the algorithm here and copy the inline-WAT
+  body, sometimes lightly customising for their data layout.
+
+A future `mizchi/simd` 0.4.0 may add a Bytes-direct API surface that
+lets dependent repos skip the vendoring step; the design decision is
+deferred until a fourth integration would benefit.
 
 ## Commands
 
