@@ -667,6 +667,69 @@ pub fn scalar_sum_f32(a : FixedArray[Byte], n : Int) -> Float {
 }
 
 ///|
+pub fn scalar_sub_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  for i in 0..<n {
+    store_f32_le(out, i, load_f32_le(a, i) - load_f32_le(b, i))
+  }
+}
+
+///|
+pub fn scalar_div_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  for i in 0..<n {
+    store_f32_le(out, i, load_f32_le(a, i) / load_f32_le(b, i))
+  }
+}
+
+///|
+pub fn scalar_sqrt_f32(
+  a : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  for i in 0..<n {
+    store_f32_le(out, i, load_f32_le(a, i).sqrt())
+  }
+}
+
+///|
+pub fn scalar_min_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  for i in 0..<n {
+    let va = load_f32_le(a, i)
+    let vb = load_f32_le(b, i)
+    store_f32_le(out, i, if va < vb { va } else { vb })
+  }
+}
+
+///|
+pub fn scalar_max_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  for i in 0..<n {
+    let va = load_f32_le(a, i)
+    let vb = load_f32_le(b, i)
+    store_f32_le(out, i, if va > vb { va } else { vb })
+  }
+}
+
+///|
 pub fn scalar_dot_f32(
   a : FixedArray[Byte],
   b : FixedArray[Byte],

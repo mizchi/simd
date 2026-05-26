@@ -1081,6 +1081,52 @@ test "dot_f32" {
   assert_f32_close(dot_f32(a, b, 5), (70.0 : Float))
 }
 
+///|
+test "sub_f32 / div_f32 / sqrt_f32 match scalar" {
+  let a = make_f32_buf([
+    (16.0 : Float), (25.0 : Float), (4.0 : Float), (9.0 : Float), (1.0 : Float),
+  ])
+  let b = make_f32_buf([
+    (2.0 : Float), (5.0 : Float), (2.0 : Float), (3.0 : Float), (1.0 : Float),
+  ])
+  let out_s = f32_buf_alloc(5)
+  let out_r = f32_buf_alloc(5)
+  sub_f32(a, b, out_s, 5)
+  @internal.scalar_sub_f32(a, b, out_r, 5)
+  for i in 0..<5 {
+    assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
+  }
+  div_f32(a, b, out_s, 5)
+  @internal.scalar_div_f32(a, b, out_r, 5)
+  for i in 0..<5 {
+    assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
+  }
+  sqrt_f32(a, out_s, 5)
+  @internal.scalar_sqrt_f32(a, out_r, 5)
+  for i in 0..<5 {
+    assert_f32_close(f32_buf_get(out_s, i), f32_buf_get(out_r, i))
+  }
+}
+
+///|
+test "min_elem_f32 / max_elem_f32 element-wise" {
+  let a = make_f32_buf([
+    (1.0 : Float), (5.0 : Float), (3.0 : Float), (8.0 : Float), (2.0 : Float),
+  ])
+  let b = make_f32_buf([
+    (4.0 : Float), (2.0 : Float), (7.0 : Float), (6.0 : Float), (9.0 : Float),
+  ])
+  let out = f32_buf_alloc(5)
+  min_elem_f32(a, b, out, 5)
+  assert_f32_close(f32_buf_get(out, 0), (1.0 : Float))
+  assert_f32_close(f32_buf_get(out, 1), (2.0 : Float))
+  assert_f32_close(f32_buf_get(out, 3), (6.0 : Float))
+  max_elem_f32(a, b, out, 5)
+  assert_f32_close(f32_buf_get(out, 0), (4.0 : Float))
+  assert_f32_close(f32_buf_get(out, 1), (5.0 : Float))
+  assert_f32_close(f32_buf_get(out, 4), (9.0 : Float))
+}
+
 // --- reductions + scan (D) ---
 
 ///|

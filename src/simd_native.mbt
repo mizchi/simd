@@ -150,6 +150,50 @@ extern "C" fn simd_mul_f32_ffi(
 extern "C" fn simd_sum_f32_ffi(arr : FixedArray[Byte], n : Int) -> Float = "simd_sum_f32_ffi"
 
 ///|
+#borrow(a, b, out)
+extern "C" fn simd_sub_f32_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit = "simd_sub_f32_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_div_f32_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit = "simd_div_f32_ffi"
+
+///|
+#borrow(a, out)
+extern "C" fn simd_sqrt_f32_ffi(
+  a : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit = "simd_sqrt_f32_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_min_elem_f32_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit = "simd_min_elem_f32_ffi"
+
+///|
+#borrow(a, b, out)
+extern "C" fn simd_max_elem_f32_ffi(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit = "simd_max_elem_f32_ffi"
+
+///|
 #borrow(a, b)
 extern "C" fn simd_dot_f32_ffi(
   a : FixedArray[Byte],
@@ -812,6 +856,70 @@ pub fn dot_f32(
     return (0.0 : Float)
   }
   simd_dot_f32_ffi(a, b, n)
+}
+
+///|
+pub fn sub_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  simd_sub_f32_ffi(a, b, out, n)
+}
+
+///|
+pub fn div_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  simd_div_f32_ffi(a, b, out, n)
+}
+
+///|
+pub fn sqrt_f32(
+  a : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  simd_sqrt_f32_ffi(a, out, n)
+}
+
+///|
+pub fn min_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  simd_min_elem_f32_ffi(a, b, out, n)
+}
+
+///|
+pub fn max_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  simd_max_elem_f32_ffi(a, b, out, n)
 }
 
 ///|

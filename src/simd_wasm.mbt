@@ -1113,6 +1113,121 @@ pub fn add_f32(
 
 ///|
 #borrow(a, b, out)
+fn sub_f32_v128(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load f32x4.sub v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add f32.load f32.sub f32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn sub_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  sub_f32_v128(a, b, out, n)
+}
+
+///|
+#borrow(a, b, out)
+fn div_f32_v128(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load f32x4.div v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add f32.load f32.div f32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn div_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  div_f32_v128(a, b, out, n)
+}
+
+///|
+#borrow(a, out)
+fn sqrt_f32_v128(
+  a : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load f32x4.sqrt v128.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.const 2 i32.shl i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add f32.load f32.sqrt f32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+pub fn sqrt_f32(
+  a : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  sqrt_f32_v128(a, out, n)
+}
+
+///|
+/// min element-wise — uses select+f32.lt for scalar tail because the
+/// Dwarfsm parser rejects `f32.min` (same hole as `f64.min`).
+#borrow(a, b, out)
+fn min_elem_f32_v128(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load f32x4.min v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 0 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add f32.load f32.lt select f32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn min_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  min_elem_f32_v128(a, b, out, n)
+}
+
+///|
+#borrow(a, b, out)
+fn max_elem_f32_v128(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 3 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add v128.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add v128.load f32x4.max v128.store local.get 4 i32.const 4 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 4 i32.const 2 i32.shl i32.add local.get 0 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 0 local.get 4 i32.const 2 i32.shl i32.add f32.load local.get 1 local.get 4 i32.const 2 i32.shl i32.add f32.load f32.gt select f32.store local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+
+///|
+pub fn max_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  if n == 0 {
+    return
+  }
+  max_elem_f32_v128(a, b, out, n)
+}
+
+///|
+#borrow(a, b, out)
 fn mul_f32_v128(
   a : FixedArray[Byte],
   b : FixedArray[Byte],

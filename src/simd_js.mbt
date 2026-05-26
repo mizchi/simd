@@ -367,6 +367,55 @@ pub fn dot_f32(
 }
 
 ///|
+pub fn sub_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  @internal.scalar_sub_f32(a, b, out, n)
+}
+
+///|
+pub fn div_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  @internal.scalar_div_f32(a, b, out, n)
+}
+
+///|
+pub fn sqrt_f32(
+  a : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  @internal.scalar_sqrt_f32(a, out, n)
+}
+
+///|
+pub fn min_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  @internal.scalar_min_elem_f32(a, b, out, n)
+}
+
+///|
+pub fn max_elem_f32(
+  a : FixedArray[Byte],
+  b : FixedArray[Byte],
+  out : FixedArray[Byte],
+  n : Int,
+) -> Unit {
+  @internal.scalar_max_elem_f32(a, b, out, n)
+}
+
+///|
 pub fn div_i32(
   a : FixedArray[Int],
   b : FixedArray[Int],

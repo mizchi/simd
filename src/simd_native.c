@@ -470,6 +470,80 @@ float simd_sum_f32_ffi(const uint8_t* arr_bytes, int32_t n) {
   return result;
 }
 
+void simd_sub_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, uint8_t* out_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  const float* b = (const float*)b_bytes;
+  float* out = (float*)out_bytes;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) vst1q_f32(out + i, vsubq_f32(vld1q_f32(a + i), vld1q_f32(b + i)));
+#elif USE_SSE2
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) _mm_storeu_ps(out + i, _mm_sub_ps(_mm_loadu_ps(a + i), _mm_loadu_ps(b + i)));
+#endif
+  for (; i < n; i++) out[i] = a[i] - b[i];
+}
+
+void simd_div_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, uint8_t* out_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  const float* b = (const float*)b_bytes;
+  float* out = (float*)out_bytes;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) vst1q_f32(out + i, vdivq_f32(vld1q_f32(a + i), vld1q_f32(b + i)));
+#elif USE_SSE2
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) _mm_storeu_ps(out + i, _mm_div_ps(_mm_loadu_ps(a + i), _mm_loadu_ps(b + i)));
+#endif
+  for (; i < n; i++) out[i] = a[i] / b[i];
+}
+
+void simd_sqrt_f32_ffi(const uint8_t* a_bytes, uint8_t* out_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  float* out = (float*)out_bytes;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) vst1q_f32(out + i, vsqrtq_f32(vld1q_f32(a + i)));
+#elif USE_SSE2
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) _mm_storeu_ps(out + i, _mm_sqrt_ps(_mm_loadu_ps(a + i)));
+#endif
+  for (; i < n; i++) out[i] = sqrtf(a[i]);
+}
+
+void simd_min_elem_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, uint8_t* out_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  const float* b = (const float*)b_bytes;
+  float* out = (float*)out_bytes;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) vst1q_f32(out + i, vminq_f32(vld1q_f32(a + i), vld1q_f32(b + i)));
+#elif USE_SSE2
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) _mm_storeu_ps(out + i, _mm_min_ps(_mm_loadu_ps(a + i), _mm_loadu_ps(b + i)));
+#endif
+  for (; i < n; i++) out[i] = a[i] < b[i] ? a[i] : b[i];
+}
+
+void simd_max_elem_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, uint8_t* out_bytes, int32_t n) {
+  const float* a = (const float*)a_bytes;
+  const float* b = (const float*)b_bytes;
+  float* out = (float*)out_bytes;
+  int32_t i = 0;
+#if USE_NEON
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) vst1q_f32(out + i, vmaxq_f32(vld1q_f32(a + i), vld1q_f32(b + i)));
+#elif USE_SSE2
+  int32_t end4 = (n / 4) * 4;
+  for (; i < end4; i += 4) _mm_storeu_ps(out + i, _mm_max_ps(_mm_loadu_ps(a + i), _mm_loadu_ps(b + i)));
+#endif
+  for (; i < n; i++) out[i] = a[i] > b[i] ? a[i] : b[i];
+}
+
 float simd_dot_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, int32_t n) {
   const float* a = (const float*)a_bytes;
   const float* b = (const float*)b_bytes;
