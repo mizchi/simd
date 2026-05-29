@@ -315,6 +315,29 @@ pub fn find_i32(arr : FixedArray[Int], needle : Int) -> Int {
 }
 
 ///|
+pub fn equal_bytes_b(a : Bytes, b : Bytes, len : Int) -> Bool {
+  if len <= 0 {
+    return true
+  }
+  @internal.scalar_equal_bytes_b(a, b, len)
+}
+
+///|
+pub fn find_byte_b(data : Bytes, needle : Byte) -> Int {
+  @internal.scalar_find_byte_b(data, needle)
+}
+
+///|
+pub fn count_byte_b(data : Bytes, needle : Byte) -> Int {
+  @internal.scalar_count_byte_b(data, needle)
+}
+
+///|
+pub fn is_ascii_b(data : Bytes) -> Bool {
+  @internal.scalar_is_ascii_b(data)
+}
+
+///|
 pub fn all_i32(arr : FixedArray[Int]) -> Bool {
   @internal.scalar_all(arr)
 }

@@ -12,12 +12,12 @@ fn bench_int_array(size : Int) -> FixedArray[Int] {
 }
 
 ///|
-fn bench_byte_array(size : Int) -> FixedArray[Byte] {
+fn bench_bytes(size : Int) -> Bytes {
   let arr = FixedArray::make(size, b'\x00')
   for i in 0..<size {
     arr[i] = (i % 95 + 32).to_byte()
   }
-  arr
+  Bytes::from_fixedarray(arr)
 }
 
 ///|
@@ -77,7 +77,7 @@ test "bench/sort" (b : @bench.T) {
 
 ///|
 test "bench/bytes_count" (b : @bench.T) {
-  let data = bench_byte_array(4096)
+  let data = bench_bytes(4096)
   b.bench(name="core_count_loop", fn() {
     let mut c = 0
     for i in 0..<data.length() {
@@ -88,4 +88,47 @@ test "bench/bytes_count" (b : @bench.T) {
     b.keep(c)
   })
   b.bench(name="core_simd_bytes_count", fn() { b.keep(bytes_count(data, b'A')) })
+}
+
+///|
+test "bench/bytes_equal" (b : @bench.T) {
+  let x = bench_bytes(4096)
+  let y = bench_bytes(4096)
+  b.bench(name="core_bytes_eq", fn() { b.keep(x == y) })
+  b.bench(name="core_simd_bytes_equal", fn() { b.keep(bytes_equal(x, y)) })
+}
+
+///|
+test "bench/bytes_search" (b : @bench.T) {
+  let data = bench_bytes(4096)
+  // needle absent: both paths scan the whole buffer (worst case).
+  b.bench(name="core_search_loop", fn() {
+    let mut idx = -1
+    for i in 0..<data.length() {
+      if data[i] == b'\x00' {
+        idx = i
+        break
+      }
+    }
+    b.keep(idx)
+  })
+  b.bench(name="core_simd_bytes_search", fn() {
+    b.keep(bytes_search(data, b'\x00'))
+  })
+}
+
+///|
+test "bench/bytes_is_ascii" (b : @bench.T) {
+  let data = bench_bytes(4096)
+  b.bench(name="core_is_ascii_loop", fn() {
+    let mut ok = true
+    for i in 0..<data.length() {
+      if (data[i].to_int() & 0x80) != 0 {
+        ok = false
+        break
+      }
+    }
+    b.keep(ok)
+  })
+  b.bench(name="core_simd_bytes_is_ascii", fn() { b.keep(bytes_is_ascii(data)) })
 }

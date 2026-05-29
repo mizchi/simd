@@ -247,3 +247,70 @@ pub fn adler32_bytes(data : FixedArray[Byte]) -> UInt {
   }
   (b << 16) | a
 }
+
+// ---------------------------------------------------------------------------
+// `Bytes`-direct variants. `Bytes` crosses the wasm inline-WAT FFI as a
+// linear-memory pointer to byte[0] — identical ABI to FixedArray[Byte] — so
+// the WAT bodies are the same as the FixedArray versions above, only the
+// MoonBit parameter type differs. (On wasm-gc `Bytes` arrives as a GC ref and
+// is rejected, so those targets use the scalar path.)
+// ---------------------------------------------------------------------------
+
+///|
+#borrow(a, b)
+fn equal_bytes_b_v128(a : Bytes, b : Bytes, len : Int) -> Int =
+  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) local.get 2 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add v128.load local.get 1 local.get 3 i32.add v128.load i8x16.eq i8x16.bitmask i32.const 65535 i32.ne i32.or local.set 5 local.get 3 i32.const 16 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add i32.load8_u local.get 1 local.get 3 i32.add i32.load8_u i32.ne i32.or local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5 i32.eqz)
+
+///|
+/// SIMD byte equality over `Bytes` (first `len` bytes) - wasm target.
+pub fn equal_bytes_b(a : Bytes, b : Bytes, len : Int) -> Bool {
+  if len <= 0 {
+    return true
+  }
+  equal_bytes_b_v128(a, b, len) != 0
+}
+
+///|
+#borrow(data)
+fn find_byte_b_v128(data : Bytes, len : Int, needle : Int) -> Int =
+  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local i32) (local v128) local.get 2 i8x16.splat local.set 7 local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 i32.const -1 local.set 5 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.add v128.load local.get 7 i8x16.eq i8x16.bitmask local.set 6 local.get 3 local.get 6 i32.ctz i32.add local.get 5 local.get 5 i32.const -1 i32.eq local.get 6 i32.mul select local.set 5 local.get 3 i32.const 16 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 1 i32.ge_s br_if 1 local.get 3 local.get 5 local.get 5 i32.const -1 i32.eq local.get 0 local.get 3 i32.add i32.load8_u local.get 2 i32.eq i32.and select local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5)
+
+///|
+/// SIMD find first byte equal to `needle` over `Bytes` - wasm target.
+pub fn find_byte_b(data : Bytes, needle : Byte) -> Int {
+  let len = data.length()
+  if len == 0 {
+    return -1
+  }
+  find_byte_b_v128(data, len, needle.to_int())
+}
+
+///|
+#borrow(data)
+fn count_byte_b_v128(data : Bytes, len : Int, needle : Int) -> Int =
+  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local v128) local.get 2 i8x16.splat local.set 6 local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add v128.load local.get 6 i8x16.eq i8x16.bitmask i32.popcnt i32.add local.set 5 local.get 3 i32.const 16 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 1 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add i32.load8_u local.get 2 i32.eq i32.add local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5)
+
+///|
+/// SIMD count of bytes equal to `needle` over `Bytes` - wasm target.
+pub fn count_byte_b(data : Bytes, needle : Byte) -> Int {
+  let len = data.length()
+  if len == 0 {
+    return 0
+  }
+  count_byte_b_v128(data, len, needle.to_int())
+}
+
+///|
+#borrow(data)
+fn is_ascii_b_v128(data : Bytes, len : Int) -> Int =
+  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.add v128.load i8x16.bitmask i32.or local.set 4 local.get 2 i32.const 16 i32.add local.set 2 br 0 end end block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.add i32.load8_u i32.const 128 i32.and i32.or local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4 i32.eqz)
+
+///|
+/// Whether every byte of `data` is < 0x80 (pure ASCII) - wasm target.
+pub fn is_ascii_b(data : Bytes) -> Bool {
+  let len = data.length()
+  if len == 0 {
+    return true
+  }
+  is_ascii_b_v128(data, len) != 0
+}

@@ -155,6 +155,55 @@ pub fn scalar_is_ascii(data : FixedArray[Byte]) -> Bool {
   true
 }
 
+// ---------------------------------------------------------------------------
+// `Bytes`-taking scalar variants. Used by native / js, and by wasm-gc (where
+// the inline-WAT `Bytes` FFI is rejected because `Bytes` arrives as a GC ref).
+// ---------------------------------------------------------------------------
+
+///|
+pub fn scalar_equal_bytes_b(a : Bytes, b : Bytes, len : Int) -> Bool {
+  for k in 0..<len {
+    if a[k] != b[k] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+pub fn scalar_find_byte_b(data : Bytes, needle : Byte) -> Int {
+  let len = data.length()
+  for i in 0..<len {
+    if data[i] == needle {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+pub fn scalar_count_byte_b(data : Bytes, needle : Byte) -> Int {
+  let len = data.length()
+  let mut c = 0
+  for i in 0..<len {
+    if data[i] == needle {
+      c = c + 1
+    }
+  }
+  c
+}
+
+///|
+pub fn scalar_is_ascii_b(data : Bytes) -> Bool {
+  let len = data.length()
+  for i in 0..<len {
+    if (data[i].to_int() & 0x80) != 0 {
+      return false
+    }
+  }
+  true
+}
+
 ///|
 /// In-place ASCII A-Z → a-z conversion. Non-ASCII bytes pass through.
 pub fn scalar_to_lower_ascii(data : FixedArray[Byte]) -> Unit {

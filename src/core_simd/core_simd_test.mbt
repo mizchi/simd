@@ -64,37 +64,54 @@ test "sort" {
 }
 
 ///|
-test "bytes_equal" {
-  let a : FixedArray[Byte] = [b'h', b'e', b'l', b'l', b'o', b'!', b'!', b'!']
-  let b : FixedArray[Byte] = [b'h', b'e', b'l', b'l', b'o', b'!', b'!', b'!']
-  let c : FixedArray[Byte] = [b'h', b'e', b'l', b'l', b'o', b'!', b'!', b'?']
-  let d : FixedArray[Byte] = [b'h', b'i']
+test "bytes_equal (Bytes)" {
+  // > 16 bytes to exercise the v128 chunk path plus the scalar tail.
+  let a = b"the quick brown fox jumps"
+  let b = b"the quick brown fox jumps"
+  let c = b"the quick brown fox jump!"
+  let d = b"the quick brown fox"
   assert_true(bytes_equal(a, b))
   assert_false(bytes_equal(a, c))
   assert_false(bytes_equal(a, d))
 }
 
 ///|
-test "bytes_search / bytes_count" {
-  let data : FixedArray[Byte] = [
-    b'a', b'b', b'a', b'c', b'a', b'b', b'a', b'd', b'a', b'b', b'a', b'c',
-  ]
-  assert_eq(bytes_search(data, b'c'), Some(3))
-  assert_eq(bytes_search(data, b'z'), None)
-  assert_eq(bytes_count(data, b'a'), 6)
-  assert_eq(bytes_count(data, b'z'), 0)
+test "bytes_search / bytes_count / bytes_contains (Bytes)" {
+  let data = b"abacabad_abacaba_padding_xyz_padding"
+  // cross-check the SIMD facade against an in-test scalar reference.
+  let mut want_count = 0
+  let mut want_first = -1
+  for i in 0..<data.length() {
+    if data[i] == b'a' {
+      want_count = want_count + 1
+      if want_first == -1 {
+        want_first = i
+      }
+    }
+  }
+  assert_eq(bytes_count(data, b'a'), want_count)
+  assert_eq(bytes_search(data, b'a'), Some(want_first))
+  assert_eq(bytes_search(data, b'_'), Some(8))
+  assert_eq(bytes_search(data, b'Q'), None)
+  assert_eq(bytes_count(data, b'Q'), 0)
+  assert_true(bytes_contains(data, b'z'))
+  assert_false(bytes_contains(data, b'Q'))
 }
 
 ///|
-test "bytes ascii ops" {
-  let ascii : FixedArray[Byte] = [b'H', b'e', b'l', b'l', b'o']
-  assert_true(bytes_is_ascii(ascii))
-  let hi : FixedArray[Byte] = [b'A', 0xC3, b'Z']
+test "bytes_is_ascii (Bytes)" {
+  assert_true(bytes_is_ascii(b"a pure ascii string, padded out past 16 bytes"))
+  // a high byte in the SIMD region (index 20).
+  let hi = b"twenty ascii bytes..\xc3 then a high byte"
   assert_false(bytes_is_ascii(hi))
+}
+
+///|
+test "ascii case ops (FixedArray in-place)" {
   let lo : FixedArray[Byte] = [b'H', b'E', b'L', b'L', b'O', b'1']
-  bytes_to_lower_ascii(lo)
+  to_lower_ascii(lo)
   assert_eq(lo, [b'h', b'e', b'l', b'l', b'o', b'1'])
   let up : FixedArray[Byte] = [b'h', b'e', b'l', b'l', b'o', b'1']
-  bytes_to_upper_ascii(up)
+  to_upper_ascii(up)
   assert_eq(up, [b'H', b'E', b'L', b'L', b'O', b'1'])
 }

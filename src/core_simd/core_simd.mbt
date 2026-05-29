@@ -103,24 +103,30 @@ pub fn sort(a : FixedArray[Int]) -> Unit {
 }
 
 // ---------------------------------------------------------------------------
-// FixedArray[Byte]
+// Bytes (read-only)
+//
+// These operate on core's immutable `Bytes` directly — no copy. On wasm,
+// `Bytes` crosses the inline-WAT FFI as a linear-memory pointer, so these are
+// true zero-copy SIMD scans. On wasm-gc `Bytes` is a GC ref (FFI-rejected) so
+// these fall back to scalar; native/js are scalar too. Result is identical on
+// all targets.
 // ---------------------------------------------------------------------------
 
 ///|
-/// Whether two byte arrays are element-wise equal. Replaces a manual
-/// length-check + `for`-loop compare. Returns `false` when lengths differ.
-pub fn bytes_equal(a : FixedArray[Byte], b : FixedArray[Byte]) -> Bool {
+/// Whether two byte sequences are equal. Replaces `a == b`.
+/// Returns `false` when lengths differ.
+pub fn bytes_equal(a : Bytes, b : Bytes) -> Bool {
   let len = a.length()
   if len != b.length() {
     return false
   }
-  @simd.equal_bytes(a, b, len)
+  @simd.equal_bytes_b(a, b, len)
 }
 
 ///|
 /// Index of the first byte equal to `needle`, or `None` if absent.
-pub fn bytes_search(data : FixedArray[Byte], needle : Byte) -> Int? {
-  let i = @simd.find_byte(data, needle)
+pub fn bytes_search(data : Bytes, needle : Byte) -> Int? {
+  let i = @simd.find_byte_b(data, needle)
   if i < 0 {
     None
   } else {
@@ -129,25 +135,39 @@ pub fn bytes_search(data : FixedArray[Byte], needle : Byte) -> Int? {
 }
 
 ///|
+/// Whether `needle` occurs in `data`.
+pub fn bytes_contains(data : Bytes, needle : Byte) -> Bool {
+  @simd.find_byte_b(data, needle) >= 0
+}
+
+///|
 /// Number of bytes equal to `needle`.
-pub fn bytes_count(data : FixedArray[Byte], needle : Byte) -> Int {
-  @simd.count_byte(data, needle)
+pub fn bytes_count(data : Bytes, needle : Byte) -> Int {
+  @simd.count_byte_b(data, needle)
 }
 
 ///|
 /// Whether every byte is < 0x80 (pure ASCII).
-pub fn bytes_is_ascii(data : FixedArray[Byte]) -> Bool {
-  @simd.is_ascii(data)
+pub fn bytes_is_ascii(data : Bytes) -> Bool {
+  @simd.is_ascii_b(data)
 }
+
+// ---------------------------------------------------------------------------
+// FixedArray[Byte] (in-place mutation)
+//
+// `Bytes` is immutable, so the in-place ASCII case-mappings target a mutable
+// `FixedArray[Byte]`. (A `Bytes -> Bytes` case-map would be allocation-bound,
+// so it's deferred — see CLAUDE.md.)
+// ---------------------------------------------------------------------------
 
 ///|
 /// Lowercase ASCII letters (A-Z) in place; other bytes untouched.
-pub fn bytes_to_lower_ascii(data : FixedArray[Byte]) -> Unit {
+pub fn to_lower_ascii(data : FixedArray[Byte]) -> Unit {
   @simd.to_lower_ascii(data)
 }
 
 ///|
 /// Uppercase ASCII letters (a-z) in place; other bytes untouched.
-pub fn bytes_to_upper_ascii(data : FixedArray[Byte]) -> Unit {
+pub fn to_upper_ascii(data : FixedArray[Byte]) -> Unit {
   @simd.to_upper_ascii(data)
 }

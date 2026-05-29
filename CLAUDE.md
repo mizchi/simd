@@ -1047,13 +1047,32 @@ Surface today:
 
 - `FixedArray[Int]`: `sum`, `product`, `dot`, `maximum`/`minimum` (`Int?`),
   `search` (`Int?`) / `contains`, `fill`, `sort`.
-- `FixedArray[Byte]`: `bytes_equal`, `bytes_search` (`Int?`), `bytes_count`,
-  `bytes_is_ascii`, `bytes_to_lower_ascii`, `bytes_to_upper_ascii`.
+- `Bytes` (read-only, **zero-copy** on wasm): `bytes_equal`, `bytes_search`
+  (`Int?`) / `bytes_contains`, `bytes_count`, `bytes_is_ascii`.
+- `FixedArray[Byte]` (in-place, `Bytes` is immutable): `to_lower_ascii`,
+  `to_upper_ascii`.
 
 **Result parity is guaranteed on all four targets** — every test asserts the
 `core_simd` output equals the core idiom. Only throughput is
 target-conditional (SIMD on `wasm`, C-FFI/auto-vec on `native`, scalar
 fallback on `wasm-gc` / `js`), so the substitution is always safe.
+
+### `Bytes`-direct FFI (verified in this toolchain)
+
+`bytes_*` take core's immutable `Bytes` directly — no copy to
+`FixedArray[Byte]` / `SimdBufferBytes`. This works because on the `wasm`
+target `Bytes` crosses the inline-WAT FFI as a **linear-memory pointer to
+byte[0]** (same ABI as `FixedArray[Byte]`), so `v128.load` / `i32.load8_u`
+read it directly. Probed and confirmed: both `v128.load` and a scalar
+`i32.load8_u` loop over a `Bytes` param return correct values on `wasm`.
+
+On `wasm-gc` the same inline-WAT **traps at link/instantiate** (`Bytes`
+arrives as a GC ref, not an i32 address) — also confirmed — so wasm-gc, like
+native / js, uses the `@internal.scalar_*_b` `Bytes` loops. The root package
+carries `equal_bytes_b` / `find_byte_b` / `count_byte_b` / `is_ascii_b`
+(wasm inline-WAT, identical bodies to the `FixedArray[Byte]` kernels; scalar
+elsewhere). This is the zero-copy `Bytes`-direct surface the downstream-
+integration notes flagged as a future option — now exercised by `core_simd`.
 
 ### Bench (V8 / wasm, n = 1024 ints / 4096 B, core idiom vs core_simd)
 
@@ -1063,7 +1082,6 @@ fallback on `wasm-gc` / `js`), so the substitution is always safe.
 | `maximum` | 19.12 µs | 236 ns | **81** |
 | `sort` | 263.6 µs | 29.6 µs | **8.9** |
 | `fill` | 1.28 µs | 149 ns | **8.6** |
-| `bytes_count` | 5.14 µs | 322 ns | **16** |
 | `search` (absent) | 1.33 µs | 612 ns | **2.2** |
 
 The headline `sum` / `maximum` ratios are inflated by iterator-closure
@@ -1073,6 +1091,20 @@ is ~5x (see the i32 table at the top); the 70-80x figure is "what you save by
 replacing the idiomatic-but-slow iterator call." `search` is only 2.2x
 because the scalar path early-exits while the branchless SIMD scan reads
 every chunk — pick by expected hit position, same caveat as `simd_any`.
+
+`Bytes` ops (4096 B, vs the loop / builtin a core user would write):
+
+| op | core idiom | core_simd | x |
+|---|---|---|---|
+| `bytes_is_ascii` | 5.08 µs | 241 ns | **21** |
+| `bytes_count` | 5.20 µs | 323 ns | **16** |
+| `bytes_search` (absent) | 5.28 µs | 615 ns | **8.6** |
+| `bytes_equal` | 452 ns | 403 ns | **1.1** |
+
+`bytes_equal` is only ~1.1x because core's `Bytes::==` is already a tight
+builtin comparison, not a per-byte MoonBit loop — there's little to beat. The
+big `Bytes` wins are the ops core has *no* builtin for (`count`, `search`,
+`is_ascii`), where the alternative is a hand-written `for`-loop.
 
 Run: `moon bench --target wasm -p core_simd`.
 
