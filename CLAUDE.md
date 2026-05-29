@@ -440,13 +440,19 @@ head for `i < stride`, then SIMD body that loads `data + i` and
 PNG Sub encoder, which is the pattern that motivated bundling it
 in-simd rather than re-porting per consumer.
 
-### Tier 2 — image / pixel ops (API + scalar; SIMD in 0.4.0)
+### Tier 2 — image / pixel ops (`rgb_to_rgba` SIMD shipped; rest API + scalar)
 
 `SimdBufferBytes` methods:
 
 - `rgb_to_rgba(src, alpha, out)` — 3-byte/pixel → 4-byte/pixel with
-  broadcast alpha. SIMD shape: `i8x16.shuffle` from 12-byte input to
-  16-byte output with α slots; not yet shipped.
+  broadcast alpha. **SIMD shipped** (wasm / wasm-gc): one `i8x16.shuffle`
+  per 4 pixels (12 src bytes → 16 out bytes), pulling R/G/B from the loaded
+  vector and the α byte from a splat in the shuffle's second operand; scalar
+  tail for `npix % 4`. The `v128.load` reads up to 3 bytes past the logical
+  RGB end into `SimdBuffer::make`'s 16-byte slack (those lanes are unused).
+  **wasm bench (4096 px): 118.3 µs → 1.89 µs = 63x** (the old path paid a
+  per-byte `buf_load_byte`/`buf_store_byte` FFI call — 12 per pixel — that
+  the shuffle erases). native keeps the FixedArray scalar loop.
 - `rgba_to_grayscale(src, out)` — Rec. 601 fixed-point
   `Y = (77*R + 150*G + 29*B) >> 8` (weights sum to 256). SIMD path
   requires `i16x8.extmul` for the weighted sum across 4 pixels.
@@ -463,14 +469,18 @@ in-simd rather than re-porting per consumer.
   requires fixed-point i16x8 (the canvas blend rewrite from this
   session's audit — deferred to 0.4.0).
 
-### Why image ops aren't SIMD-shipped in 0.3.0
+### Image-op SIMD rollout
 
 The byte binary ops are mechanical 16-byte-chunk-with-different-SIMD-op
 skeletons. The image ops each need their own inline-WAT structure
 (shuffle patterns, lane-width conversions, fixed-point rescaling). The
-API surface is shipped in 0.3.0 so consumer repos can call them with
-forward-compatible signatures; the 0.4.0 release fills in the wasm SIMD
-bodies behind the same API.
+API surface shipped first (forward-compatible signatures); the wasm SIMD
+bodies fill in behind the same API. `rgb_to_rgba` is the first done
+(`i8x16.shuffle`, 63x — above). The remaining ones in priority order:
+`channel_extract` (`i8x16.shuffle` de-interleave, the same shape),
+`rgba_to_grayscale` / `lerp` / `alpha_blend_solid` (need `i16x8.extmul`
+fixed-point), `channel_merge` (4-way interleave); `histogram` stays scalar
+(wasm SIMD has no scatter).
 
 ## More parser surface that works
 

@@ -379,3 +379,35 @@ test "bench/ASCII case (4096)" (bb : @bench.T) {
   bb.bench(name="simd_to_lower_4096", fn() { a.to_lower_ascii() })
   bb.bench(name="simd_to_upper_4096", fn() { a.to_upper_ascii() })
 }
+
+///|
+/// Scalar reference rgb→rgba (per-pixel get/set), the old non-SIMD path.
+fn scalar_rgb_to_rgba(
+  src : SimdBufferBytes,
+  alpha : Byte,
+  out : SimdBufferBytes,
+) -> Unit {
+  let n = src.length() / 3
+  for i in 0..<n {
+    out.set(i * 4, src.get(i * 3))
+    out.set(i * 4 + 1, src.get(i * 3 + 1))
+    out.set(i * 4 + 2, src.get(i * 3 + 2))
+    out.set(i * 4 + 3, alpha)
+  }
+}
+
+///|
+test "bench/rgb_to_rgba" (bb : @bench.T) {
+  let npix = 4096
+  let rgb = SimdBufferBytes::make(npix * 3)
+  for i in 0..<(npix * 3) {
+    rgb.set(i, (i % 256).to_byte())
+  }
+  let rgba = SimdBufferBytes::make(npix * 4)
+  bb.bench(name="scalar_rgb_to_rgba_4096px", fn() {
+    scalar_rgb_to_rgba(rgb, b'\xFF', rgba)
+  })
+  bb.bench(name="simd_rgb_to_rgba_4096px", fn() {
+    SimdBufferBytes::rgb_to_rgba(rgb, b'\xFF', rgba)
+  })
+}
