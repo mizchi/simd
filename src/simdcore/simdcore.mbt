@@ -449,3 +449,29 @@ pub fn array_dot_f64(a : Array[Double], b : Array[Double]) -> Double {
 pub fn array_mean_f64(a : Array[Double]) -> Double {
   mean_f64(to_fixedarray_f64(a))
 }
+
+// ---------------------------------------------------------------------------
+// JSON convenience (target-agnostic: delegates to the per-target
+// `json_structural_indices_into`)
+// ---------------------------------------------------------------------------
+
+///|
+/// Structural byte offsets of `input` (excluding those inside string
+/// literals), as a fresh `Array[Int]`. Allocates scratch + indices per call —
+/// use `json_structural_indices_into` with reused buffers on hot paths.
+pub fn json_structural_indices(input : Bytes) -> Array[Int] {
+  let n = input.length()
+  if n == 0 {
+    return Array::new()
+  }
+  let words = (n + 31) / 32
+  let structural = FixedArray::make(words, 0)
+  let quote = FixedArray::make(words, 0)
+  let indices = FixedArray::make(n, 0)
+  let count = json_structural_indices_into(input, structural, quote, indices)
+  let result = Array::new(capacity=count)
+  for i in 0..<count {
+    result.push(indices[i])
+  }
+  result
+}

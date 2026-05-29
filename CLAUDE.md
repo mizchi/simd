@@ -1270,20 +1270,31 @@ wasm-gc / native / js.
   caller scratch (two `(len+31)/32`-word bitmaps + an up-to-`len` index
   buffer) for hot loops.
 
-| op (4 KiB JSON) | scalar | simdcore | x |
+| op (4 KiB JSON, wasm) | scalar | simdcore | x |
 |---|---|---|---|
 | `json_classify_structural` | 19.0 µs | 1.81 µs | **10.5** |
-| `json_structural_indices_into` (full) | — | 25.8 µs | ~1.3 |
+| full pipeline (`_into`, vs MoonBit scalar pipeline) | 53.9 µs | 26.2 µs | **2.0** |
 
-The **classify primitive is 10.5x** (pure `i8x16.eq` lane parallelism). The
-**full indexer stays ~1.3x** because `compute_quote_mask` is a serial
-bit-walk — wasm SIMD has no CLMUL to prefix-XOR the quote bitmap, the same
-floor documented for the simdjson sub-package. Use the classify primitive
-where you don't need in-string exclusion (counting, locating, minify
-pre-scan); reach for the full indexer only when the quote-aware offsets are
-required, knowing it's bandwidth-bound.
+The **classify primitive is 10.5x** on wasm (pure `i8x16.eq` lane
+parallelism). The **full indexer is ~2x** vs the MoonBit scalar pipeline,
+held back by `compute_quote_mask` — a serial bit-walk, since wasm SIMD has no
+CLMUL to prefix-XOR the quote bitmap (the same floor documented for the
+simdjson sub-package). Use the classify primitive where you don't need
+in-string exclusion (counting, locating, minify pre-scan); reach for the full
+indexer when the quote-aware offsets are required.
 
-Run: `moon bench --target wasm -p simdcore`.
+**Native path (C FFI, `simdcore.c`).** The native target binds `Bytes` /
+`FixedArray[Int]` to C kernels (`#borrow` → `const uint8_t*` / `int32_t*`),
+fusing the three stages into one call. The win is modest — full pipeline
+**32.0 µs → 27.8 µs ≈ 1.15x**, classify roughly flat — because moon's default
+native compiler is **TCC**, which neither auto-vectorises nor exposes SSE/NEON
+intrinsics, and (unlike `find_byte_b`'s `memchr`) JSON classification has no
+libc primitive to lean on. So the C loop is essentially the scalar loop minus
+MoonBit's bounds checks. Recorded as a data point: native C FFI pays off
+hugely where a tuned libc primitive exists (bytes ops) and only marginally for
+plain classification loops under TCC.
+
+Run: `moon bench --target wasm -p simdcore` (or `--target native`).
 
 ## Commands
 

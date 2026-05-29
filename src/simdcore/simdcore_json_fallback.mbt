@@ -1,5 +1,6 @@
-// JSON structural indexing — scalar fallback (wasm-gc / native / js),
-// `Bytes`-direct. Same public API as the wasm SIMD path; results identical.
+// JSON structural indexing — scalar fallback (wasm-gc / js), `Bytes`-direct.
+// (native uses the C FFI path in simdcore_json_native.mbt.)
+// Same public API as the wasm SIMD path; results identical.
 
 ///|
 /// Classify structural bytes (`{ } [ ] , :`) into a bitmap. `out` is zeroed
@@ -89,24 +90,4 @@ pub fn json_structural_indices_into(
     }
   }
   count
-}
-
-///|
-/// Convenience: structural byte offsets (excluding in-string) as an
-/// `Array[Int]`. Scalar.
-pub fn json_structural_indices(input : Bytes) -> Array[Int] {
-  let n = input.length()
-  if n == 0 {
-    return Array::new()
-  }
-  let words = (n + 31) / 32
-  let structural = FixedArray::make(words, 0)
-  let quote = FixedArray::make(words, 0)
-  let indices = FixedArray::make(n, 0)
-  let count = json_structural_indices_into(input, structural, quote, indices)
-  let result = Array::new(capacity=count)
-  for i in 0..<count {
-    result.push(indices[i])
-  }
-  result
 }
