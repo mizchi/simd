@@ -1017,6 +1017,264 @@ A future `mizchi/simd` 0.4.0 may add a Bytes-direct API surface that
 lets dependent repos skip the vendoring step; the design decision is
 deferred until a fourth integration would benefit.
 
+## `src/simdcore/` sub-package — faster moonbitlang/core equivalents
+
+`src/simdcore/` is an **opt-in companion to moonbitlang/core**. It can't
+replace core transparently (no monkey-patching), so instead it exposes
+functions shaped like the core idioms they stand in for, letting a hot path
+be swapped one call at a time:
+
+```moonbit
+a.iter().fold(init=0, fn(x, y) { x + y })  // core
+@simdcore.sum(a)                          // faster equivalent
+
+a.iter().maximum()      ->  @simdcore.maximum(a)   // Int?
+a.search(x)             ->  @simdcore.search(a, x) // Int?
+a.contains(x)           ->  @simdcore.contains(a, x)
+a.fill(v)               ->  @simdcore.fill(a, v)
+a.sort()                ->  @simdcore.sort(a)      // FixedArray[Int]
+```
+
+It is a **thin facade over the existing kernels** (`@simd.sum_i32`,
+`sort_i32`, `find_byte`, …) — no new inline-WAT except two small kernels
+added to the root package to round out the core surface:
+
+- `fill_i32(arr, value)` — `i32x4.splat` + `v128.store` (memset for i32).
+- `find_i32(arr, needle) -> Int` — public wrapper over the existing private
+  `find_int_i32_v128` (the kernel already backing `argmin` / `argmax`).
+
+Surface today:
+
+- `FixedArray[Int]` reductions / search: `sum`, `product`, `dot`,
+  `maximum`/`minimum` (`Int?`), `search` (`Int?`) / `contains`,
+  `count_nonzero`, `fill`, `sort`.
+- `FixedArray[Int]` element-wise (write into `out`): `add`, `sub`, `mul`,
+  `neg`, `abs`, `saxpy` (`out = k*a + b`).
+- `FixedArray[Double]` (the practical numpy dtype): reductions `sum_f64`,
+  `dot_f64`, `mean_f64`, `variance_f64`; element-wise `add_f64`, `sub_f64`,
+  `mul_f64`, `div_f64`, `sqrt_f64`, `min_elem_f64`, `max_elem_f64`.
+- `Bytes` (read-only, **zero-copy** on wasm): `bytes_equal`, `bytes_search`
+  (`Int?`) / `bytes_contains`, `bytes_count`, `bytes_is_ascii`.
+- `FixedArray[Byte]` (in-place, `Bytes` is immutable): `to_lower_ascii`,
+  `to_upper_ascii`.
+- `String` → UTF-8 (the FFI-boundary bottleneck): `encode_utf8` (`-> Bytes`),
+  `encode_utf8_into` (`-> Int`, no alloc), `is_ascii_string`.
+- UTF-8 → `String` (ASCII fast path, non-ASCII → `@utf8.decode_lossy`):
+  `decode_utf8_unsafe` (public-API, stable) and
+  `decode_utf8_unsafe_intrinsic` (faster, depends on a private core
+  intrinsic). See the decode section below.
+- `Array[Int]` / `Array[Double]` bridge: `to_fixedarray` / `of_fixedarray`
+  (+ `_f64`) conversions, plus copy-in one-shots `array_sum`,
+  `array_product`, `array_maximum`/`array_minimum`, `array_dot`,
+  `array_count_nonzero`, `array_sort` (in place), `array_sum_f64`,
+  `array_dot_f64`, `array_mean_f64`. See the Array bridge section below.
+- JSON structural indexing over `Bytes` (simdjson `find_structural_bits`,
+  Bytes-direct, no `@simd_buffer` hop): `json_classify_structural` (bitmap,
+  the fast primitive), `json_structural_indices` (`-> Array[Int]`) and
+  `json_structural_indices_into` (scratch). See the JSON section below.
+
+**Result parity is guaranteed on all four targets** — every test asserts the
+`simdcore` output equals the core idiom. Only throughput is
+target-conditional (SIMD on `wasm`, C-FFI/auto-vec on `native`, scalar
+fallback on `wasm-gc` / `js`), so the substitution is always safe.
+
+### `Bytes`-direct FFI (verified in this toolchain)
+
+`bytes_*` take core's immutable `Bytes` directly — no copy to
+`FixedArray[Byte]` / `SimdBufferBytes`. This works because on the `wasm`
+target `Bytes` crosses the inline-WAT FFI as a **linear-memory pointer to
+byte[0]** (same ABI as `FixedArray[Byte]`), so `v128.load` / `i32.load8_u`
+read it directly. Probed and confirmed: both `v128.load` and a scalar
+`i32.load8_u` loop over a `Bytes` param return correct values on `wasm`.
+
+On `wasm-gc` the same inline-WAT **traps at link/instantiate** (`Bytes`
+arrives as a GC ref, not an i32 address) — also confirmed — so wasm-gc, like
+native / js, uses the `@internal.scalar_*_b` `Bytes` loops. The root package
+carries `equal_bytes_b` / `find_byte_b` / `count_byte_b` / `is_ascii_b`
+(wasm inline-WAT, identical bodies to the `FixedArray[Byte]` kernels; scalar
+elsewhere). This is the zero-copy `Bytes`-direct surface the downstream-
+integration notes flagged as a future option — now exercised by `simdcore`.
+
+### String → UTF-8 conversion (the FFI-boundary bottleneck)
+
+MoonBit's `String` is UTF-16, and crossing the FFI boundary to UTF-8 `Bytes`
+is a real bottleneck: core's `@encoding/utf8.encode` runs a per-code-unit
+scalar loop that the wasm backend does **not** lower to a fast intrinsic
+(measured ~9 µs for 4 KiB of ASCII; `@encoding/ascii.encode` is worse, and
+the `decode` side is the same scalar loop — dispatching by content buys
+nothing).
+
+Verified enabler: **`String` crosses the inline-WAT FFI as a linear-memory
+pointer to its UTF-16 code-unit buffer** (unit `i` at byte offset `2*i`) —
+probed by reading units with `i32.load16_u`, including a `€` (U+20AC). So the
+all-ASCII case vectorises:
+
+- `is_ascii_string` — OR-fold `(unit & 0xFF80)` over 8-unit `i16x8` chunks +
+  `v128.any_true`.
+- `encode_utf8` / `encode_utf8_into` — if all-ASCII, narrow UTF-16 → UTF-8
+  with one `i8x16.shuffle` per 16 units (picks each unit's low byte: even
+  byte lanes `0,2,…,30`), scalar tail. **Non-ASCII (multi-byte, surrogate
+  pairs) delegates to `@encoding/utf8.encode`**, so the result is always
+  identical to core.
+
+`String` lives in `simdcore` directly (target-split `simdcore_str_wasm.mbt` /
+`simdcore_str_fallback.mbt`), not the root catalog, because the scalar
+fallback just calls `@encoding/utf8` — no root kernel needed off-wasm.
+
+| op (4 KiB ASCII) | core | simdcore | x |
+|---|---|---|---|
+| `encode_utf8_into` (no alloc) | 9.13 µs | 835 ns | **10.9** |
+| `encode_utf8` (`-> Bytes`) | 9.07 µs | 3.06 µs | **3.0** |
+
+`encode_utf8` is "only" 3x because `Bytes::from_fixedarray` copies the output
+(no public zero-copy `FixedArray[Byte] -> Bytes`); `encode_utf8_into` writes
+straight into the caller's buffer and shows the true ~11x narrowing win.
+Reuse an output buffer and prefer `_into` on hot paths (same lesson as the
+`SimdBuffer` `_into` family).
+
+**Decode (UTF-8 `Bytes` → `String`), ASCII fast path — two variants.** The
+SIMD part is the same in both: detect all-ASCII (`@simd.is_ascii_b`), then
+widen each byte to a UTF-16 code unit with `i16x8.extend_low/high_i8x16_u`.
+They differ only in how the widened code units become a `String`, which is
+the boundary that decides the API:
+
+| variant | String wrap | dep | x (4 KiB ASCII) |
+|---|---|---|---|
+| `decode_utf8_unsafe` | widen → `FixedArray[Byte]` → `Bytes::from_fixedarray` (1 copy) → `Bytes::to_unchecked_string` | **public only** | 8.13 µs → 5.29 µs = **1.5** |
+| `decode_utf8_unsafe_intrinsic` | widen → `FixedArray[UInt16]` → `%string.unsafe_from_uint16_fixedarray` (zero-copy) | **private core intrinsic** | 8.13 µs → 3.11 µs = **2.6** |
+
+Both name themselves `_unsafe` because they decide via `is_ascii` + delegate
+non-ASCII to `@utf8.decode_lossy`, rather than reproducing core `decode`'s
+`Malformed`-raising contract. Verified facts behind these (probed in this
+toolchain):
+
+- `Bytes::to_unchecked_string(offset?, length?)` is **public**, interprets the
+  bytes as **UTF-16LE**, `length` in **bytes** (`41 00 42 00` → `"AB"`). This
+  is the same zero-copy reinterpret `@encoding/utf16.decode`'s LE path uses.
+- `FixedArray[UInt16]` **crosses the inline-WAT FFI** as a u16 pointer (write
+  via `i32.store16`) — so it is SIMD-fillable (the old "FixedArray[UInt]
+  rejected" note does not apply to `UInt16`).
+- `i16x8.extend_low/high_i8x16_u` parse fine in inline-WAT.
+- `%string.unsafe_from_uint16_fixedarray` (FixedArray[UInt16] → String,
+  zero-copy) is redeclarable via `extern` and works — but it is a **private**
+  `moonbitlang/core` symbol and may break across core versions.
+
+**Minimal API to make a fast decode fully stable:** core need only expose
+*one* of two symbols it already has internally — `String::
+unsafe_from_uint16_fixedarray(FixedArray[UInt16]) -> String` (→ the 2.6x
+zero-copy path becomes stable) or a public `FixedArray[Byte] ->Bytes`
+zero-copy reinterpret (→ removes the copy from the 1.5x public path). Until
+then, `decode_utf8_unsafe` ships on public API at 1.5x and
+`decode_utf8_unsafe_intrinsic` opts into the faster, less-stable path.
+
+### Bench (V8 / wasm, n = 1024 ints / 4096 B, core idiom vs simdcore)
+
+| op | core idiom | simdcore | x |
+|---|---|---|---|
+| `sum` | 16.33 µs | 230 ns | **71** |
+| `maximum` | 19.12 µs | 236 ns | **81** |
+| `sort` | 263.6 µs | 29.6 µs | **8.9** |
+| `fill` | 1.28 µs | 149 ns | **8.6** |
+| `search` (absent) | 1.33 µs | 612 ns | **2.2** |
+
+The headline `sum` / `maximum` ratios are inflated by iterator-closure
+overhead in `a.iter().fold(...)` / `a.iter().maximum()` — the actual code a
+core user writes. Against a raw scalar `for`-loop baseline the pure-SIMD win
+is ~5x (see the i32 table at the top); the 70-80x figure is "what you save by
+replacing the idiomatic-but-slow iterator call." `search` is only 2.2x
+because the scalar path early-exits while the branchless SIMD scan reads
+every chunk — pick by expected hit position, same caveat as `simd_any`.
+
+`Bytes` ops (4096 B, vs the loop / builtin a core user would write):
+
+| op | core idiom | simdcore | x |
+|---|---|---|---|
+| `bytes_is_ascii` | 5.08 µs | 241 ns | **21** |
+| `bytes_count` | 5.20 µs | 323 ns | **16** |
+| `bytes_search` (absent) | 5.28 µs | 615 ns | **8.6** |
+| `bytes_equal` | 452 ns | 403 ns | **1.1** |
+
+`bytes_equal` is only ~1.1x because core's `Bytes::==` is already a tight
+builtin comparison, not a per-byte MoonBit loop — there's little to beat. The
+big `Bytes` wins are the ops core has *no* builtin for (`count`, `search`,
+`is_ascii`), where the alternative is a hand-written `for`-loop.
+
+Element-wise `i32` (n = 1024) and `f64` (n = 1024, f64x2 so 2-way) vs the
+hand-written zip loop:
+
+| op | core loop | simdcore | x |
+|---|---|---|---|
+| `add` (i32) | 3.26 µs | 302 ns | **10.8** |
+| `saxpy` (i32) | 3.32 µs | 337 ns | **9.9** |
+| `add_f64` | 3.16 µs | 593 ns | **5.3** |
+| `dot_f64` | 2.31 µs | 668 ns | **3.5** |
+| `sum_f64` | 1.30 µs | 659 ns | **2.0** |
+
+f64 ratios are lower than i32 because f64x2 packs only 2 lanes per v128 (vs 4
+for i32) and the reductions carry a serial accumulator.
+
+Run: `moon bench --target wasm -p simdcore`.
+
+### `Array[T]` bridge
+
+core's growable `Array[T]` is the type most user code holds, but the SIMD
+kernels need the contiguous `FixedArray[T]` layout and **there is no public
+zero-copy `Array -> FixedArray`** (only `FixedArray::from_array(view)` which
+copies, and `Array::from_fixed_array` which wraps the other direction
+zero-copy). So the bridge copies in (`to_fixedarray`) and wraps out
+zero-copy (`of_fixedarray`).
+
+The copy turns out to be cheap relative to the *idiomatic* baseline a core
+user actually writes — `a.iter().fold(...)` / `a.iter().maximum()` carry
+per-element closure overhead — so copy + SIMD still wins:
+
+| op (n = 1024) | core idiom | simdcore (copy + SIMD) | x |
+|---|---|---|---|
+| `array_sum` | `a.iter().fold` 16.95 µs | 2.50 µs | **6.8** |
+| `array_sort` | `Array::sort` 264 µs | 31.8 µs | **8.3** |
+
+(Copy alone is ~2.4 µs at n = 1024, i.e. most of `array_sum`'s cost — so a
+single cheap reduction won't beat a hand-tuned raw `for` loop, and the copy
+is wasted if you call several ops. In that case `to_fixedarray` once and
+reuse the `FixedArray`; `array_sort` always wins because the sort dominates
+the round-trip.)
+
+Run: `moon bench --target wasm -p simdcore`.
+
+### JSON structural indexing (`Bytes`-direct)
+
+simdcore vendors the `src/simdjson/` `find_structural_bits` inline-WAT to run
+directly on core's `Bytes` (input) and `FixedArray[Int]` (bitmaps / indices),
+skipping the `@simd_buffer.SimdBufferBytes` copy-hop the standalone simdjson
+package requires. The WAT bodies are byte-identical to `simdjson_wasm.mbt`
+(they take raw linear-memory addresses, and `Bytes` / `FixedArray[Int]` cross
+the FFI as exactly those pointers); the scalar fallback mirrors the result on
+wasm-gc / native / js.
+
+- `json_classify_structural(input, out)` — bit `i` set iff `input[i]` ∈
+  `{ } [ ] , :` (raw, includes occurrences inside strings). The fast
+  primitive.
+- `json_structural_indices(input) -> Array[Int]` / `_into(...)` — full
+  pipeline (classify + `compute_quote_mask` + extract), so the returned byte
+  offsets exclude structural chars inside string literals. `_into` takes
+  caller scratch (two `(len+31)/32`-word bitmaps + an up-to-`len` index
+  buffer) for hot loops.
+
+| op (4 KiB JSON) | scalar | simdcore | x |
+|---|---|---|---|
+| `json_classify_structural` | 19.0 µs | 1.81 µs | **10.5** |
+| `json_structural_indices_into` (full) | — | 25.8 µs | ~1.3 |
+
+The **classify primitive is 10.5x** (pure `i8x16.eq` lane parallelism). The
+**full indexer stays ~1.3x** because `compute_quote_mask` is a serial
+bit-walk — wasm SIMD has no CLMUL to prefix-XOR the quote bitmap, the same
+floor documented for the simdjson sub-package. Use the classify primitive
+where you don't need in-string exclusion (counting, locating, minify
+pre-scan); reach for the full indexer only when the quote-aware offsets are
+required, knowing it's bandwidth-bound.
+
+Run: `moon bench --target wasm -p simdcore`.
+
 ## Commands
 
 ```bash
