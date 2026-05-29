@@ -343,6 +343,11 @@ pub fn find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
 }
 
 ///|
+pub fn rfind_byte_b(data : Bytes, needle : Byte) -> Int {
+  @internal.scalar_rfind_byte_b(data, needle)
+}
+
+///|
 pub fn all_i32(arr : FixedArray[Int]) -> Bool {
   @internal.scalar_all(arr)
 }

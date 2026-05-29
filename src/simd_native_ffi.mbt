@@ -376,6 +376,14 @@ extern "C" fn simd_find_bytes_b_ffi(
 
 ///|
 #borrow(data)
+extern "C" fn simd_rfind_byte_b_ffi(
+  data : Bytes,
+  len : Int,
+  needle : Byte,
+) -> Int = "simd_rfind_byte_ffi"
+
+///|
+#borrow(data)
 extern "C" fn simd_to_lower_ascii_ffi(
   data : FixedArray[Byte],
   len : Int,

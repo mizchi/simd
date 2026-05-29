@@ -338,6 +338,18 @@ pub fn bytes_contains_sub(haystack : Bytes, needle : Bytes) -> Bool {
   @simd.find_bytes_b(haystack, needle) >= 0
 }
 
+///|
+/// Index of the *last* byte equal to `needle`, or `None` if absent. Native
+/// uses `memrchr`; wasm reverse-scans with SIMD; wasm-gc / js are scalar.
+pub fn bytes_rindex(data : Bytes, needle : Byte) -> Int? {
+  let i = @simd.rfind_byte_b(data, needle)
+  if i < 0 {
+    None
+  } else {
+    Some(i)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // FixedArray[Byte] (in-place mutation)
 //

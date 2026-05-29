@@ -508,3 +508,28 @@ test "bytes_index_of vs reference" {
   let h3 = b"0123456789abcdefNEEDLE"
   assert_eq(bytes_index_of(h3, b"NEEDLE"), Some(16))
 }
+
+///|
+test "bytes_rindex vs reference" {
+  // > 32 bytes so the reverse scan covers the unaligned tail + >=2 chunks.
+  let h = b"/usr/local/bin/moon; path.with.dots; trailing/slash/"
+  for needle in [b'/', b'.', b';', b'z', b'm'] {
+    // scalar reference: last index of needle
+    let mut want = -1
+    for i in 0..<h.length() {
+      if h[i] == needle {
+        want = i
+      }
+    }
+    assert_eq(bytes_rindex(h, needle), if want < 0 { None } else { Some(want) })
+  }
+  // boundary: match only in the unaligned tail
+  assert_eq(bytes_rindex(b"0123456789abcdefZ", b'Z'), Some(16))
+  // match only in the first chunk
+  assert_eq(bytes_rindex(b"Z0123456789abcdef0123456789", b'Z'), Some(0))
+  assert_eq(bytes_rindex(b"", b'a'), None)
+  // last vs first occurrence differ
+  let h2 = b"abcabcabc"
+  assert_eq(bytes_rindex(h2, b'a'), Some(6))
+  assert_eq(bytes_search(h2, b'a'), Some(0))
+}

@@ -99,6 +99,16 @@ pub fn find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
 }
 
 ///|
+/// native last-occurrence byte search: glibc `memrchr`.
+pub fn rfind_byte_b(data : Bytes, needle : Byte) -> Int {
+  let len = data.length()
+  if len == 0 {
+    return -1
+  }
+  simd_rfind_byte_b_ffi(data, len, needle)
+}
+
+///|
 /// native min reduce: scalar auto-vec wins; reverted from C FFI.
 pub fn min_i32(arr : FixedArray[Int]) -> Int {
   @internal.scalar_min(arr)

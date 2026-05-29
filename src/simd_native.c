@@ -861,6 +861,12 @@ int32_t simd_find_bytes_ffi(const uint8_t* haystack, int32_t hlen,
   return p ? (int32_t)((const uint8_t*)p - haystack) : -1;
 }
 
+/* Last occurrence of `needle` via glibc memrchr. Returns the index or -1. */
+int32_t simd_rfind_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {
+  const void* p = memrchr(data, needle, (size_t)len);
+  return p ? (int32_t)((const uint8_t*)p - data) : -1;
+}
+
 int32_t simd_count_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {
   int32_t count = 0;
   int32_t i = 0;
