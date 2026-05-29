@@ -1068,6 +1068,10 @@ Surface today:
   `array_product`, `array_maximum`/`array_minimum`, `array_dot`,
   `array_count_nonzero`, `array_sort` (in place), `array_sum_f64`,
   `array_dot_f64`, `array_mean_f64`. See the Array bridge section below.
+- JSON structural indexing over `Bytes` (simdjson `find_structural_bits`,
+  Bytes-direct, no `@simd_buffer` hop): `json_classify_structural` (bitmap,
+  the fast primitive), `json_structural_indices` (`-> Array[Int]`) and
+  `json_structural_indices_into` (scratch). See the JSON section below.
 
 **Result parity is guaranteed on all four targets** — every test asserts the
 `simdcore` output equals the core idiom. Only throughput is
@@ -1234,6 +1238,40 @@ single cheap reduction won't beat a hand-tuned raw `for` loop, and the copy
 is wasted if you call several ops. In that case `to_fixedarray` once and
 reuse the `FixedArray`; `array_sort` always wins because the sort dominates
 the round-trip.)
+
+Run: `moon bench --target wasm -p simdcore`.
+
+### JSON structural indexing (`Bytes`-direct)
+
+simdcore vendors the `src/simdjson/` `find_structural_bits` inline-WAT to run
+directly on core's `Bytes` (input) and `FixedArray[Int]` (bitmaps / indices),
+skipping the `@simd_buffer.SimdBufferBytes` copy-hop the standalone simdjson
+package requires. The WAT bodies are byte-identical to `simdjson_wasm.mbt`
+(they take raw linear-memory addresses, and `Bytes` / `FixedArray[Int]` cross
+the FFI as exactly those pointers); the scalar fallback mirrors the result on
+wasm-gc / native / js.
+
+- `json_classify_structural(input, out)` — bit `i` set iff `input[i]` ∈
+  `{ } [ ] , :` (raw, includes occurrences inside strings). The fast
+  primitive.
+- `json_structural_indices(input) -> Array[Int]` / `_into(...)` — full
+  pipeline (classify + `compute_quote_mask` + extract), so the returned byte
+  offsets exclude structural chars inside string literals. `_into` takes
+  caller scratch (two `(len+31)/32`-word bitmaps + an up-to-`len` index
+  buffer) for hot loops.
+
+| op (4 KiB JSON) | scalar | simdcore | x |
+|---|---|---|---|
+| `json_classify_structural` | 19.0 µs | 1.81 µs | **10.5** |
+| `json_structural_indices_into` (full) | — | 25.8 µs | ~1.3 |
+
+The **classify primitive is 10.5x** (pure `i8x16.eq` lane parallelism). The
+**full indexer stays ~1.3x** because `compute_quote_mask` is a serial
+bit-walk — wasm SIMD has no CLMUL to prefix-XOR the quote bitmap, the same
+floor documented for the simdjson sub-package. Use the classify primitive
+where you don't need in-string exclusion (counting, locating, minify
+pre-scan); reach for the full indexer only when the quote-aware offsets are
+required, knowing it's bandwidth-bound.
 
 Run: `moon bench --target wasm -p simdcore`.
 

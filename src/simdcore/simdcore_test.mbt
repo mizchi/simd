@@ -364,3 +364,89 @@ test "array f64 reductions == loop" {
   assert_eq(array_dot_f64(a, b), d)
   assert_eq(array_mean_f64(a), s / 8.0)
 }
+
+///|
+/// Reference: structural offsets of `{}[],:` NOT inside a string literal.
+fn json_indices_ref(s : String) -> Array[Int] {
+  let bytes = @utf8.encode(s[:])
+  let n = bytes.length()
+  let result = Array::new()
+  let mut in_string = false
+  let mut escape_pending = false
+  for i in 0..<n {
+    let b = bytes[i].to_int()
+    if escape_pending {
+      escape_pending = false
+    } else if b == 0x22 {
+      in_string = not(in_string)
+    } else if b == 0x5C && in_string {
+      escape_pending = true
+    } else if not(in_string) &&
+      (
+        b == 0x7B ||
+        b == 0x7D ||
+        b == 0x5B ||
+        b == 0x5D ||
+        b == 0x2C ||
+        b == 0x3A
+      ) {
+      result.push(i)
+    }
+  }
+  result
+}
+
+///|
+test "json_structural_indices vs reference" {
+  let docs = [
+    "{}", "[]", "{\"a\":1,\"b\":[2,3]}", "{\"k\":\"a,b:c{}[]\",\"n\":42}", "{\"q\":\"he said \\\"hi\\\"\",\"p\":\"a\\\\b\"}",
+    "[{\"id\":1,\"tags\":[\"x\",\"y\"]},{\"id\":2,\"tags\":[\"z\"]},{\"id\":3}]",
+  ]
+  for d in docs {
+    let bytes = @utf8.encode(d[:])
+    assert_eq(json_structural_indices(bytes), json_indices_ref(d))
+  }
+}
+
+///|
+test "json_structural_indices empty" {
+  assert_eq(json_structural_indices(b""), Array::new())
+}
+
+///|
+test "json_classify_structural bitmap" {
+  let bytes = b"{\"a\":[1,2]}"
+  let words = (bytes.length() + 31) / 32
+  let out = FixedArray::make(words, 0)
+  json_classify_structural(bytes, out)
+  for i in 0..<bytes.length() {
+    let b = bytes[i].to_int()
+    let want = b == 0x7B ||
+      b == 0x7D ||
+      b == 0x5B ||
+      b == 0x5D ||
+      b == 0x2C ||
+      b == 0x3A
+    let got = (out[i >> 5] & (1 << (i & 31))) != 0
+    assert_eq(got, want)
+  }
+}
+
+///|
+test "json_structural_indices_into reuse" {
+  let doc = "{\"x\":[10,20,30],\"y\":{\"z\":true}}"
+  let bytes = @utf8.encode(doc[:])
+  let n = bytes.length()
+  let words = (n + 31) / 32
+  let structural = FixedArray::make(words, 0)
+  let quote = FixedArray::make(words, 0)
+  let indices = FixedArray::make(n, 0)
+  let count = json_structural_indices_into(bytes, structural, quote, indices)
+  let got = Array::new()
+  for i in 0..<count {
+    got.push(indices[i])
+  }
+  assert_eq(got, json_indices_ref(doc))
+  let count2 = json_structural_indices_into(bytes, structural, quote, indices)
+  assert_eq(count2, count)
+}

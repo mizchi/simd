@@ -11,5 +11,7 @@ options(
     "simdcore_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "simdcore_str_wasm.mbt": [ "wasm" ],
     "simdcore_str_fallback.mbt": [ "wasm-gc", "native", "js" ],
+    "simdcore_json_wasm.mbt": [ "wasm" ],
+    "simdcore_json_fallback.mbt": [ "wasm-gc", "native", "js" ],
   },
 )

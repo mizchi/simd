@@ -293,3 +293,59 @@ test "bench/array_sort" (b : @bench.T) {
     b.keep(c[0])
   })
 }
+
+///|
+fn bench_json_bytes() -> Bytes {
+  // ~4 KiB of realistic JSON: array of objects.
+  let sb = StringBuilder::new()
+  sb.write_string("[")
+  for i in 0..<120 {
+    if i > 0 {
+      sb.write_string(",")
+    }
+    sb.write_string("{\"id\":")
+    sb.write_string(i.to_string())
+    sb.write_string(",\"name\":\"item ")
+    sb.write_string(i.to_string())
+    sb.write_string("\",\"tags\":[\"a\",\"b\",\"c\"],\"ok\":true}")
+  }
+  sb.write_string("]")
+  @utf8.encode(sb.to_string()[:])
+}
+
+///|
+test "bench/json" (b : @bench.T) {
+  let bytes = bench_json_bytes()
+  let n = bytes.length()
+  let words = (n + 31) / 32
+  let structural = FixedArray::make(words, 0)
+  let quote = FixedArray::make(words, 0)
+  let indices = FixedArray::make(n, 0)
+  // classify-only primitive (the genuinely fast part)
+  let cls = FixedArray::make(words, 0)
+  b.bench(name="json_classify_scalar", fn() {
+    for w in 0..<words {
+      cls[w] = 0
+    }
+    for i in 0..<n {
+      let c = bytes[i].to_int()
+      if c == 0x7B ||
+        c == 0x7D ||
+        c == 0x5B ||
+        c == 0x5D ||
+        c == 0x2C ||
+        c == 0x3A {
+        cls[i >> 5] = cls[i >> 5] | (1 << (i & 31))
+      }
+    }
+    b.keep(cls[0])
+  })
+  b.bench(name="json_classify_simdcore", fn() {
+    json_classify_structural(bytes, cls)
+    b.keep(cls[0])
+  })
+  // full pipeline (quote-mask bound)
+  b.bench(name="json_indices_simdcore_into", fn() {
+    b.keep(json_structural_indices_into(bytes, structural, quote, indices))
+  })
+}
