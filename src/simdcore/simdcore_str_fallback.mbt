@@ -32,3 +32,17 @@ pub fn encode_utf8_into(s : String, out : FixedArray[Byte]) -> Int {
   }
   len
 }
+
+///|
+/// Decode UTF-8 `bytes` to a `String` (scalar; == `@encoding/utf8.decode_lossy`).
+/// `_unsafe` mirrors the wasm signature; no SIMD here.
+pub fn decode_utf8_unsafe(bytes : Bytes) -> String {
+  @utf8.decode_lossy(bytes[:])
+}
+
+///|
+/// Same as `decode_utf8_unsafe` off-wasm (no intrinsic fast path needed —
+/// there is no SIMD widen to accelerate).
+pub fn decode_utf8_unsafe_intrinsic(bytes : Bytes) -> String {
+  @utf8.decode_lossy(bytes[:])
+}

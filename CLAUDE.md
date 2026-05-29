@@ -1059,6 +1059,10 @@ Surface today:
   `to_upper_ascii`.
 - `String` → UTF-8 (the FFI-boundary bottleneck): `encode_utf8` (`-> Bytes`),
   `encode_utf8_into` (`-> Int`, no alloc), `is_ascii_string`.
+- UTF-8 → `String` (ASCII fast path, non-ASCII → `@utf8.decode_lossy`):
+  `decode_utf8_unsafe` (public-API, stable) and
+  `decode_utf8_unsafe_intrinsic` (faster, depends on a private core
+  intrinsic). See the decode section below.
 
 **Result parity is guaranteed on all four targets** — every test asserts the
 `simdcore` output equals the core idiom. Only throughput is
@@ -1119,13 +1123,40 @@ straight into the caller's buffer and shows the true ~11x narrowing win.
 Reuse an output buffer and prefer `_into` on hot paths (same lesson as the
 `SimdBuffer` `_into` family).
 
-**Decode (UTF-8 `Bytes` → `String`) is *not* accelerated.** There is no
-public zero-copy `FixedArray[UInt16] -> String` (core's
-`%string.unsafe_from_uint16_fixedarray` intrinsic is private), and
-dispatching to core's `ascii`/`utf8` decoders gives no win (measured — same
-scalar loop). A SIMD widen (`i8x16` → `i16x8`) is ready, but without a String
-sink it can't be wired up; revisit if core exposes a UTF-16-buffer → String
-constructor.
+**Decode (UTF-8 `Bytes` → `String`), ASCII fast path — two variants.** The
+SIMD part is the same in both: detect all-ASCII (`@simd.is_ascii_b`), then
+widen each byte to a UTF-16 code unit with `i16x8.extend_low/high_i8x16_u`.
+They differ only in how the widened code units become a `String`, which is
+the boundary that decides the API:
+
+| variant | String wrap | dep | x (4 KiB ASCII) |
+|---|---|---|---|
+| `decode_utf8_unsafe` | widen → `FixedArray[Byte]` → `Bytes::from_fixedarray` (1 copy) → `Bytes::to_unchecked_string` | **public only** | 8.13 µs → 5.29 µs = **1.5** |
+| `decode_utf8_unsafe_intrinsic` | widen → `FixedArray[UInt16]` → `%string.unsafe_from_uint16_fixedarray` (zero-copy) | **private core intrinsic** | 8.13 µs → 3.11 µs = **2.6** |
+
+Both name themselves `_unsafe` because they decide via `is_ascii` + delegate
+non-ASCII to `@utf8.decode_lossy`, rather than reproducing core `decode`'s
+`Malformed`-raising contract. Verified facts behind these (probed in this
+toolchain):
+
+- `Bytes::to_unchecked_string(offset?, length?)` is **public**, interprets the
+  bytes as **UTF-16LE**, `length` in **bytes** (`41 00 42 00` → `"AB"`). This
+  is the same zero-copy reinterpret `@encoding/utf16.decode`'s LE path uses.
+- `FixedArray[UInt16]` **crosses the inline-WAT FFI** as a u16 pointer (write
+  via `i32.store16`) — so it is SIMD-fillable (the old "FixedArray[UInt]
+  rejected" note does not apply to `UInt16`).
+- `i16x8.extend_low/high_i8x16_u` parse fine in inline-WAT.
+- `%string.unsafe_from_uint16_fixedarray` (FixedArray[UInt16] → String,
+  zero-copy) is redeclarable via `extern` and works — but it is a **private**
+  `moonbitlang/core` symbol and may break across core versions.
+
+**Minimal API to make a fast decode fully stable:** core need only expose
+*one* of two symbols it already has internally — `String::
+unsafe_from_uint16_fixedarray(FixedArray[UInt16]) -> String` (→ the 2.6x
+zero-copy path becomes stable) or a public `FixedArray[Byte] ->Bytes`
+zero-copy reinterpret (→ removes the copy from the 1.5x public path). Until
+then, `decode_utf8_unsafe` ships on public API at 1.5x and
+`decode_utf8_unsafe_intrinsic` opts into the faster, less-stable path.
 
 ### Bench (V8 / wasm, n = 1024 ints / 4096 B, core idiom vs simdcore)
 

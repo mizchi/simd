@@ -269,3 +269,24 @@ test "encode_utf8_into" {
     assert_eq(out[i], want[i])
   }
 }
+
+///|
+test "decode_utf8_unsafe (ascii == core)" {
+  for n in [0, 5, 16, 33, 100] {
+    let s = make_string(n, fn(i) { 0x41 + i % 26 })
+    let bytes = @utf8.encode(s[:])
+    assert_eq(decode_utf8_unsafe(bytes), s)
+    assert_eq(decode_utf8_unsafe_intrinsic(bytes), s)
+  }
+}
+
+///|
+test "decode_utf8_unsafe (non-ascii == decode_lossy)" {
+  // valid multi-byte UTF-8 (é, ö, ☃, 😀) padded beyond 16 bytes.
+  let s = "h\u{e9}llo w\u{f6}rld \u{2603} and \u{1F600}, padded beyond sixteen"
+  let bytes = @utf8.encode(s[:])
+  assert_eq(decode_utf8_unsafe(bytes), @utf8.decode_lossy(bytes[:]))
+  assert_eq(decode_utf8_unsafe_intrinsic(bytes), @utf8.decode_lossy(bytes[:]))
+  // round-trips back to the original for well-formed input.
+  assert_eq(decode_utf8_unsafe(bytes), s)
+}

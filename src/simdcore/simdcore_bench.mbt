@@ -239,3 +239,24 @@ test "bench/is_ascii_string" (b : @bench.T) {
   let s = bench_ascii_string(4096)
   b.bench(name="simdcore_is_ascii_string", fn() { b.keep(is_ascii_string(s)) })
 }
+
+///|
+fn bench_ascii_bytes(n : Int) -> Bytes {
+  let a = FixedArray::make(n, b'\x00')
+  for i in 0..<n {
+    a[i] = (0x41 + i % 26).to_byte()
+  }
+  Bytes::from_fixedarray(a)
+}
+
+///|
+test "bench/utf8_decode" (b : @bench.T) {
+  let bytes = bench_ascii_bytes(4096)
+  b.bench(name="core_utf8_decode", fn() { b.keep(@utf8.decode_lossy(bytes[:])) })
+  b.bench(name="simdcore_decode_unsafe", fn() {
+    b.keep(decode_utf8_unsafe(bytes))
+  })
+  b.bench(name="simdcore_decode_unsafe_intrinsic", fn() {
+    b.keep(decode_utf8_unsafe_intrinsic(bytes))
+  })
+}
