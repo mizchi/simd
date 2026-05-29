@@ -1201,6 +1201,28 @@ test "rgb_to_rgba" {
 }
 
 ///|
+test "rgb_to_rgba SIMD body + tail" {
+  // exercise the 4-pixel SIMD shuffle path plus the scalar tail across
+  // several pixel counts (0,1,3 = tail-only; 4,8 = body-only; 5,7,9 = both).
+  for npix in [0, 1, 3, 4, 5, 7, 8, 9, 16, 17] {
+    let rgb = SimdBufferBytes::make(npix * 3)
+    for i in 0..<npix {
+      rgb.set(i * 3, ((i * 3 + 1) % 256).to_byte())
+      rgb.set(i * 3 + 1, ((i * 7 + 2) % 256).to_byte())
+      rgb.set(i * 3 + 2, ((i * 13 + 3) % 256).to_byte())
+    }
+    let rgba = SimdBufferBytes::make(npix * 4)
+    SimdBufferBytes::rgb_to_rgba(rgb, b'\xAB', rgba)
+    for i in 0..<npix {
+      assert_eq(rgba.get(i * 4), rgb.get(i * 3))
+      assert_eq(rgba.get(i * 4 + 1), rgb.get(i * 3 + 1))
+      assert_eq(rgba.get(i * 4 + 2), rgb.get(i * 3 + 2))
+      assert_eq(rgba.get(i * 4 + 3), 0xAB)
+    }
+  }
+}
+
+///|
 test "rgba_to_grayscale" {
   let rgba = SimdBufferBytes::from_array([
     b'\xFF', b'\xFF', b'\xFF', b'\xFF', // white → ~255

@@ -496,13 +496,10 @@ pub fn SimdBufferBytes::rgb_to_rgba(
   if out.len != n * 4 {
     abort("SimdBufferBytes.rgb_to_rgba: out length must be src/3 * 4")
   }
-  let a_int = alpha.to_int()
-  for i in 0..<n {
-    buf_store_byte(out.addr + i * 4, buf_load_byte(src.addr + i * 3))
-    buf_store_byte(out.addr + i * 4 + 1, buf_load_byte(src.addr + i * 3 + 1))
-    buf_store_byte(out.addr + i * 4 + 2, buf_load_byte(src.addr + i * 3 + 2))
-    buf_store_byte(out.addr + i * 4 + 3, a_int)
+  if n == 0 {
+    return
   }
+  buf_rgb_to_rgba(src.addr, out.addr, n, alpha.to_int())
 }
 
 ///|
@@ -1018,6 +1015,16 @@ fn buf_sat_sub(a : Int, b : Int, out : Int, len : Int) -> Unit =
 /// Locals: 5 = vec_end, 6 = i, 7 = byte_tmp, 8 = lo_splat (v128), 9 = hi_splat (v128).
 fn buf_clamp_u8(src : Int, lo : Int, hi : Int, out : Int, len : Int) -> Unit =
   #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local v128) (local v128) local.get 1 i8x16.splat local.set 8 local.get 2 i8x16.splat local.set 9 local.get 4 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 5 block loop local.get 6 local.get 5 i32.ge_s br_if 1 local.get 3 local.get 6 i32.add local.get 0 local.get 6 i32.add v128.load local.get 8 i8x16.max_u local.get 9 i8x16.min_u v128.store local.get 6 i32.const 16 i32.add local.set 6 br 0 end end block loop local.get 6 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 6 i32.add i32.load8_u local.set 7 local.get 7 local.get 1 local.get 7 local.get 1 i32.ge_s select local.set 7 local.get 7 local.get 2 local.get 7 local.get 2 i32.le_s select local.set 7 local.get 3 local.get 6 i32.add local.get 7 i32.store8 local.get 6 i32.const 1 i32.add local.set 6 br 0 end end)
+
+///|
+/// RGB → RGBA expansion: 4 pixels (12 src bytes) → 16 out bytes per iter via
+/// one `i8x16.shuffle` that pulls R/G/B from the loaded vector and the alpha
+/// byte from a splat in the shuffle's second operand. Scalar tail for the
+/// remaining `npix % 4` pixels. The SIMD `v128.load` reads up to 3 bytes past
+/// the logical RGB end into `SimdBuffer::make`'s 16-byte slack (unused lanes).
+/// Locals: 4 = alpha_v (v128), 5 = p (pixel index), 6 = pix_end (multiple of 4).
+fn buf_rgb_to_rgba(src : Int, out : Int, npix : Int, alpha : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local v128) (local i32) (local i32) local.get 3 i8x16.splat local.set 4 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 6 block loop local.get 5 local.get 6 i32.ge_s br_if 1 local.get 1 local.get 5 i32.const 2 i32.shl i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add v128.load local.get 4 i8x16.shuffle 0 1 2 16 3 4 5 16 6 7 8 16 9 10 11 16 v128.store local.get 5 i32.const 4 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 5 i32.const 2 i32.shl i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add i32.load8_u i32.store8 local.get 1 local.get 5 i32.const 2 i32.shl i32.add i32.const 1 i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add i32.const 1 i32.add i32.load8_u i32.store8 local.get 1 local.get 5 i32.const 2 i32.shl i32.add i32.const 2 i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add i32.const 2 i32.add i32.load8_u i32.store8 local.get 1 local.get 5 i32.const 2 i32.shl i32.add i32.const 3 i32.add local.get 3 i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
 
 ///|
 /// Shifted-self subtraction (PNG Sub filter): for i in stride..<len,
