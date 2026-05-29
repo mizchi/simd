@@ -37,6 +37,18 @@ pub fn adler32_bytes(data : FixedArray[Byte]) -> UInt {
 }
 
 ///|
+/// native fill: scalar auto-vec wins; no C FFI needed.
+pub fn fill_i32(arr : FixedArray[Int], value : Int) -> Unit {
+  @internal.scalar_fill(arr, value)
+}
+
+///|
+/// native find: scalar early-exit beats branchless SIMD here.
+pub fn find_i32(arr : FixedArray[Int], needle : Int) -> Int {
+  @internal.scalar_find(arr, needle)
+}
+
+///|
 /// native min reduce: scalar auto-vec wins; reverted from C FFI.
 pub fn min_i32(arr : FixedArray[Int]) -> Int {
   @internal.scalar_min(arr)

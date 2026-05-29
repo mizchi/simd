@@ -335,3 +335,24 @@ pub fn scalar_cumprod(arr : FixedArray[Int], out : FixedArray[Int]) -> Unit {
     out[i] = acc
   }
 }
+
+///|
+/// Fill every element of `arr` with `value` (scalar).
+pub fn scalar_fill(arr : FixedArray[Int], value : Int) -> Unit {
+  let len = arr.length()
+  for i in 0..<len {
+    arr[i] = value
+  }
+}
+
+///|
+/// Index of the first element equal to `needle`, or -1 if absent (scalar).
+pub fn scalar_find(arr : FixedArray[Int], needle : Int) -> Int {
+  let len = arr.length()
+  for i in 0..<len {
+    if arr[i] == needle {
+      return i
+    }
+  }
+  -1
+}

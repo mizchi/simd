@@ -1017,6 +1017,65 @@ A future `mizchi/simd` 0.4.0 may add a Bytes-direct API surface that
 lets dependent repos skip the vendoring step; the design decision is
 deferred until a fourth integration would benefit.
 
+## `src/core_simd/` sub-package — faster moonbitlang/core equivalents
+
+`src/core_simd/` is an **opt-in companion to moonbitlang/core**. It can't
+replace core transparently (no monkey-patching), so instead it exposes
+functions shaped like the core idioms they stand in for, letting a hot path
+be swapped one call at a time:
+
+```moonbit
+a.iter().fold(init=0, fn(x, y) { x + y })  // core
+@core_simd.sum(a)                          // faster equivalent
+
+a.iter().maximum()      ->  @core_simd.maximum(a)   // Int?
+a.search(x)             ->  @core_simd.search(a, x) // Int?
+a.contains(x)           ->  @core_simd.contains(a, x)
+a.fill(v)               ->  @core_simd.fill(a, v)
+a.sort()                ->  @core_simd.sort(a)      // FixedArray[Int]
+```
+
+It is a **thin facade over the existing kernels** (`@simd.sum_i32`,
+`sort_i32`, `find_byte`, …) — no new inline-WAT except two small kernels
+added to the root package to round out the core surface:
+
+- `fill_i32(arr, value)` — `i32x4.splat` + `v128.store` (memset for i32).
+- `find_i32(arr, needle) -> Int` — public wrapper over the existing private
+  `find_int_i32_v128` (the kernel already backing `argmin` / `argmax`).
+
+Surface today:
+
+- `FixedArray[Int]`: `sum`, `product`, `dot`, `maximum`/`minimum` (`Int?`),
+  `search` (`Int?`) / `contains`, `fill`, `sort`.
+- `FixedArray[Byte]`: `bytes_equal`, `bytes_search` (`Int?`), `bytes_count`,
+  `bytes_is_ascii`, `bytes_to_lower_ascii`, `bytes_to_upper_ascii`.
+
+**Result parity is guaranteed on all four targets** — every test asserts the
+`core_simd` output equals the core idiom. Only throughput is
+target-conditional (SIMD on `wasm`, C-FFI/auto-vec on `native`, scalar
+fallback on `wasm-gc` / `js`), so the substitution is always safe.
+
+### Bench (V8 / wasm, n = 1024 ints / 4096 B, core idiom vs core_simd)
+
+| op | core idiom | core_simd | x |
+|---|---|---|---|
+| `sum` | 16.33 µs | 230 ns | **71** |
+| `maximum` | 19.12 µs | 236 ns | **81** |
+| `sort` | 263.6 µs | 29.6 µs | **8.9** |
+| `fill` | 1.28 µs | 149 ns | **8.6** |
+| `bytes_count` | 5.14 µs | 322 ns | **16** |
+| `search` (absent) | 1.33 µs | 612 ns | **2.2** |
+
+The headline `sum` / `maximum` ratios are inflated by iterator-closure
+overhead in `a.iter().fold(...)` / `a.iter().maximum()` — the actual code a
+core user writes. Against a raw scalar `for`-loop baseline the pure-SIMD win
+is ~5x (see the i32 table at the top); the 70-80x figure is "what you save by
+replacing the idiomatic-but-slow iterator call." `search` is only 2.2x
+because the scalar path early-exits while the branchless SIMD scan reads
+every chunk — pick by expected hit position, same caveat as `simd_any`.
+
+Run: `moon bench --target wasm -p core_simd`.
+
 ## Commands
 
 ```bash

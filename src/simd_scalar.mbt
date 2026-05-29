@@ -305,6 +305,16 @@ pub fn count_nonzero_i32(arr : FixedArray[Int]) -> Int {
 }
 
 ///|
+pub fn fill_i32(arr : FixedArray[Int], value : Int) -> Unit {
+  @internal.scalar_fill(arr, value)
+}
+
+///|
+pub fn find_i32(arr : FixedArray[Int], needle : Int) -> Int {
+  @internal.scalar_find(arr, needle)
+}
+
+///|
 pub fn all_i32(arr : FixedArray[Int]) -> Bool {
   @internal.scalar_all(arr)
 }

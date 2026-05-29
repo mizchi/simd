@@ -111,6 +111,35 @@ pub fn argmax_i32(arr : FixedArray[Int]) -> Int {
 }
 
 ///|
+/// Index of the first element equal to `needle`, or -1 if absent.
+/// Reuses the `find_int_i32_v128` kernel (i32x4.eq + bitmask + ctz, no early
+/// break) that backs argmin / argmax.
+pub fn find_i32(arr : FixedArray[Int], needle : Int) -> Int {
+  let len = arr.length()
+  if len == 0 {
+    return -1
+  }
+  find_int_i32_v128(arr, len, needle)
+}
+
+///|
+/// Fill `arr[0..len)` with `value`: i32x4.splat once, then v128.store per
+/// 4-element chunk + i32.store scalar tail.
+#borrow(arr)
+fn fill_i32_v128(arr : FixedArray[Int], len : Int, value : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) local.get 2 i32x4.splat local.set 5 local.get 1 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add local.get 5 v128.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 1 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add local.get 2 i32.store local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+/// SIMD fill - wasm target: i32x4.splat + v128.store.
+pub fn fill_i32(arr : FixedArray[Int], value : Int) -> Unit {
+  let len = arr.length()
+  if len == 0 {
+    return
+  }
+  fill_i32_v128(arr, len, value)
+}
+
+///|
 #borrow(a, b, out)
 fn saxpy_i32_v128(
   k : Int,
