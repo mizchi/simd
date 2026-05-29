@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -848,6 +849,16 @@ int32_t simd_equal_bytes_ffi(const uint8_t* a, const uint8_t* b, int32_t len) {
 int32_t simd_find_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {
   const void* p = memchr(data, needle, (size_t)len);
   return p ? (int32_t)((const uint8_t*)p - data) : -1;
+}
+
+/* Substring search via glibc memmem (a tuned two-way / SIMD search on most
+   libc builds). Returns the first index or -1. */
+int32_t simd_find_bytes_ffi(const uint8_t* haystack, int32_t hlen,
+                            const uint8_t* needle, int32_t nlen) {
+  if (nlen <= 0) return 0;
+  if (nlen > hlen) return -1;
+  const void* p = memmem(haystack, (size_t)hlen, needle, (size_t)nlen);
+  return p ? (int32_t)((const uint8_t*)p - haystack) : -1;
 }
 
 int32_t simd_count_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {

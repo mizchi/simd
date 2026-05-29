@@ -1054,7 +1054,8 @@ Surface today:
   `dot_f64`, `mean_f64`, `variance_f64`; element-wise `add_f64`, `sub_f64`,
   `mul_f64`, `div_f64`, `sqrt_f64`, `min_elem_f64`, `max_elem_f64`.
 - `Bytes` (read-only, **zero-copy** on wasm): `bytes_equal`, `bytes_search`
-  (`Int?`) / `bytes_contains`, `bytes_count`, `bytes_is_ascii`.
+  (`Int?`) / `bytes_contains`, `bytes_count`, `bytes_is_ascii`,
+  `bytes_index_of` (substring, `Int?`) / `bytes_contains_sub`.
 - `FixedArray[Byte]` (in-place, `Bytes` is immutable): `to_lower_ascii`,
   `to_upper_ascii`.
 - `String` → UTF-8 (the FFI-boundary bottleneck): `encode_utf8` (`-> Bytes`),
@@ -1104,6 +1105,32 @@ C). Native bench (4 KiB) vs a per-byte MoonBit loop: `find_byte_b` **56x**
 core's `Bytes::==` (already `memcmp`). This is the zero-copy `Bytes`-direct
 surface the downstream-integration notes flagged as a future option — now
 exercised by `simdcore` on wasm **and** native.
+
+### Substring search (`find_bytes_b` → `bytes_index_of`)
+
+`Bytes` substring search (core has none) is the cleanest libc win after
+`find_byte_b`/`memchr`:
+
+- **native** → glibc `memmem` (declared via `#define _GNU_SOURCE`; works under
+  the bundled TCC since it links system glibc).
+- **wasm** → a new `find_byte_from_b` inline-WAT (SIMD `i8x16.eq` first-byte
+  scan that **early-returns on the first matching chunk** — `i32.ctz` gives
+  the earliest lane) drives a MoonBit candidate loop with a scalar verify of
+  the remaining needle bytes.
+- **wasm-gc / js** → `@internal.scalar_find_bytes_b`.
+
+| `bytes_index_of` (4 KiB, needle at tail) | scalar | simdcore | x |
+|---|---|---|---|
+| native | 2.57 µs | 467 ns (`memmem`) | **5.5** |
+| wasm | 12.62 µs | 257 ns | **49** |
+
+**Inline-WAT finding:** `if … return … end` inside a `loop` **does** parse and
+run correctly in the Dwarfsm inline-WAT (used here for the early-return
+first-byte scan). The earlier `argmin`/`argmax` note that early-exit was
+"less reliable" was over-cautious — structured `if`/`return` is fine; what
+those kernels avoided was unstructured control flow. Prefer early return for
+search-style kernels (much better worst case than the select-tracking
+"scan-everything" pattern).
 
 ### String → UTF-8 conversion (the FFI-boundary bottleneck)
 

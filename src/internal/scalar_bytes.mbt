@@ -205,6 +205,38 @@ pub fn scalar_is_ascii_b(data : Bytes) -> Bool {
 }
 
 ///|
+/// First index where `needle` occurs in `haystack`, or -1 (naive scan).
+pub fn scalar_find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
+  let nl = needle.length()
+  if nl == 0 {
+    return 0
+  }
+  let hl = haystack.length()
+  if nl > hl {
+    return -1
+  }
+  let n0 = needle[0]
+  let last = hl - nl
+  for i in 0..<=last {
+    if haystack[i] == n0 {
+      let mut k = 1
+      let mut ok = true
+      while k < nl {
+        if haystack[i + k] != needle[k] {
+          ok = false
+          break
+        }
+        k = k + 1
+      }
+      if ok {
+        return i
+      }
+    }
+  }
+  -1
+}
+
+///|
 /// In-place ASCII A-Z → a-z conversion. Non-ASCII bytes pass through.
 pub fn scalar_to_lower_ascii(data : FixedArray[Byte]) -> Unit {
   let len = data.length()

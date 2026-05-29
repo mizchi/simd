@@ -429,3 +429,47 @@ test "bench/json_pipeline_ab" (b : @bench.T) {
     b.keep(json_structural_indices_into(bytes, s1, q1, i1))
   })
 }
+
+///|
+/// Scalar reference substring search (the loop a core user would write).
+fn ref_index_of_bench(h : Bytes, n : Bytes) -> Int {
+  let hl = h.length()
+  let nl = n.length()
+  if nl == 0 || nl > hl {
+    return if nl == 0 { 0 } else { -1 }
+  }
+  for i in 0..<=(hl - nl) {
+    let mut ok = true
+    for k in 0..<nl {
+      if h[i + k] != n[k] {
+        ok = false
+        break
+      }
+    }
+    if ok {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+test "bench/bytes_index_of" (b : @bench.T) {
+  // 4 KiB haystack, needle planted near the end (worst case: full scan).
+  let arr = FixedArray::make(4096, b'\x00')
+  for i in 0..<4096 {
+    arr[i] = (0x61 + i % 26).to_byte() // 'a'..'z' cycling
+  }
+  // plant a needle that doesn't otherwise occur
+  let tail = b"NEEDLE!"
+  for j in 0..<tail.length() {
+    arr[4096 - tail.length() + j] = tail[j]
+  }
+  let hay = Bytes::from_fixedarray(arr)
+  b.bench(name="bytes_index_of_scalar", fn() {
+    b.keep(ref_index_of_bench(hay, tail))
+  })
+  b.bench(name="bytes_index_of_simdcore", fn() {
+    b.keep(bytes_index_of(hay, tail))
+  })
+}

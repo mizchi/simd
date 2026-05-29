@@ -450,3 +450,61 @@ test "json_structural_indices_into reuse" {
   let count2 = json_structural_indices_into(bytes, structural, quote, indices)
   assert_eq(count2, count)
 }
+
+///|
+/// Reference substring search (naive) for cross-checking.
+fn ref_index_of(h : Bytes, n : Bytes) -> Int {
+  let hl = h.length()
+  let nl = n.length()
+  if nl == 0 {
+    return 0
+  }
+  if nl > hl {
+    return -1
+  }
+  for i in 0..<=(hl - nl) {
+    let mut ok = true
+    for k in 0..<nl {
+      if h[i + k] != n[k] {
+        ok = false
+        break
+      }
+    }
+    if ok {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+test "bytes_index_of vs reference" {
+  let h = b"the quick brown fox jumps over the lazy dog, padded out a bit more"
+  let needles = [
+    b"the", b"fox", b"dog", b"quick", b"more", b"t", b"e ", b"zzz", b"the quick",
+    b"", b"padded out a bit more",
+  ]
+  for n in needles {
+    let want = ref_index_of(h, n)
+    let got = match bytes_index_of(h, n) {
+      Some(i) => i
+      None => -1
+    }
+    assert_eq(got, want)
+  }
+  // overlap / repeated first byte (forces multiple candidate verifies):
+  // every "a" matches the first needle byte, so the SIMD scan keeps finding
+  // candidates that fail verification until the real match.
+  let h2 = b"aaaaaaaaaaaaaaaaaaab"
+  for n in [b"aab", b"aaab", b"ab", b"aaaa"] {
+    let want = ref_index_of(h2, n)
+    assert_eq(bytes_index_of(h2, n), if want < 0 { None } else { Some(want) })
+  }
+  assert_true(bytes_contains_sub(h2, b"aab"))
+  assert_false(bytes_contains_sub(h2, b"aac"))
+  // needle longer than haystack
+  assert_eq(bytes_index_of(b"hi", b"hello"), None)
+  // match at the very end, crossing a 16-byte boundary
+  let h3 = b"0123456789abcdefNEEDLE"
+  assert_eq(bytes_index_of(h3, b"NEEDLE"), Some(16))
+}

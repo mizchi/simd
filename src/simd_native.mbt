@@ -85,6 +85,20 @@ pub fn is_ascii_b(data : Bytes) -> Bool {
 }
 
 ///|
+/// native substring search: glibc `memmem`.
+pub fn find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
+  let nl = needle.length()
+  if nl == 0 {
+    return 0
+  }
+  let hl = haystack.length()
+  if nl > hl {
+    return -1
+  }
+  simd_find_bytes_b_ffi(haystack, hl, needle, nl)
+}
+
+///|
 /// native min reduce: scalar auto-vec wins; reverted from C FFI.
 pub fn min_i32(arr : FixedArray[Int]) -> Int {
   @internal.scalar_min(arr)
