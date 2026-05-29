@@ -1088,12 +1088,22 @@ read it directly. Probed and confirmed: both `v128.load` and a scalar
 `i32.load8_u` loop over a `Bytes` param return correct values on `wasm`.
 
 On `wasm-gc` the same inline-WAT **traps at link/instantiate** (`Bytes`
-arrives as a GC ref, not an i32 address) — also confirmed — so wasm-gc, like
-native / js, uses the `@internal.scalar_*_b` `Bytes` loops. The root package
-carries `equal_bytes_b` / `find_byte_b` / `count_byte_b` / `is_ascii_b`
-(wasm inline-WAT, identical bodies to the `FixedArray[Byte]` kernels; scalar
-elsewhere). This is the zero-copy `Bytes`-direct surface the downstream-
-integration notes flagged as a future option — now exercised by `simdcore`.
+arrives as a GC ref, not an i32 address) — also confirmed — so wasm-gc / js
+use the `@internal.scalar_*_b` `Bytes` loops. The root package carries
+`equal_bytes_b` / `find_byte_b` / `count_byte_b` / `is_ascii_b` (wasm
+inline-WAT, identical bodies to the `FixedArray[Byte]` kernels).
+
+On **`native`** these bind to the same C byte kernels as the
+`FixedArray[Byte]` ops: `Bytes` crosses the native FFI as a
+`const uint8_t*` to byte[0] under `#borrow` (identical ABI to
+`FixedArray[Byte]` — verified by the native test suite), so
+`simd_{equal_bytes,find_byte,count_byte,is_ascii}_b_ffi` are just extra
+`extern "C"` declarations bound to the existing `simd_*_ffi` symbols (no new
+C). Native bench (4 KiB) vs a per-byte MoonBit loop: `find_byte_b` **56x**
+(`memchr`), `is_ascii_b` 17x, `count_byte_b` 4.2x; `equal_bytes_b` ties
+core's `Bytes::==` (already `memcmp`). This is the zero-copy `Bytes`-direct
+surface the downstream-integration notes flagged as a future option — now
+exercised by `simdcore` on wasm **and** native.
 
 ### String → UTF-8 conversion (the FFI-boundary bottleneck)
 

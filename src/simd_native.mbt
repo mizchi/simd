@@ -54,22 +54,34 @@ pub fn equal_bytes_b(a : Bytes, b : Bytes, len : Int) -> Bool {
   if len <= 0 {
     return true
   }
-  @internal.scalar_equal_bytes_b(a, b, len)
+  simd_equal_bytes_b_ffi(a, b, len) != 0
 }
 
 ///|
 pub fn find_byte_b(data : Bytes, needle : Byte) -> Int {
-  @internal.scalar_find_byte_b(data, needle)
+  let len = data.length()
+  if len == 0 {
+    return -1
+  }
+  simd_find_byte_b_ffi(data, len, needle)
 }
 
 ///|
 pub fn count_byte_b(data : Bytes, needle : Byte) -> Int {
-  @internal.scalar_count_byte_b(data, needle)
+  let len = data.length()
+  if len == 0 {
+    return 0
+  }
+  simd_count_byte_b_ffi(data, len, needle)
 }
 
 ///|
 pub fn is_ascii_b(data : Bytes) -> Bool {
-  @internal.scalar_is_ascii_b(data)
+  let len = data.length()
+  if len == 0 {
+    return true
+  }
+  simd_is_ascii_b_ffi(data, len) != 0
 }
 
 ///|
