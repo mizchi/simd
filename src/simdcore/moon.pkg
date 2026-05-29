@@ -1,4 +1,15 @@
 import {
   "moonbitlang/core/bench",
+  "moonbitlang/core/encoding/utf8",
   "mizchi/simd/src" @simd,
 }
+
+options(
+  targets: {
+    "simdcore.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdcore_test.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdcore_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdcore_str_wasm.mbt": [ "wasm" ],
+    "simdcore_str_fallback.mbt": [ "wasm-gc", "native", "js" ],
+  },
+)

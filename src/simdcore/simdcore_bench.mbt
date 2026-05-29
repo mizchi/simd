@@ -207,3 +207,35 @@ test "bench/f64_dot" (b : @bench.T) {
   })
   b.bench(name="simdcore_dot_f64", fn() { b.keep(dot_f64(a, c)) })
 }
+
+///|
+fn bench_ascii_string(n : Int) -> String {
+  let arr = Array::new()
+  for i in 0..<n {
+    arr.push(Char::from_int(0x41 + i % 26))
+  }
+  String::from_array(arr)
+}
+
+///|
+test "bench/utf8_encode" (b : @bench.T) {
+  let s = bench_ascii_string(4096)
+  b.bench(name="core_utf8_encode", fn() { b.keep(@utf8.encode(s[:])) })
+  b.bench(name="simdcore_encode_utf8", fn() { b.keep(encode_utf8(s)) })
+}
+
+///|
+test "bench/utf8_encode_into" (b : @bench.T) {
+  let s = bench_ascii_string(4096)
+  let out = FixedArray::make(4096, b'\x00')
+  b.bench(name="core_utf8_encode_alloc", fn() { b.keep(@utf8.encode(s[:])) })
+  b.bench(name="simdcore_encode_utf8_into", fn() {
+    b.keep(encode_utf8_into(s, out))
+  })
+}
+
+///|
+test "bench/is_ascii_string" (b : @bench.T) {
+  let s = bench_ascii_string(4096)
+  b.bench(name="simdcore_is_ascii_string", fn() { b.keep(is_ascii_string(s)) })
+}

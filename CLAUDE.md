@@ -1057,6 +1057,8 @@ Surface today:
   (`Int?`) / `bytes_contains`, `bytes_count`, `bytes_is_ascii`.
 - `FixedArray[Byte]` (in-place, `Bytes` is immutable): `to_lower_ascii`,
   `to_upper_ascii`.
+- `String` → UTF-8 (the FFI-boundary bottleneck): `encode_utf8` (`-> Bytes`),
+  `encode_utf8_into` (`-> Int`, no alloc), `is_ascii_string`.
 
 **Result parity is guaranteed on all four targets** — every test asserts the
 `simdcore` output equals the core idiom. Only throughput is
@@ -1079,6 +1081,51 @@ carries `equal_bytes_b` / `find_byte_b` / `count_byte_b` / `is_ascii_b`
 (wasm inline-WAT, identical bodies to the `FixedArray[Byte]` kernels; scalar
 elsewhere). This is the zero-copy `Bytes`-direct surface the downstream-
 integration notes flagged as a future option — now exercised by `simdcore`.
+
+### String → UTF-8 conversion (the FFI-boundary bottleneck)
+
+MoonBit's `String` is UTF-16, and crossing the FFI boundary to UTF-8 `Bytes`
+is a real bottleneck: core's `@encoding/utf8.encode` runs a per-code-unit
+scalar loop that the wasm backend does **not** lower to a fast intrinsic
+(measured ~9 µs for 4 KiB of ASCII; `@encoding/ascii.encode` is worse, and
+the `decode` side is the same scalar loop — dispatching by content buys
+nothing).
+
+Verified enabler: **`String` crosses the inline-WAT FFI as a linear-memory
+pointer to its UTF-16 code-unit buffer** (unit `i` at byte offset `2*i`) —
+probed by reading units with `i32.load16_u`, including a `€` (U+20AC). So the
+all-ASCII case vectorises:
+
+- `is_ascii_string` — OR-fold `(unit & 0xFF80)` over 8-unit `i16x8` chunks +
+  `v128.any_true`.
+- `encode_utf8` / `encode_utf8_into` — if all-ASCII, narrow UTF-16 → UTF-8
+  with one `i8x16.shuffle` per 16 units (picks each unit's low byte: even
+  byte lanes `0,2,…,30`), scalar tail. **Non-ASCII (multi-byte, surrogate
+  pairs) delegates to `@encoding/utf8.encode`**, so the result is always
+  identical to core.
+
+`String` lives in `simdcore` directly (target-split `simdcore_str_wasm.mbt` /
+`simdcore_str_fallback.mbt`), not the root catalog, because the scalar
+fallback just calls `@encoding/utf8` — no root kernel needed off-wasm.
+
+| op (4 KiB ASCII) | core | simdcore | x |
+|---|---|---|---|
+| `encode_utf8_into` (no alloc) | 9.13 µs | 835 ns | **10.9** |
+| `encode_utf8` (`-> Bytes`) | 9.07 µs | 3.06 µs | **3.0** |
+
+`encode_utf8` is "only" 3x because `Bytes::from_fixedarray` copies the output
+(no public zero-copy `FixedArray[Byte] -> Bytes`); `encode_utf8_into` writes
+straight into the caller's buffer and shows the true ~11x narrowing win.
+Reuse an output buffer and prefer `_into` on hot paths (same lesson as the
+`SimdBuffer` `_into` family).
+
+**Decode (UTF-8 `Bytes` → `String`) is *not* accelerated.** There is no
+public zero-copy `FixedArray[UInt16] -> String` (core's
+`%string.unsafe_from_uint16_fixedarray` intrinsic is private), and
+dispatching to core's `ascii`/`utf8` decoders gives no win (measured — same
+scalar loop). A SIMD widen (`i8x16` → `i16x8`) is ready, but without a String
+sink it can't be wired up; revisit if core exposes a UTF-16-buffer → String
+constructor.
 
 ### Bench (V8 / wasm, n = 1024 ints / 4096 B, core idiom vs simdcore)
 

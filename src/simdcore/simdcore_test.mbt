@@ -211,3 +211,61 @@ test "ascii case ops (FixedArray in-place)" {
   to_upper_ascii(up)
   assert_eq(up, [b'H', b'E', b'L', b'L', b'O', b'1'])
 }
+
+///|
+fn make_string(n : Int, f : (Int) -> Int) -> String {
+  let arr = Array::new()
+  for i in 0..<n {
+    arr.push(Char::from_int(f(i)))
+  }
+  String::from_array(arr)
+}
+
+///|
+test "is_ascii_string" {
+  // long enough (> 16 units) to cover the SIMD chunk path + scalar tail.
+  let ascii = make_string(45, fn(i) { 0x41 + i % 26 })
+  assert_true(is_ascii_string(ascii))
+  // a non-ASCII unit at index 20, inside the SIMD region.
+  let mixed = make_string(45, fn(i) { if i == 20 { 0x20AC } else { 0x41 } })
+  assert_false(is_ascii_string(mixed))
+  assert_true(is_ascii_string(""))
+}
+
+///|
+test "encode_utf8 (ascii fast path == core)" {
+  // lengths chosen to hit 16-aligned body, body+tail, and pure tail (< 16).
+  for n in [0, 5, 16, 33, 100] {
+    let s = make_string(n, fn(i) { 0x41 + i % 26 })
+    assert_eq(encode_utf8(s), @utf8.encode(s[:]))
+  }
+}
+
+///|
+test "encode_utf8 (non-ascii delegates to core)" {
+  // €(BMP, 3-byte) and 😀(astral, surrogate pair -> 4-byte).
+  let s = make_string(40, fn(i) {
+    if i == 10 {
+      0x20AC
+    } else if i == 25 {
+      0x41
+    } else {
+      0x42
+    }
+  })
+  assert_eq(encode_utf8(s), @utf8.encode(s[:]))
+  let astral = "hello \u{1F600} world, padded out beyond sixteen units"
+  assert_eq(encode_utf8(astral), @utf8.encode(astral[:]))
+}
+
+///|
+test "encode_utf8_into" {
+  let s = make_string(50, fn(i) { 0x61 + i % 26 })
+  let out = FixedArray::make(64, b'\x00')
+  let written = encode_utf8_into(s, out)
+  assert_eq(written, 50)
+  let want = @utf8.encode(s[:])
+  for i in 0..<written {
+    assert_eq(out[i], want[i])
+  }
+}
