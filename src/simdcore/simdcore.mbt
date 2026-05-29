@@ -318,6 +318,26 @@ pub fn bytes_is_ascii(data : Bytes) -> Bool {
   @simd.is_ascii_b(data)
 }
 
+///|
+/// Index of the first occurrence of the `needle` byte sequence in `haystack`,
+/// or `None` if absent. Empty `needle` returns `Some(0)`. (core has no
+/// `Bytes` substring search.) Native uses `memmem`; wasm SIMD-scans the first
+/// byte then verifies; wasm-gc / js are scalar.
+pub fn bytes_index_of(haystack : Bytes, needle : Bytes) -> Int? {
+  let i = @simd.find_bytes_b(haystack, needle)
+  if i < 0 {
+    None
+  } else {
+    Some(i)
+  }
+}
+
+///|
+/// Whether `needle` occurs as a contiguous subsequence of `haystack`.
+pub fn bytes_contains_sub(haystack : Bytes, needle : Bytes) -> Bool {
+  @simd.find_bytes_b(haystack, needle) >= 0
+}
+
 // ---------------------------------------------------------------------------
 // FixedArray[Byte] (in-place mutation)
 //

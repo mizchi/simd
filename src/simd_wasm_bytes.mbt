@@ -314,3 +314,49 @@ pub fn is_ascii_b(data : Bytes) -> Bool {
   }
   is_ascii_b_v128(data, len) != 0
 }
+
+///|
+/// Find the first index `>= start` where `data[i] == needle`, else -1.
+/// SIMD 16-byte scan with early return on the first matching chunk (ctz gives
+/// the earliest lane), then a scalar tail. Backs the substring driver below.
+#borrow(data)
+fn find_byte_from_b(data : Bytes, len : Int, needle : Int, start : Int) -> Int =
+  #|(func (param i32) (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local v128) local.get 2 i8x16.splat local.set 6 local.get 3 local.set 4 block loop local.get 4 i32.const 16 i32.add local.get 1 i32.gt_s br_if 1 local.get 0 local.get 4 i32.add v128.load local.get 6 i8x16.eq i8x16.bitmask local.set 5 local.get 5 i32.eqz i32.eqz if local.get 4 local.get 5 i32.ctz i32.add return end local.get 4 i32.const 16 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 1 i32.ge_s br_if 1 local.get 0 local.get 4 i32.add i32.load8_u local.get 2 i32.eq if local.get 4 return end local.get 4 i32.const 1 i32.add local.set 4 br 0 end end i32.const -1)
+
+///|
+/// SIMD substring search over `Bytes`: SIMD first-byte scan (`find_byte_from_b`)
+/// to jump to candidates, scalar verify of the remaining `needle` bytes.
+/// Returns the first index where `needle` occurs in `haystack`, or -1.
+pub fn find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
+  let hl = haystack.length()
+  let nl = needle.length()
+  if nl == 0 {
+    return 0
+  }
+  if nl > hl {
+    return -1
+  }
+  let n0 = needle[0].to_int()
+  let last = hl - nl
+  let mut pos = 0
+  while pos <= last {
+    let cand = find_byte_from_b(haystack, hl, n0, pos)
+    if cand < 0 || cand > last {
+      return -1
+    }
+    let mut k = 1
+    let mut ok = true
+    while k < nl {
+      if haystack[cand + k] != needle[k] {
+        ok = false
+        break
+      }
+      k = k + 1
+    }
+    if ok {
+      return cand
+    }
+    pos = cand + 1
+  }
+  -1
+}

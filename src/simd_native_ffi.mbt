@@ -366,6 +366,15 @@ extern "C" fn simd_count_byte_b_ffi(
 extern "C" fn simd_is_ascii_b_ffi(data : Bytes, len : Int) -> Int = "simd_is_ascii_ffi"
 
 ///|
+#borrow(haystack, needle)
+extern "C" fn simd_find_bytes_b_ffi(
+  haystack : Bytes,
+  hlen : Int,
+  needle : Bytes,
+  nlen : Int,
+) -> Int = "simd_find_bytes_ffi"
+
+///|
 #borrow(data)
 extern "C" fn simd_to_lower_ascii_ffi(
   data : FixedArray[Byte],

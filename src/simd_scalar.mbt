@@ -338,6 +338,11 @@ pub fn is_ascii_b(data : Bytes) -> Bool {
 }
 
 ///|
+pub fn find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
+  @internal.scalar_find_bytes_b(haystack, needle)
+}
+
+///|
 pub fn all_i32(arr : FixedArray[Int]) -> Bool {
   @internal.scalar_all(arr)
 }
