@@ -290,3 +290,77 @@ test "decode_utf8_unsafe (non-ascii == decode_lossy)" {
   // round-trips back to the original for well-formed input.
   assert_eq(decode_utf8_unsafe(bytes), s)
 }
+
+///|
+fn int_array(n : Int) -> Array[Int] {
+  let a = Array::new(capacity=n)
+  for i in 0..<n {
+    a.push((i * 37 + 11) % 1000 - 500)
+  }
+  a
+}
+
+///|
+test "array bridge: to/of_fixedarray round trip" {
+  let a = int_array(20)
+  let fa = to_fixedarray(a)
+  assert_eq(fa.length(), 20)
+  let back = of_fixedarray(fa)
+  assert_eq(back, a)
+}
+
+///|
+test "array reductions == idiom" {
+  let a = int_array(50)
+  assert_eq(array_sum(a), a.iter().fold(init=0, fn(x, y) { x + y }))
+  assert_eq(
+    array_product(int_array(6)),
+    int_array(6).iter().fold(init=1, fn(x, y) { x * y }),
+  )
+  assert_eq(array_maximum(a), a.iter().maximum())
+  assert_eq(array_minimum(a), a.iter().minimum())
+  let mut nz = 0
+  for i in 0..<a.length() {
+    if a[i] != 0 {
+      nz = nz + 1
+    }
+  }
+  assert_eq(array_count_nonzero(a), nz)
+  let b = int_array(50)
+  let mut d = 0
+  for i in 0..<a.length() {
+    d = d + a[i] * b[i]
+  }
+  assert_eq(array_dot(a, b), d)
+}
+
+///|
+test "array_sort in place == Array::sort" {
+  let a = int_array(100)
+  let want = a.copy()
+  want.sort()
+  array_sort(a)
+  assert_eq(a, want)
+  // edge cases
+  let one = [42]
+  array_sort(one)
+  assert_eq(one, [42])
+  let empty : Array[Int] = []
+  array_sort(empty)
+  assert_eq(empty, [])
+}
+
+///|
+test "array f64 reductions == loop" {
+  let a : Array[Double] = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5]
+  let b : Array[Double] = [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+  let mut s = 0.0
+  let mut d = 0.0
+  for i in 0..<a.length() {
+    s = s + a[i]
+    d = d + a[i] * b[i]
+  }
+  assert_eq(array_sum_f64(a), s)
+  assert_eq(array_dot_f64(a, b), d)
+  assert_eq(array_mean_f64(a), s / 8.0)
+}

@@ -20,11 +20,12 @@
 // On every target the *result* is identical to the core idiom; only the
 // throughput differs. So this is always safe to substitute.
 //
-// Inputs are `FixedArray[Int]` / `FixedArray[Byte]` (the layouts that cross
-// the wasm FFI boundary). For `Array[Int]`, call `.to_fixedarray()` first,
-// or keep the hot buffer as a `FixedArray` — note that copying an
-// `Array` to a `FixedArray` per call usually erases the SIMD win, so reuse
-// the backing storage.
+// Inputs are `FixedArray[Int]` / `FixedArray[Byte]` / `Bytes` / `String`
+// (the layouts that cross the wasm FFI boundary). For core's growable
+// `Array[T]`, use the `Array[T]` bridge at the bottom of this file
+// (`to_fixedarray` / `of_fixedarray` + `array_*` one-shots): it copies once
+// into a `FixedArray`, which still beats the idiomatic `a.iter().fold(...)`
+// baseline — reuse the `FixedArray` if you run many ops.
 
 // ---------------------------------------------------------------------------
 // FixedArray[Int]
@@ -335,4 +336,116 @@ pub fn to_lower_ascii(data : FixedArray[Byte]) -> Unit {
 /// Uppercase ASCII letters (a-z) in place; other bytes untouched.
 pub fn to_upper_ascii(data : FixedArray[Byte]) -> Unit {
   @simd.to_upper_ascii(data)
+}
+
+// ---------------------------------------------------------------------------
+// Array[T] bridge
+//
+// core's growable `Array[T]` is the type most user code holds, but SIMD needs
+// the contiguous `FixedArray[T]` layout and there is no public zero-copy
+// `Array -> FixedArray`. So the bridge copies in (`to_fixedarray`) and wraps
+// out zero-copy (`of_fixedarray`, via `Array::from_fixed_array`).
+//
+// The copy is cheap relative to the *idiomatic* core baseline a user writes:
+// `a.iter().fold(...)` / `a.iter().maximum()` carry per-element closure
+// overhead, so copy + SIMD still beats them (~6x for reductions, ~9x for
+// sort on n=1024 — see CLAUDE.md). It will NOT beat a hand-tuned raw `for`
+// loop on the cheapest single reductions, and the copy is wasted if you call
+// many ops: in that case `to_fixedarray` once and reuse the FixedArray.
+// ---------------------------------------------------------------------------
+
+///|
+/// Copy an `Array[Int]` into a fresh `FixedArray[Int]` (the SIMD-ready layout).
+pub fn to_fixedarray(a : Array[Int]) -> FixedArray[Int] {
+  FixedArray::from_array(a[:])
+}
+
+///|
+/// Wrap a `FixedArray[Int]` as an `Array[Int]` (zero-copy via
+/// `Array::from_fixed_array`). Pair with `to_fixedarray` to round-trip.
+pub fn of_fixedarray(a : FixedArray[Int]) -> Array[Int] {
+  Array::from_fixed_array(a)
+}
+
+///|
+/// Copy an `Array[Double]` into a fresh `FixedArray[Double]`.
+pub fn to_fixedarray_f64(a : Array[Double]) -> FixedArray[Double] {
+  FixedArray::from_array(a[:])
+}
+
+///|
+/// Wrap a `FixedArray[Double]` as an `Array[Double]` (zero-copy).
+pub fn of_fixedarray_f64(a : FixedArray[Double]) -> Array[Double] {
+  Array::from_fixed_array(a)
+}
+
+// --- Array[Int] one-shot convenience (copy-in; beats the iterator idiom) ---
+
+///|
+/// Sum of an `Array[Int]`. Replaces `a.iter().fold(init=0, ..)`.
+pub fn array_sum(a : Array[Int]) -> Int {
+  sum(to_fixedarray(a))
+}
+
+///|
+/// Product of an `Array[Int]`.
+pub fn array_product(a : Array[Int]) -> Int {
+  product(to_fixedarray(a))
+}
+
+///|
+/// Largest element of an `Array[Int]`, or `None` if empty.
+pub fn array_maximum(a : Array[Int]) -> Int? {
+  maximum(to_fixedarray(a))
+}
+
+///|
+/// Smallest element of an `Array[Int]`, or `None` if empty.
+pub fn array_minimum(a : Array[Int]) -> Int? {
+  minimum(to_fixedarray(a))
+}
+
+///|
+/// Dot product of two equal-length `Array[Int]`.
+pub fn array_dot(a : Array[Int], b : Array[Int]) -> Int {
+  dot(to_fixedarray(a), to_fixedarray(b))
+}
+
+///|
+/// Number of non-zero elements of an `Array[Int]`.
+pub fn array_count_nonzero(a : Array[Int]) -> Int {
+  count_nonzero(to_fixedarray(a))
+}
+
+///|
+/// Sort an `Array[Int]` ascending, in place (copy → SIMD merge sort → blit
+/// back). ~9x `Array::sort` on n=1024 despite the round-trip copies.
+pub fn array_sort(a : Array[Int]) -> Unit {
+  let n = a.length()
+  if n <= 1 {
+    return
+  }
+  let fa = FixedArray::from_array(a[:])
+  @simd.sort_i32(fa)
+  a.unsafe_blit_fixed(0, fa, 0, n)
+}
+
+// --- Array[Double] one-shot convenience ---
+
+///|
+/// Sum of an `Array[Double]`.
+pub fn array_sum_f64(a : Array[Double]) -> Double {
+  sum_f64(to_fixedarray_f64(a))
+}
+
+///|
+/// Dot product of two equal-length `Array[Double]`.
+pub fn array_dot_f64(a : Array[Double], b : Array[Double]) -> Double {
+  dot_f64(to_fixedarray_f64(a), to_fixedarray_f64(b))
+}
+
+///|
+/// Arithmetic mean of an `Array[Double]`.
+pub fn array_mean_f64(a : Array[Double]) -> Double {
+  mean_f64(to_fixedarray_f64(a))
 }

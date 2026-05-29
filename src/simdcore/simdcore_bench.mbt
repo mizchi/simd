@@ -260,3 +260,36 @@ test "bench/utf8_decode" (b : @bench.T) {
     b.keep(decode_utf8_unsafe_intrinsic(bytes))
   })
 }
+
+///|
+fn bench_int_arr(n : Int) -> Array[Int] {
+  let a = Array::new(capacity=n)
+  for i in 0..<n {
+    a.push(i * 48271 % 100000)
+  }
+  a
+}
+
+///|
+test "bench/array_sum" (b : @bench.T) {
+  let a = bench_int_arr(1024)
+  b.bench(name="core_array_iter_fold", fn() {
+    b.keep(a.iter().fold(init=0, fn(x, y) { x + y }))
+  })
+  b.bench(name="simdcore_array_sum", fn() { b.keep(array_sum(a)) })
+}
+
+///|
+test "bench/array_sort" (b : @bench.T) {
+  let src = bench_int_arr(1024)
+  b.bench(name="core_array_sort", fn() {
+    let c = src.copy()
+    c.sort()
+    b.keep(c[0])
+  })
+  b.bench(name="simdcore_array_sort", fn() {
+    let c = src.copy()
+    array_sort(c)
+    b.keep(c[0])
+  })
+}

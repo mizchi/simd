@@ -1063,6 +1063,11 @@ Surface today:
   `decode_utf8_unsafe` (public-API, stable) and
   `decode_utf8_unsafe_intrinsic` (faster, depends on a private core
   intrinsic). See the decode section below.
+- `Array[Int]` / `Array[Double]` bridge: `to_fixedarray` / `of_fixedarray`
+  (+ `_f64`) conversions, plus copy-in one-shots `array_sum`,
+  `array_product`, `array_maximum`/`array_minimum`, `array_dot`,
+  `array_count_nonzero`, `array_sort` (in place), `array_sum_f64`,
+  `array_dot_f64`, `array_mean_f64`. See the Array bridge section below.
 
 **Result parity is guaranteed on all four targets** — every test asserts the
 `simdcore` output equals the core idiom. Only throughput is
@@ -1203,6 +1208,32 @@ hand-written zip loop:
 
 f64 ratios are lower than i32 because f64x2 packs only 2 lanes per v128 (vs 4
 for i32) and the reductions carry a serial accumulator.
+
+Run: `moon bench --target wasm -p simdcore`.
+
+### `Array[T]` bridge
+
+core's growable `Array[T]` is the type most user code holds, but the SIMD
+kernels need the contiguous `FixedArray[T]` layout and **there is no public
+zero-copy `Array -> FixedArray`** (only `FixedArray::from_array(view)` which
+copies, and `Array::from_fixed_array` which wraps the other direction
+zero-copy). So the bridge copies in (`to_fixedarray`) and wraps out
+zero-copy (`of_fixedarray`).
+
+The copy turns out to be cheap relative to the *idiomatic* baseline a core
+user actually writes — `a.iter().fold(...)` / `a.iter().maximum()` carry
+per-element closure overhead — so copy + SIMD still wins:
+
+| op (n = 1024) | core idiom | simdcore (copy + SIMD) | x |
+|---|---|---|---|
+| `array_sum` | `a.iter().fold` 16.95 µs | 2.50 µs | **6.8** |
+| `array_sort` | `Array::sort` 264 µs | 31.8 µs | **8.3** |
+
+(Copy alone is ~2.4 µs at n = 1024, i.e. most of `array_sum`'s cost — so a
+single cheap reduction won't beat a hand-tuned raw `for` loop, and the copy
+is wasted if you call several ops. In that case `to_fixedarray` once and
+reuse the `FixedArray`; `array_sort` always wins because the sort dominates
+the round-trip.)
 
 Run: `moon bench --target wasm -p simdcore`.
 
