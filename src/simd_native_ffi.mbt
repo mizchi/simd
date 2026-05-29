@@ -337,6 +337,26 @@ extern "C" fn simd_popcount_bytes_ffi(
 #borrow(data)
 extern "C" fn simd_is_ascii_ffi(data : FixedArray[Byte], len : Int) -> Int = "simd_is_ascii_ffi"
 
+// `Bytes`-direct bindings to the same C byte kernels. `Bytes` crosses the
+// native FFI as a `const uint8_t*` to byte[0] under `#borrow`, identical to
+// `FixedArray[Byte]`, so they reuse the existing C symbols.
+
+///|
+#borrow(a, b)
+extern "C" fn simd_equal_bytes_b_ffi(a : Bytes, b : Bytes, len : Int) -> Int = "simd_equal_bytes_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_find_byte_b_ffi(data : Bytes, len : Int, needle : Byte) -> Int = "simd_find_byte_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_count_byte_b_ffi(data : Bytes, len : Int, needle : Byte) -> Int = "simd_count_byte_ffi"
+
+///|
+#borrow(data)
+extern "C" fn simd_is_ascii_b_ffi(data : Bytes, len : Int) -> Int = "simd_is_ascii_ffi"
+
 ///|
 #borrow(data)
 extern "C" fn simd_to_lower_ascii_ffi(
