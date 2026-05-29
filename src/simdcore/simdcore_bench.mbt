@@ -349,3 +349,83 @@ test "bench/json" (b : @bench.T) {
     b.keep(json_structural_indices_into(bytes, structural, quote, indices))
   })
 }
+
+///|
+/// MoonBit scalar reference full pipeline (for a fair same-run A/B vs the
+/// per-target simdcore path — C FFI on native, inline-WAT on wasm).
+fn json_indices_scalar_ref(
+  src : Bytes,
+  structural : FixedArray[Int],
+  quote : FixedArray[Int],
+  indices : FixedArray[Int],
+) -> Int {
+  let n = src.length()
+  let words = (n + 31) / 32
+  for w in 0..<words {
+    structural[w] = 0
+    quote[w] = 0
+  }
+  for i in 0..<n {
+    let b = src[i].to_int()
+    if b == 0x7B ||
+      b == 0x7D ||
+      b == 0x5B ||
+      b == 0x5D ||
+      b == 0x2C ||
+      b == 0x3A {
+      structural[i >> 5] = structural[i >> 5] | (1 << (i & 31))
+    }
+  }
+  let mut in_string = false
+  let mut escape_pending = false
+  for i in 0..<n {
+    let b = src[i].to_int()
+    let mut bit_set = false
+    if escape_pending {
+      escape_pending = false
+      bit_set = in_string
+    } else if b == 0x22 {
+      in_string = not(in_string)
+    } else if b == 0x5C && in_string {
+      escape_pending = true
+      bit_set = true
+    } else {
+      bit_set = in_string
+    }
+    if bit_set {
+      quote[i >> 5] = quote[i >> 5] | (1 << (i & 31))
+    }
+  }
+  let mut count = 0
+  for w in 0..<words {
+    let mut word = structural[w] & quote[w].lnot()
+    while word != 0 {
+      let mut x = word
+      let mut bit = 0
+      while (x & 1) == 0 {
+        x = x >> 1
+        bit = bit + 1
+      }
+      indices[count] = w * 32 + bit
+      count = count + 1
+      word = word & (word - 1)
+    }
+  }
+  count
+}
+
+///|
+test "bench/json_pipeline_ab" (b : @bench.T) {
+  let bytes = bench_json_bytes()
+  let n = bytes.length()
+  let words = (n + 31) / 32
+  let s1 = FixedArray::make(words, 0)
+  let q1 = FixedArray::make(words, 0)
+  let i1 = FixedArray::make(n, 0)
+  b.bench(name="json_pipeline_scalar_ref", fn() {
+    b.keep(json_indices_scalar_ref(bytes, s1, q1, i1))
+  })
+  b.bench(name="json_pipeline_simdcore", fn() {
+    b.keep(json_structural_indices_into(bytes, s1, q1, i1))
+  })
+}

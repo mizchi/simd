@@ -347,11 +347,19 @@ extern "C" fn simd_equal_bytes_b_ffi(a : Bytes, b : Bytes, len : Int) -> Int = "
 
 ///|
 #borrow(data)
-extern "C" fn simd_find_byte_b_ffi(data : Bytes, len : Int, needle : Byte) -> Int = "simd_find_byte_ffi"
+extern "C" fn simd_find_byte_b_ffi(
+  data : Bytes,
+  len : Int,
+  needle : Byte,
+) -> Int = "simd_find_byte_ffi"
 
 ///|
 #borrow(data)
-extern "C" fn simd_count_byte_b_ffi(data : Bytes, len : Int, needle : Byte) -> Int = "simd_count_byte_ffi"
+extern "C" fn simd_count_byte_b_ffi(
+  data : Bytes,
+  len : Int,
+  needle : Byte,
+) -> Int = "simd_count_byte_ffi"
 
 ///|
 #borrow(data)
