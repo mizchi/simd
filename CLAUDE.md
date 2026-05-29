@@ -1054,8 +1054,9 @@ Surface today:
   `dot_f64`, `mean_f64`, `variance_f64`; element-wise `add_f64`, `sub_f64`,
   `mul_f64`, `div_f64`, `sqrt_f64`, `min_elem_f64`, `max_elem_f64`.
 - `Bytes` (read-only, **zero-copy** on wasm): `bytes_equal`, `bytes_search`
-  (`Int?`) / `bytes_contains`, `bytes_count`, `bytes_is_ascii`,
-  `bytes_index_of` (substring, `Int?`) / `bytes_contains_sub`.
+  (`Int?`) / `bytes_contains`, `bytes_rindex` (last byte, `Int?`),
+  `bytes_count`, `bytes_is_ascii`, `bytes_index_of` (substring, `Int?`) /
+  `bytes_contains_sub`.
 - `FixedArray[Byte]` (in-place, `Bytes` is immutable): `to_lower_ascii`,
   `to_upper_ascii`.
 - `String` → UTF-8 (the FFI-boundary bottleneck): `encode_utf8` (`-> Bytes`),
@@ -1123,6 +1124,16 @@ exercised by `simdcore` on wasm **and** native.
 |---|---|---|---|
 | native | 2.57 µs | 467 ns (`memmem`) | **5.5** |
 | wasm | 12.62 µs | 257 ns | **49** |
+
+`bytes_rindex` (last occurrence of a byte) is the same story in reverse:
+**native** → glibc `memrchr`; **wasm** → a reverse `i8x16.eq` scan (scalar
+tail down to the 16-aligned boundary, then chunks backward, early-returning
+the highest matching lane via `31 - i32.clz(bitmask)`).
+
+| `bytes_rindex` (4 KiB, byte near start) | scalar | simdcore | x |
+|---|---|---|---|
+| native | 2.53 µs | 46 ns (`memrchr`) | **54** |
+| wasm | 5.18 µs | 269 ns | **19** |
 
 **Inline-WAT finding:** `if … return … end` inside a `loop` **does** parse and
 run correctly in the Dwarfsm inline-WAT (used here for the early-return

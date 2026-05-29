@@ -237,6 +237,18 @@ pub fn scalar_find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
 }
 
 ///|
+/// Last index where `data[i] == needle`, or -1 (scalar reverse scan).
+pub fn scalar_rfind_byte_b(data : Bytes, needle : Byte) -> Int {
+  let len = data.length()
+  for i = len - 1; i >= 0; i = i - 1 {
+    if data[i] == needle {
+      return i
+    }
+  }
+  -1
+}
+
+///|
 /// In-place ASCII A-Z → a-z conversion. Non-ASCII bytes pass through.
 pub fn scalar_to_lower_ascii(data : FixedArray[Byte]) -> Unit {
   let len = data.length()

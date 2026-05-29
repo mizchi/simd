@@ -360,3 +360,22 @@ pub fn find_bytes_b(haystack : Bytes, needle : Bytes) -> Int {
   }
   -1
 }
+
+///|
+/// Last index `i` where `data[i] == needle`, else -1. Scalar tail from the
+/// end down to the 16-aligned boundary, then 16-byte chunks backward with
+/// early return of the highest matching lane (`31 - i32.clz(bitmask)`).
+/// locals: 3 = aligned-then-bitmask, 4 = pos, 5 = needle_v.
+#borrow(data)
+fn rfind_byte_b_v128(data : Bytes, len : Int, needle : Int) -> Int =
+  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local v128) local.get 2 i8x16.splat local.set 5 local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 local.get 1 i32.const 1 i32.sub local.set 4 block loop local.get 4 local.get 3 i32.lt_s br_if 1 local.get 0 local.get 4 i32.add i32.load8_u local.get 2 i32.eq if local.get 4 return end local.get 4 i32.const 1 i32.sub local.set 4 br 0 end end local.get 3 i32.const 16 i32.sub local.set 4 block loop local.get 4 i32.const 0 i32.lt_s br_if 1 local.get 0 local.get 4 i32.add v128.load local.get 5 i8x16.eq i8x16.bitmask local.set 3 local.get 3 i32.eqz i32.eqz if local.get 4 i32.const 31 i32.add local.get 3 i32.clz i32.sub return end local.get 4 i32.const 16 i32.sub local.set 4 br 0 end end i32.const -1)
+
+///|
+/// SIMD last occurrence of `needle` - wasm target: reverse i8x16.eq scan.
+pub fn rfind_byte_b(data : Bytes, needle : Byte) -> Int {
+  let len = data.length()
+  if len == 0 {
+    return -1
+  }
+  rfind_byte_b_v128(data, len, needle.to_int())
+}

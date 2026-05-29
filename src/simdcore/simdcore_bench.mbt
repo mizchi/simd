@@ -473,3 +473,24 @@ test "bench/bytes_index_of" (b : @bench.T) {
     b.keep(bytes_index_of(hay, tail))
   })
 }
+
+///|
+test "bench/bytes_rindex" (b : @bench.T) {
+  // 4 KiB, target byte only near the START -> reverse scan traverses all.
+  let arr = FixedArray::make(4096, b'\x00')
+  for i in 0..<4096 {
+    arr[i] = (0x61 + i % 25).to_byte() // 'a'..'y' (no 'z')
+  }
+  arr[3] = b'z'
+  let hay = Bytes::from_fixedarray(arr)
+  b.bench(name="bytes_rindex_scalar", fn() {
+    let mut r = -1
+    for i in 0..<hay.length() {
+      if hay[i] == b'z' {
+        r = i
+      }
+    }
+    b.keep(r)
+  })
+  b.bench(name="bytes_rindex_simdcore", fn() { b.keep(bytes_rindex(hay, b'z')) })
+}
