@@ -1,5 +1,5 @@
-// Benchmarks comparing the core idiom (scalar) against the core_simd
-// substitute. Run with `moon bench --target wasm -p core_simd` to see the
+// Benchmarks comparing the core idiom (scalar) against the simdcore
+// substitute. Run with `moon bench --target wasm -p simdcore` to see the
 // real SIMD speedup; on wasm-gc / js both paths are scalar (parity expected).
 
 ///|
@@ -21,19 +21,28 @@ fn bench_bytes(size : Int) -> Bytes {
 }
 
 ///|
+fn bench_f64_array(size : Int) -> FixedArray[Double] {
+  let arr = FixedArray::make(size, 0.0)
+  for i in 0..<size {
+    arr[i] = (i % 1000 + 1).to_double()
+  }
+  arr
+}
+
+///|
 test "bench/sum" (b : @bench.T) {
   let a = bench_int_array(1024)
   b.bench(name="core_fold_sum", fn() {
     b.keep(a.iter().fold(init=0, fn(x, y) { x + y }))
   })
-  b.bench(name="core_simd_sum", fn() { b.keep(sum(a)) })
+  b.bench(name="simdcore_sum", fn() { b.keep(sum(a)) })
 }
 
 ///|
 test "bench/maximum" (b : @bench.T) {
   let a = bench_int_array(1024)
   b.bench(name="core_iter_maximum", fn() { b.keep(a.iter().maximum()) })
-  b.bench(name="core_simd_maximum", fn() { b.keep(maximum(a)) })
+  b.bench(name="simdcore_maximum", fn() { b.keep(maximum(a)) })
 }
 
 ///|
@@ -50,14 +59,14 @@ test "bench/search" (b : @bench.T) {
     }
     b.keep(idx)
   })
-  b.bench(name="core_simd_search", fn() { b.keep(search(a, -1)) })
+  b.bench(name="simdcore_search", fn() { b.keep(search(a, -1)) })
 }
 
 ///|
 test "bench/fill" (b : @bench.T) {
   let a = FixedArray::make(1024, 0)
   b.bench(name="core_fill", fn() { a.fill(7) })
-  b.bench(name="core_simd_fill", fn() { fill(a, 7) })
+  b.bench(name="simdcore_fill", fn() { fill(a, 7) })
 }
 
 ///|
@@ -68,7 +77,7 @@ test "bench/sort" (b : @bench.T) {
     a.sort()
     b.keep(a[0])
   })
-  b.bench(name="core_simd_sort", fn() {
+  b.bench(name="simdcore_sort", fn() {
     let a = src.copy()
     sort(a)
     b.keep(a[0])
@@ -87,7 +96,7 @@ test "bench/bytes_count" (b : @bench.T) {
     }
     b.keep(c)
   })
-  b.bench(name="core_simd_bytes_count", fn() { b.keep(bytes_count(data, b'A')) })
+  b.bench(name="simdcore_bytes_count", fn() { b.keep(bytes_count(data, b'A')) })
 }
 
 ///|
@@ -95,7 +104,7 @@ test "bench/bytes_equal" (b : @bench.T) {
   let x = bench_bytes(4096)
   let y = bench_bytes(4096)
   b.bench(name="core_bytes_eq", fn() { b.keep(x == y) })
-  b.bench(name="core_simd_bytes_equal", fn() { b.keep(bytes_equal(x, y)) })
+  b.bench(name="simdcore_bytes_equal", fn() { b.keep(bytes_equal(x, y)) })
 }
 
 ///|
@@ -112,7 +121,7 @@ test "bench/bytes_search" (b : @bench.T) {
     }
     b.keep(idx)
   })
-  b.bench(name="core_simd_bytes_search", fn() {
+  b.bench(name="simdcore_bytes_search", fn() {
     b.keep(bytes_search(data, b'\x00'))
   })
 }
@@ -130,5 +139,71 @@ test "bench/bytes_is_ascii" (b : @bench.T) {
     }
     b.keep(ok)
   })
-  b.bench(name="core_simd_bytes_is_ascii", fn() { b.keep(bytes_is_ascii(data)) })
+  b.bench(name="simdcore_bytes_is_ascii", fn() { b.keep(bytes_is_ascii(data)) })
+}
+
+///|
+test "bench/int_add" (b : @bench.T) {
+  let a = bench_int_array(1024)
+  let c = bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="core_add_loop", fn() {
+    for i in 0..<a.length() {
+      out[i] = a[i] + c[i]
+    }
+  })
+  b.bench(name="simdcore_add", fn() { add(a, c, out) })
+}
+
+///|
+test "bench/saxpy" (b : @bench.T) {
+  let a = bench_int_array(1024)
+  let c = bench_int_array(1024)
+  let out = FixedArray::make(1024, 0)
+  b.bench(name="core_saxpy_loop", fn() {
+    for i in 0..<a.length() {
+      out[i] = 3 * a[i] + c[i]
+    }
+  })
+  b.bench(name="simdcore_saxpy", fn() { saxpy(3, a, c, out) })
+}
+
+///|
+test "bench/f64_sum" (b : @bench.T) {
+  let a = bench_f64_array(1024)
+  b.bench(name="core_f64_sum_loop", fn() {
+    let mut s = 0.0
+    for i in 0..<a.length() {
+      s = s + a[i]
+    }
+    b.keep(s)
+  })
+  b.bench(name="simdcore_sum_f64", fn() { b.keep(sum_f64(a)) })
+}
+
+///|
+test "bench/f64_add" (b : @bench.T) {
+  let a = bench_f64_array(1024)
+  let c = bench_f64_array(1024)
+  let out = FixedArray::make(1024, 0.0)
+  b.bench(name="core_f64_add_loop", fn() {
+    for i in 0..<a.length() {
+      out[i] = a[i] + c[i]
+    }
+  })
+  b.bench(name="simdcore_add_f64", fn() { add_f64(a, c, out) })
+}
+
+///|
+test "bench/f64_dot" (b : @bench.T) {
+  let a = bench_f64_array(1024)
+  let c = bench_f64_array(1024)
+  b.bench(name="core_f64_dot_loop", fn() {
+    let mut s = 0.0
+    for i in 0..<a.length() {
+      s = s + a[i] * c[i]
+    }
+    b.keep(s)
+  })
+  b.bench(name="simdcore_dot_f64", fn() { b.keep(dot_f64(a, c)) })
 }

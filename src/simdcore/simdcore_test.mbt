@@ -1,5 +1,5 @@
 // Tests run on all four targets (wasm / wasm-gc / native / js). Each asserts
-// the core_simd result equals the moonbitlang/core idiom it replaces, so the
+// the simdcore result equals the moonbitlang/core idiom it replaces, so the
 // substitution is verified to be behaviour-preserving regardless of backend.
 
 ///|
@@ -61,6 +61,102 @@ test "sort" {
   want.sort()
   sort(a)
   assert_eq(a, want)
+}
+
+///|
+test "count_nonzero" {
+  let a : FixedArray[Int] = [0, 1, 0, 2, 0, 0, 3, 4, 0, 5, 0, 0, 6]
+  let mut want = 0
+  for i in 0..<a.length() {
+    if a[i] != 0 {
+      want = want + 1
+    }
+  }
+  assert_eq(count_nonzero(a), want)
+}
+
+///|
+test "int element-wise add/sub/mul/neg/abs/saxpy" {
+  let a : FixedArray[Int] = [3, -7, 11, 0, 5, 9, -2, 8, 13, -1]
+  let b : FixedArray[Int] = [1, 4, -6, 2, 5, -3, 7, 8, -9, 10]
+  let n = a.length()
+  let out = FixedArray::make(n, 0)
+  add(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i] + b[i])
+  }
+  sub(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i] - b[i])
+  }
+  mul(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i] * b[i])
+  }
+  neg(a, out)
+  for i in 0..<n {
+    assert_eq(out[i], -a[i])
+  }
+  abs(a, out)
+  for i in 0..<n {
+    assert_eq(out[i], if a[i] < 0 { -a[i] } else { a[i] })
+  }
+  saxpy(3, a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], 3 * a[i] + b[i])
+  }
+}
+
+///|
+test "f64 reductions" {
+  let a : FixedArray[Double] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+  let b : FixedArray[Double] = [8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0]
+  let n = a.length()
+  let mut s = 0.0
+  let mut d = 0.0
+  for i in 0..<n {
+    s = s + a[i]
+    d = d + a[i] * b[i]
+  }
+  assert_eq(sum_f64(a), s)
+  assert_eq(dot_f64(a, b), d)
+  assert_eq(mean_f64(a), s / n.to_double())
+}
+
+///|
+test "f64 element-wise add/sub/mul/div/sqrt/min/max" {
+  let a : FixedArray[Double] = [4.0, 9.0, 16.0, 25.0, 1.0, 36.0]
+  let b : FixedArray[Double] = [2.0, 3.0, 8.0, 5.0, 4.0, 6.0]
+  let n = a.length()
+  let out = FixedArray::make(n, 0.0)
+  add_f64(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i] + b[i])
+  }
+  sub_f64(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i] - b[i])
+  }
+  mul_f64(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i] * b[i])
+  }
+  div_f64(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i] / b[i])
+  }
+  sqrt_f64(a, out)
+  for i in 0..<n {
+    assert_eq(out[i], a[i].sqrt())
+  }
+  min_elem_f64(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], if a[i] < b[i] { a[i] } else { b[i] })
+  }
+  max_elem_f64(a, b, out)
+  for i in 0..<n {
+    assert_eq(out[i], if a[i] > b[i] { a[i] } else { b[i] })
+  }
 }
 
 ///|

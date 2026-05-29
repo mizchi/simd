@@ -1017,22 +1017,22 @@ A future `mizchi/simd` 0.4.0 may add a Bytes-direct API surface that
 lets dependent repos skip the vendoring step; the design decision is
 deferred until a fourth integration would benefit.
 
-## `src/core_simd/` sub-package — faster moonbitlang/core equivalents
+## `src/simdcore/` sub-package — faster moonbitlang/core equivalents
 
-`src/core_simd/` is an **opt-in companion to moonbitlang/core**. It can't
+`src/simdcore/` is an **opt-in companion to moonbitlang/core**. It can't
 replace core transparently (no monkey-patching), so instead it exposes
 functions shaped like the core idioms they stand in for, letting a hot path
 be swapped one call at a time:
 
 ```moonbit
 a.iter().fold(init=0, fn(x, y) { x + y })  // core
-@core_simd.sum(a)                          // faster equivalent
+@simdcore.sum(a)                          // faster equivalent
 
-a.iter().maximum()      ->  @core_simd.maximum(a)   // Int?
-a.search(x)             ->  @core_simd.search(a, x) // Int?
-a.contains(x)           ->  @core_simd.contains(a, x)
-a.fill(v)               ->  @core_simd.fill(a, v)
-a.sort()                ->  @core_simd.sort(a)      // FixedArray[Int]
+a.iter().maximum()      ->  @simdcore.maximum(a)   // Int?
+a.search(x)             ->  @simdcore.search(a, x) // Int?
+a.contains(x)           ->  @simdcore.contains(a, x)
+a.fill(v)               ->  @simdcore.fill(a, v)
+a.sort()                ->  @simdcore.sort(a)      // FixedArray[Int]
 ```
 
 It is a **thin facade over the existing kernels** (`@simd.sum_i32`,
@@ -1045,15 +1045,21 @@ added to the root package to round out the core surface:
 
 Surface today:
 
-- `FixedArray[Int]`: `sum`, `product`, `dot`, `maximum`/`minimum` (`Int?`),
-  `search` (`Int?`) / `contains`, `fill`, `sort`.
+- `FixedArray[Int]` reductions / search: `sum`, `product`, `dot`,
+  `maximum`/`minimum` (`Int?`), `search` (`Int?`) / `contains`,
+  `count_nonzero`, `fill`, `sort`.
+- `FixedArray[Int]` element-wise (write into `out`): `add`, `sub`, `mul`,
+  `neg`, `abs`, `saxpy` (`out = k*a + b`).
+- `FixedArray[Double]` (the practical numpy dtype): reductions `sum_f64`,
+  `dot_f64`, `mean_f64`, `variance_f64`; element-wise `add_f64`, `sub_f64`,
+  `mul_f64`, `div_f64`, `sqrt_f64`, `min_elem_f64`, `max_elem_f64`.
 - `Bytes` (read-only, **zero-copy** on wasm): `bytes_equal`, `bytes_search`
   (`Int?`) / `bytes_contains`, `bytes_count`, `bytes_is_ascii`.
 - `FixedArray[Byte]` (in-place, `Bytes` is immutable): `to_lower_ascii`,
   `to_upper_ascii`.
 
 **Result parity is guaranteed on all four targets** — every test asserts the
-`core_simd` output equals the core idiom. Only throughput is
+`simdcore` output equals the core idiom. Only throughput is
 target-conditional (SIMD on `wasm`, C-FFI/auto-vec on `native`, scalar
 fallback on `wasm-gc` / `js`), so the substitution is always safe.
 
@@ -1072,11 +1078,11 @@ native / js, uses the `@internal.scalar_*_b` `Bytes` loops. The root package
 carries `equal_bytes_b` / `find_byte_b` / `count_byte_b` / `is_ascii_b`
 (wasm inline-WAT, identical bodies to the `FixedArray[Byte]` kernels; scalar
 elsewhere). This is the zero-copy `Bytes`-direct surface the downstream-
-integration notes flagged as a future option — now exercised by `core_simd`.
+integration notes flagged as a future option — now exercised by `simdcore`.
 
-### Bench (V8 / wasm, n = 1024 ints / 4096 B, core idiom vs core_simd)
+### Bench (V8 / wasm, n = 1024 ints / 4096 B, core idiom vs simdcore)
 
-| op | core idiom | core_simd | x |
+| op | core idiom | simdcore | x |
 |---|---|---|---|
 | `sum` | 16.33 µs | 230 ns | **71** |
 | `maximum` | 19.12 µs | 236 ns | **81** |
@@ -1094,7 +1100,7 @@ every chunk — pick by expected hit position, same caveat as `simd_any`.
 
 `Bytes` ops (4096 B, vs the loop / builtin a core user would write):
 
-| op | core idiom | core_simd | x |
+| op | core idiom | simdcore | x |
 |---|---|---|---|
 | `bytes_is_ascii` | 5.08 µs | 241 ns | **21** |
 | `bytes_count` | 5.20 µs | 323 ns | **16** |
@@ -1106,7 +1112,21 @@ builtin comparison, not a per-byte MoonBit loop — there's little to beat. The
 big `Bytes` wins are the ops core has *no* builtin for (`count`, `search`,
 `is_ascii`), where the alternative is a hand-written `for`-loop.
 
-Run: `moon bench --target wasm -p core_simd`.
+Element-wise `i32` (n = 1024) and `f64` (n = 1024, f64x2 so 2-way) vs the
+hand-written zip loop:
+
+| op | core loop | simdcore | x |
+|---|---|---|---|
+| `add` (i32) | 3.26 µs | 302 ns | **10.8** |
+| `saxpy` (i32) | 3.32 µs | 337 ns | **9.9** |
+| `add_f64` | 3.16 µs | 593 ns | **5.3** |
+| `dot_f64` | 2.31 µs | 668 ns | **3.5** |
+| `sum_f64` | 1.30 µs | 659 ns | **2.0** |
+
+f64 ratios are lower than i32 because f64x2 packs only 2 lanes per v128 (vs 4
+for i32) and the reductions carry a serial accumulator.
+
+Run: `moon bench --target wasm -p simdcore`.
 
 ## Commands
 

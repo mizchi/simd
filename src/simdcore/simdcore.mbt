@@ -1,4 +1,4 @@
-// core_simd — drop-in faster equivalents of common moonbitlang/core
+// simdcore — drop-in faster equivalents of common moonbitlang/core
 // operations, backed by mizchi/simd's SIMD kernels.
 //
 // This package is an *opt-in* companion to moonbitlang/core. It does not
@@ -6,10 +6,10 @@
 // with the same shape as the core idioms they stand in for, so a hot path
 // can be swapped over one call at a time:
 //
-//     a.iter().fold(init=0, Int::op_add)   ->   @core_simd.sum(a)
-//     a.iter().maximum()                   ->   @core_simd.maximum(a)
-//     a.search(x)                          ->   @core_simd.search(a, x)
-//     a.sort()  (FixedArray[Int])          ->   @core_simd.sort(a)
+//     a.iter().fold(init=0, Int::op_add)   ->   @simdcore.sum(a)
+//     a.iter().maximum()                   ->   @simdcore.maximum(a)
+//     a.search(x)                          ->   @simdcore.search(a, x)
+//     a.sort()  (FixedArray[Int])          ->   @simdcore.sort(a)
 //
 // SIMD acceleration is target-conditional, inherited from the underlying
 // mizchi/simd kernels:
@@ -100,6 +100,171 @@ pub fn fill(a : FixedArray[Int], value : Int) -> Unit {
 /// `FixedArray[Int]` (bottom-up merge sort with SIMD leaf + bitonic merges).
 pub fn sort(a : FixedArray[Int]) -> Unit {
   @simd.sort_i32(a)
+}
+
+///|
+/// Number of non-zero elements. Replaces a `fold` / `for`-loop counter.
+pub fn count_nonzero(a : FixedArray[Int]) -> Int {
+  @simd.count_nonzero_i32(a)
+}
+
+// ---------------------------------------------------------------------------
+// FixedArray[Int] — element-wise (write into a caller-supplied `out`)
+//
+// These replace the hand-written zip loop `for i { out[i] = a[i] OP b[i] }`.
+// `out` may alias `a` (or `b`) for in-place updates. Caller guarantees the
+// lengths match.
+// ---------------------------------------------------------------------------
+
+///|
+/// `out[i] = a[i] + b[i]`.
+pub fn add(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  @simd.add_i32(a, b, out)
+}
+
+///|
+/// `out[i] = a[i] - b[i]`.
+pub fn sub(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  @simd.sub_i32(a, b, out)
+}
+
+///|
+/// `out[i] = a[i] * b[i]`.
+pub fn mul(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  @simd.mul_i32(a, b, out)
+}
+
+///|
+/// `out[i] = -a[i]`.
+pub fn neg(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  @simd.neg_i32(a, out)
+}
+
+///|
+/// `out[i] = abs(a[i])`.
+pub fn abs(a : FixedArray[Int], out : FixedArray[Int]) -> Unit {
+  @simd.abs_i32(a, out)
+}
+
+///|
+/// `out[i] = k * a[i] + b[i]` (fused scale-add, "saxpy").
+pub fn saxpy(
+  k : Int,
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  out : FixedArray[Int],
+) -> Unit {
+  @simd.saxpy_i32(k, a, b, out)
+}
+
+// ---------------------------------------------------------------------------
+// FixedArray[Double] — the practical numpy dtype
+//
+// Reductions return a `Double`; element-wise ops write into `out`. f64 is
+// 2-way parallel (f64x2) so the SIMD wins are smaller than i32/byte, but the
+// reductions and element-wise math still beat the scalar loop.
+// ---------------------------------------------------------------------------
+
+///|
+/// Sum of all elements. Replaces `a.iter().fold(init=0.0, ...)`.
+pub fn sum_f64(a : FixedArray[Double]) -> Double {
+  @simd.sum_f64(a)
+}
+
+///|
+/// Dot product of two equal-length arrays.
+pub fn dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
+  @simd.dot_f64(a, b)
+}
+
+///|
+/// Arithmetic mean. Returns 0.0 for an empty array.
+pub fn mean_f64(a : FixedArray[Double]) -> Double {
+  @simd.mean_f64(a)
+}
+
+///|
+/// Population variance.
+pub fn variance_f64(a : FixedArray[Double]) -> Double {
+  @simd.var_f64(a)
+}
+
+///|
+/// `out[i] = a[i] + b[i]`.
+pub fn add_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  @simd.add_f64(a, b, out)
+}
+
+///|
+/// `out[i] = a[i] - b[i]`.
+pub fn sub_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  @simd.sub_f64(a, b, out)
+}
+
+///|
+/// `out[i] = a[i] * b[i]`.
+pub fn mul_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  @simd.mul_f64(a, b, out)
+}
+
+///|
+/// `out[i] = a[i] / b[i]`.
+pub fn div_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  @simd.div_f64(a, b, out)
+}
+
+///|
+/// `out[i] = sqrt(a[i])`.
+pub fn sqrt_f64(a : FixedArray[Double], out : FixedArray[Double]) -> Unit {
+  @simd.sqrt_f64(a, out)
+}
+
+///|
+/// Element-wise minimum: `out[i] = min(a[i], b[i])`.
+pub fn min_elem_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  @simd.min_elem_f64(a, b, out)
+}
+
+///|
+/// Element-wise maximum: `out[i] = max(a[i], b[i])`.
+pub fn max_elem_f64(
+  a : FixedArray[Double],
+  b : FixedArray[Double],
+  out : FixedArray[Double],
+) -> Unit {
+  @simd.max_elem_f64(a, b, out)
 }
 
 // ---------------------------------------------------------------------------
