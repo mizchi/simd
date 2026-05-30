@@ -30,3 +30,18 @@ test "bench/sha256 x4 vs 4x single" (bb : @bench.T) {
   })
   bb.bench(name="sha256_x4_4096", fn() { bb.keep(sha256_x4(m0, m1, m2, m3)) })
 }
+
+///|
+test "bench/sha1 x4 vs 4x single" (bb : @bench.T) {
+  let m0 = bench_msg(4096, 11)
+  let m1 = bench_msg(4096, 23)
+  let m2 = bench_msg(4096, 37)
+  let m3 = bench_msg(4096, 53)
+  bb.bench(name="sha1_4x_single_4096", fn() {
+    bb.keep(sha1(m0))
+    bb.keep(sha1(m1))
+    bb.keep(sha1(m2))
+    bb.keep(sha1(m3))
+  })
+  bb.bench(name="sha1_x4_4096", fn() { bb.keep(sha1_x4(m0, m1, m2, m3)) })
+}

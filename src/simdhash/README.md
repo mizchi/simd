@@ -19,41 +19,43 @@ let (d0, d1, d2, d3) = @simdhash.sha256_x4(m0, m1, m2, m3)   // batch
 
 ## Backend comparison
 
-| backend | `sha256` (single) | `sha256_x4` (batch) |
-|---|---|---|
-| **wasm** | scalar¹ | **4-way multi-buffer SIMD**² |
-| **wasm-gc** | scalar | scalar |
-| **native** | scalar (gcc-compiled) | scalar |
-| **js** | scalar | scalar |
+| backend | single (`sha256` / `sha1` / `md5`) | `sha256_x4` / `sha1_x4` batch | `md5_x4` batch |
+|---|---|---|---|
+| **wasm** | scalar¹ | `sha256_x4` **inline-WAT 4-way SIMD**²; `sha1_x4` scalar | scalar |
+| **wasm-gc** | scalar | scalar | scalar |
+| **native** | scalar (gcc-compiled) | **SSE2 / NEON 4-way multi-buffer**³ | scalar |
+| **js** | scalar | scalar | scalar |
 
 Digests are **byte-identical on every backend** (verified against the FIPS
-180-4 / NIST known-answer vectors).
+180-4 / NIST / RFC 1321 known-answer vectors plus an equal-length sweep that
+asserts every lane equals the scalar digest).
 
-¹ **A single SHA-256 stream does not vectorise.** The 64-round compression is
-a tight sequential dependency, and wasm SIMD has no SHA-NI / CLMUL equivalent
-(same wall as `crc32` and simdjson's `compute_quote_mask`). So `sha256` is
-scalar on all backends by design.
+¹ **A single hash stream does not vectorise.** The compression rounds are a
+tight sequential dependency, and wasm SIMD has no SHA-NI / CLMUL equivalent
+(same wall as `crc32` and simdjson's `compute_quote_mask`). So the single
+`sha256` / `sha1` / `md5` are scalar on every backend by design.
 
-² **The SIMD win is multi-buffer.** `sha256_x4` hashes four *independent*
-messages in parallel — one per `i32x4` lane (Intel's `sha256_mb` approach).
-On wasm with four equal-length inputs it runs the inline-WAT multi-buffer
-kernel; use it when you have many equal-length records to hash (file chunks,
-leaves of a Merkle tree, …).
+² **The SIMD win is multi-buffer.** `*_x4` hashes four *independent* messages
+in parallel — one per SIMD lane (Intel's `sha256_mb` approach). On wasm,
+`sha256_x4` runs an inline-WAT `i32x4` kernel; `sha1_x4` / `md5_x4` stay scalar
+on wasm.
 
-### Bench (wasm, four 4 KiB messages)
+³ **Native uses real SSE2 / NEON** (`simdhash.c`, gcc/clang-compiled — SSE2 is
+baseline on x86-64, NEON on arm64; a portable scalar lane-struct covers other
+ISAs). Both `sha256_x4` and `sha1_x4` run the 4-way kernel. Use the `*_x4`
+forms when you have many equal-length records to hash (file chunks, Merkle
+leaves, …).
 
-| | time | vs 4× single |
+### Bench (four 4 KiB messages)
+
+| | wasm | native (SSE2) |
 |---|---|---|
-| `sha256` × 4 (separate calls) | 527 µs | 1.0× |
-| `sha256_x4` (multi-buffer SIMD) | 190 µs | **2.8×** |
+| `sha256` × 4 (separate calls) | 527 µs | 166 µs |
+| **`sha256_x4`** (multi-buffer) | **190 µs (2.8×)** | **46 µs (3.6×)** |
+| `sha1` × 4 (separate calls) | — | 121 µs |
+| **`sha1_x4`** (native multi-buffer) | scalar | **36 µs (3.4×)** |
 
-(Under 2× isn't possible to beat the theoretical 4× here: each lane still runs
-the same serial 64-round chain, and the transpose into lane-major layout costs
-a pass — but four lanes advance per instruction, so batch throughput ~2.8×.)
+Not the theoretical 4×: each lane still runs the full serial round chain and
+the padding/transpose costs a pass — but four lanes advance per instruction.
 
-**SHA-1 / MD5** are scalar on every backend (`sha1_x4` / `md5_x4` run four
-scalar digests). Their single-stream compression is just as serial as
-SHA-256's; a multi-buffer SIMD kernel for them is a natural follow-up on the
-same pattern as `sha256_x4`.
-
-Run: `moon bench --target wasm -p simdhash`.
+Run: `moon bench --target native -p simdhash` (or `--target wasm`).
