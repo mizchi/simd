@@ -891,9 +891,9 @@ a large net loss vs the scalar fallback:
 
 | op (1024, wasm-gc, moonrun) | scalar simdcore | `*_via_buffer` (per-call alloc) |
 |---|---|---|
-| `sum` | 231 ns | 611.84 µs (~2650× slower) |
-| `dot` | 262 ns | 1.21 ms (~4600× slower) |
-| `sort` | 29.4 µs | 1.27 ms (~43× slower) |
+| `sum` | 809 ns | 649 µs (~800× slower) |
+| `dot` | 1.43 µs | 1.32 ms (~920× slower) |
+| `sort` | 5.73 µs | 1.25 ms (~220× slower) |
 
 The takeaway: a per-call-allocating API can never win Option A — even the
 compute-heavy `sort` loses to the double `memory.grow`. The realistic wasm-gc
