@@ -379,3 +379,166 @@ test "bench/ASCII case (4096)" (bb : @bench.T) {
   bb.bench(name="simd_to_lower_4096", fn() { a.to_lower_ascii() })
   bb.bench(name="simd_to_upper_4096", fn() { a.to_upper_ascii() })
 }
+
+// ---------------------------------------------------------------------------
+// "Option A": wasm-gc SIMD by routing FixedArray / Bytes through SimdBuffer.
+//
+// A caller holding core's FixedArray / Bytes gets *scalar* on wasm-gc from the
+// Bytes-direct APIs (simdcore, simdimage, …) — GC refs can't feed `v128.load`.
+// The portable escape is to copy into a linear-memory SimdBuffer, run the SIMD
+// kernel, and (for array-producing ops) copy back.
+//
+// Two cost regimes, both measured here:
+//   * "naive"  — `SimdBuffer::from_array` per call. Each allocates fresh pages
+//                via `memory.grow` (~hundreds of µs), which dominates utterly.
+//                This is the trap; never do it in a hot loop.
+//   * "reuse"  — buffers pre-allocated ONCE, body does `copy_from_array` +
+//                SIMD (+ `copy_to_array`). This is the honest steady-state.
+//                The copy itself is a per-element inline-WAT FFI store/load,
+//                so the win only appears when the SIMD kernel outweighs it.
+// Baseline is the plain FixedArray scalar loop the Bytes-direct path falls back
+// to on wasm-gc. Run: `moon bench --target wasm-gc -p simd_buffer`.
+// ---------------------------------------------------------------------------
+
+///|
+fn scalar_fa_sum(a : FixedArray[Int]) -> Int {
+  let mut acc = 0
+  for i in 0..<a.length() {
+    acc = acc + a[i]
+  }
+  acc
+}
+
+///|
+test "bench/optionA i32 sum 1024" (bb : @bench.T) {
+  let n = 1024
+  let a = FixedArray::make(n, 0)
+  for i in 0..<n {
+    a[i] = i + 1
+  }
+  let buf = SimdBuffer::make(n)
+  bb.bench(name="optA_scalar_sum_1024", fn() { bb.keep(scalar_fa_sum(a)) })
+  bb.bench(name="optA_naive_sum_1024", fn() {
+    let b = SimdBuffer::from_array(a)
+    bb.keep(b.sum())
+  })
+  bb.bench(name="optA_reuse_sum_1024", fn() {
+    buf.copy_from_array(a)
+    bb.keep(buf.sum())
+  })
+}
+
+///|
+fn scalar_fa_dot(a : FixedArray[Int], b : FixedArray[Int]) -> Int {
+  let mut acc = 0
+  for i in 0..<a.length() {
+    acc = acc + a[i] * b[i]
+  }
+  acc
+}
+
+///|
+test "bench/optionA i32 dot 1024" (bb : @bench.T) {
+  let n = 1024
+  let a = FixedArray::make(n, 0)
+  let b = FixedArray::make(n, 0)
+  for i in 0..<n {
+    a[i] = i % 100
+    b[i] = i % 50
+  }
+  let ba = SimdBuffer::make(n)
+  let bb2 = SimdBuffer::make(n)
+  bb.bench(name="optA_scalar_dot_1024", fn() { bb.keep(scalar_fa_dot(a, b)) })
+  bb.bench(name="optA_reuse_dot_1024", fn() {
+    ba.copy_from_array(a)
+    bb2.copy_from_array(b)
+    bb.keep(SimdBuffer::dot(ba, bb2))
+  })
+}
+
+///|
+fn scalar_fa_sort(a : FixedArray[Int]) -> FixedArray[Int] {
+  let copy = FixedArray::make(a.length(), 0)
+  for i in 0..<a.length() {
+    copy[i] = a[i]
+  }
+  copy.sort()
+  copy
+}
+
+///|
+test "bench/optionA i32 sort 1024 (array out)" (bb : @bench.T) {
+  let n = 1024
+  let a = FixedArray::make(n, 0)
+  for i in 0..<n {
+    a[i] = (i * 48271 + 7) % 100000
+  }
+  let buf = SimdBuffer::make(n)
+  let scratch = SimdBuffer::make(n)
+  let out = FixedArray::make(n, 0)
+  bb.bench(name="optA_scalar_sort_1024", fn() { bb.keep(scalar_fa_sort(a)) })
+  bb.bench(name="optA_reuse_sort_1024", fn() {
+    buf.copy_from_array(a)
+    SimdBuffer::sort(buf, scratch)
+    buf.copy_to_array(out)
+    bb.keep(out)
+  })
+}
+
+///|
+fn scalar_fa_popcount(a : FixedArray[Byte]) -> Int {
+  let mut acc = 0
+  for i in 0..<a.length() {
+    let mut v = a[i].to_int()
+    while v != 0 {
+      acc = acc + (v & 1)
+      v = v >> 1
+    }
+  }
+  acc
+}
+
+///|
+test "bench/optionA bytes popcount 4096" (bb : @bench.T) {
+  let n = 4096
+  let a = FixedArray::make(n, b'\x00')
+  for i in 0..<n {
+    a[i] = (i % 256).to_byte()
+  }
+  let buf = SimdBufferBytes::make(n)
+  bb.bench(name="optA_scalar_popcount_4096", fn() {
+    bb.keep(scalar_fa_popcount(a))
+  })
+  bb.bench(name="optA_reuse_popcount_4096", fn() {
+    buf.copy_from_array(a)
+    bb.keep(buf.popcount())
+  })
+}
+
+///|
+fn scalar_fa_adler32(a : FixedArray[Byte]) -> UInt {
+  let mut s1 = 1U
+  let mut s2 = 0U
+  for i in 0..<a.length() {
+    s1 = (s1 + a[i].to_uint()) % 65521
+    s2 = (s2 + s1) % 65521
+  }
+  (s2 << 16) | s1
+}
+
+///|
+test "bench/optionA bytes adler32 4096" (bb : @bench.T) {
+  let n = 4096
+  let a = FixedArray::make(n, b'\x00')
+  for i in 0..<n {
+    a[i] = (i % 251).to_byte()
+  }
+  let buf = SimdBufferBytes::make(n)
+  bb.bench(name="optA_scalar_adler32_4096", fn() {
+    bb.keep(scalar_fa_adler32(a))
+  })
+  bb.bench(name="optA_reuse_adler32_4096", fn() {
+    buf.copy_from_array(a)
+    bb.keep(buf.adler32())
+  })
+}
