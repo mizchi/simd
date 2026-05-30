@@ -636,7 +636,11 @@ pub fn SimdBufferBytes::histogram(
 /// composition for premultiplied alpha; faster than the unpremultiplied
 /// formula (no per-pixel divide).
 ///
-/// Scalar for now; a SIMD i16x8 variant is planned for 0.4.0.
+/// `/255` is round-to-nearest (`(x + 128 + ((x + 128) >> 8)) >> 8`), the
+/// standard premultiplied-blend approximation — differs from an exact integer
+/// floor by at most 1 LSB. SIMD on wasm / wasm-gc (4 px/iter, `i16x8.extmul`
+/// + round + `i8x16.add_sat_u`); the `npix % 4` tail is scalar with the same
+/// formula. native keeps the FixedArray scalar loop.
 pub fn SimdBufferBytes::alpha_blend_solid(
   dst : SimdBufferBytes,
   src_r : Int,
@@ -651,19 +655,27 @@ pub fn SimdBufferBytes::alpha_blend_solid(
   }
   let inv_a = 255 - src_a
   let n = dst.len / 4
-  for i in 0..<n {
-    let dr = buf_load_byte(dst.addr + i * 4)
-    let dg = buf_load_byte(dst.addr + i * 4 + 1)
-    let db = buf_load_byte(dst.addr + i * 4 + 2)
-    let da = buf_load_byte(dst.addr + i * 4 + 3)
-    let nr = src_r + dr * inv_a / 255
-    let ng = src_g + dg * inv_a / 255
-    let nb = src_b + db * inv_a / 255
-    let na = src_a + da * inv_a / 255
-    buf_store_byte(dst.addr + i * 4, if nr > 255 { 255 } else { nr })
-    buf_store_byte(dst.addr + i * 4 + 1, if ng > 255 { 255 } else { ng })
-    buf_store_byte(dst.addr + i * 4 + 2, if nb > 255 { 255 } else { nb })
-    buf_store_byte(dst.addr + i * 4 + 3, if na > 255 { 255 } else { na })
+  if n == 0 {
+    return
+  }
+  let src_packed = (src_r & 0xFF) |
+    ((src_g & 0xFF) << 8) |
+    ((src_b & 0xFF) << 16) |
+    ((src_a & 0xFF) << 24)
+  let full = n / 4
+  if full > 0 {
+    buf_alpha_blend_solid(dst.addr, full * 16, inv_a, src_packed)
+  }
+  // scalar tail (same round-div255 formula as the SIMD body)
+  let chans = [src_r, src_g, src_b, src_a]
+  for i in (full * 4)..<n {
+    for c in 0..<4 {
+      let d = buf_load_byte(dst.addr + i * 4 + c)
+      let t = d * inv_a + 128
+      let r = (t + (t >> 8)) >> 8
+      let o = chans[c] + r
+      buf_store_byte(dst.addr + i * 4 + c, if o > 255 { 255 } else { o })
+    }
   }
 }
 
@@ -1101,6 +1113,24 @@ fn buf_lerp(
 /// Locals: 3 = p, 4 = pix_end, 5/6/7 = wR/wG/wB, 8 = v, 9 = acc.
 fn buf_rgba_to_grayscale(src : Int, out : Int, n : Int) -> Unit =
   #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) (local v128) i32.const 77 i8x16.splat local.set 5 i32.const 150 i8x16.splat local.set 6 i32.const 29 i8x16.splat local.set 7 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 8 local.get 8 local.get 8 i8x16.shuffle 0 4 8 12 0 0 0 0 0 0 0 0 0 0 0 0 local.get 5 i16x8.extmul_low_i8x16_u local.get 8 local.get 8 i8x16.shuffle 1 5 9 13 0 0 0 0 0 0 0 0 0 0 0 0 local.get 6 i16x8.extmul_low_i8x16_u i16x8.add local.get 8 local.get 8 i8x16.shuffle 2 6 10 14 0 0 0 0 0 0 0 0 0 0 0 0 local.get 7 i16x8.extmul_low_i8x16_u i16x8.add i32.const 8 i16x8.shr_u local.set 9 local.get 1 local.get 3 i32.add local.get 9 local.get 9 i8x16.shuffle 0 2 4 6 0 0 0 0 0 0 0 0 0 0 0 0 i32x4.extract_lane 0 i32.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load8_u i32.const 77 i32.mul local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 1 i32.add i32.load8_u i32.const 150 i32.mul i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 2 i32.add i32.load8_u i32.const 29 i32.mul i32.add i32.const 8 i32.shr_u i32.store8 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+/// Premultiplied source-over of a solid color over `dst` (RGBA8, in place),
+/// 4 pixels per iter. Per byte: `out = sat(src_chan + round(dst*inv_a/255))`.
+/// `dst*inv_a` is a weighted widening (`i16x8.extmul`); `/255` is the standard
+/// round-to-nearest `(t + t>>8) >> 8` with `t = x + 128`; the low bytes are
+/// gathered with `i8x16.shuffle` and the solid color (packed RGBA in
+/// `src_packed`, splat to every pixel) is added with `i8x16.add_sat_u`.
+/// Processes `nbytes_full` (a multiple of 16) bytes; the caller handles the
+/// `npix % 4` tail. Locals: 4 = i, 5 = inv_v, 6 = c128, 7 = src_v, 8 = v,
+/// 9 = lo, 10 = hi.
+fn buf_alpha_blend_solid(
+  dst : Int,
+  nbytes_full : Int,
+  inv_a : Int,
+  src_packed : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) local.get 2 i8x16.splat local.set 5 i32.const 128 i16x8.splat local.set 6 local.get 3 i32x4.splat local.set 7 block loop local.get 4 local.get 1 i32.ge_s br_if 1 local.get 0 local.get 4 i32.add v128.load local.set 8 local.get 8 local.get 5 i16x8.extmul_low_i8x16_u local.get 6 i16x8.add local.set 9 local.get 9 local.get 9 i32.const 8 i16x8.shr_u i16x8.add i32.const 8 i16x8.shr_u local.set 9 local.get 8 local.get 5 i16x8.extmul_high_i8x16_u local.get 6 i16x8.add local.set 10 local.get 10 local.get 10 i32.const 8 i16x8.shr_u i16x8.add i32.const 8 i16x8.shr_u local.set 10 local.get 0 local.get 4 i32.add local.get 9 local.get 10 i8x16.shuffle 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 30 local.get 7 i8x16.add_sat_u v128.store local.get 4 i32.const 16 i32.add local.set 4 br 0 end end)
 
 ///|
 /// Shifted-self subtraction (PNG Sub filter): for i in stride..<len,

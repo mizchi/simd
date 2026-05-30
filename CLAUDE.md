@@ -511,13 +511,16 @@ in-simd rather than re-porting per consumer.
   `i16x8.shr_u 8` + low-byte gather-shuffle narrow; scalar tail. `t=0` / `t=256`
   copy `a` / `b` (those weights overflow u8). **wasm bench (4096 B):
   68.8 µs → 1.21 µs = 57x.**
+- `alpha_blend_solid(dst, sr, sg, sb, sa)` — premultiplied source-over of a
+  solid color over an RGBA8 `dst`, in place. **SIMD shipped** (wasm /
+  wasm-gc): 4 pixels per iter — `dst*inv_a` via `i16x8.extmul`, round-div255
+  (`(t + t>>8) >> 8`, `t = x + 128`), low-byte gather-shuffle, then the packed
+  solid color (`r|g<<8|b<<16|a<<24`, `i32x4.splat`) added with
+  `i8x16.add_sat_u`; scalar tail. `/255` is round-to-nearest (≤1 LSB vs an
+  exact floor — the standard blend approximation; scalar matches). **wasm
+  bench (4096 px): 202.3 µs → 3.47 µs = 58x.**
 - `histogram(self, bins[256])` — 256-bin scalar (wasm SIMD has no
   scatter; this stays scalar).
-- `alpha_blend_solid(dst, sr, sg, sb, sa)` — premultiplied
-  source-over, in-place over an RGBA8 destination. Scalar formula
-  `out = src + dst * (255 - sa) / 255` with saturation. SIMD path
-  requires fixed-point i16x8 (the canvas blend rewrite from this
-  session's audit — deferred to 0.4.0).
 
 ### Image-op SIMD rollout
 
@@ -530,12 +533,14 @@ bodies fill in behind the same API. Shipped so far:
   specialised kernels since shuffle indices are immediates), `channel_merge`
   (34x — 3 shuffles per 4 pixels).
 - `i16x8.extmul` fixed-point ops: `lerp` (57x — 16 bytes/iter, weighted
-  widen + add + `shr_u 8` + gather-narrow) and `rgba_to_grayscale` (12x — 4
-  pixels/iter, R/G/B gather-shuffles + weighted extmul sum).
+  widen + add + `shr_u 8` + gather-narrow), `rgba_to_grayscale` (12x — 4
+  pixels/iter, R/G/B gather-shuffles + weighted extmul sum), and
+  `alpha_blend_solid` (58x — `extmul` + round-div255 + `i8x16.add_sat_u` of
+  the `i32x4.splat`-packed solid color).
 
-Remaining: `alpha_blend_solid` (premultiplied source-over, fixed-point i16x8
-like `lerp` but in-place with per-channel α math); `histogram` stays scalar
-(wasm SIMD has no scatter).
+**All Tier-2 image ops are now SIMD on wasm / wasm-gc**, except `histogram`
+(wasm SIMD has no scatter — stays scalar). native keeps the FixedArray scalar
+loops for the image ops.
 
 ## More parser surface that works
 

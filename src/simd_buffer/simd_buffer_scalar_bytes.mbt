@@ -462,18 +462,16 @@ pub fn SimdBufferBytes::alpha_blend_solid(
   }
   let inv_a = 255 - src_a
   let n = dst_len / 4
+  let chans = [src_r, src_g, src_b, src_a]
+  // round-to-nearest div-255: (x + 128 + ((x+128) >> 8)) >> 8 (matches the
+  // wasm SIMD path).
   for i in 0..<n {
-    let dr = dst.data[i * 4].to_int()
-    let dg = dst.data[i * 4 + 1].to_int()
-    let db = dst.data[i * 4 + 2].to_int()
-    let da = dst.data[i * 4 + 3].to_int()
-    let nr = src_r + dr * inv_a / 255
-    let ng = src_g + dg * inv_a / 255
-    let nb = src_b + db * inv_a / 255
-    let na = src_a + da * inv_a / 255
-    dst.data[i * 4] = (if nr > 255 { 255 } else { nr }).to_byte()
-    dst.data[i * 4 + 1] = (if ng > 255 { 255 } else { ng }).to_byte()
-    dst.data[i * 4 + 2] = (if nb > 255 { 255 } else { nb }).to_byte()
-    dst.data[i * 4 + 3] = (if na > 255 { 255 } else { na }).to_byte()
+    for c in 0..<4 {
+      let d = dst.data[i * 4 + c].to_int()
+      let t = d * inv_a + 128
+      let r = (t + (t >> 8)) >> 8
+      let o = chans[c] + r
+      dst.data[i * 4 + c] = (if o > 255 { 255 } else { o }).to_byte()
+    }
   }
 }
