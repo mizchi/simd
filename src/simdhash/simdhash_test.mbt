@@ -79,3 +79,29 @@ test "sha256_x4 matches four independent sha256" {
   assert_true(e2 == sha256(c))
   assert_true(e3 == sha256(d))
 }
+
+///|
+test "sha256_x4 equal-length sweep (exercises the wasm 4-way SIMD path)" {
+  // four *distinct* equal-length messages at sizes spanning the block-count
+  // and padding boundaries; every lane must match the scalar digest, proving
+  // lane independence and multi-block correctness of the SIMD kernel.
+  fn mk(seed : Int, n : Int) -> Bytes {
+    let a = FixedArray::make(n, b'\x00')
+    for i in 0..<n {
+      a[i] = ((i * 31 + seed * 7 + 1) % 256).to_byte()
+    }
+    Bytes::from_array(a)
+  }
+
+  for n in [0, 1, 55, 56, 63, 64, 65, 119, 128, 200, 256] {
+    let m0 = mk(1, n)
+    let m1 = mk(2, n)
+    let m2 = mk(3, n)
+    let m3 = mk(4, n)
+    let (d0, d1, d2, d3) = sha256_x4(m0, m1, m2, m3)
+    assert_true(d0 == sha256(m0))
+    assert_true(d1 == sha256(m1))
+    assert_true(d2 == sha256(m2))
+    assert_true(d3 == sha256(m3))
+  }
+}

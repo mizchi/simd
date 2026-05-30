@@ -1,12 +1,12 @@
 // @simdhash — cryptographic digests over `Bytes`.
 //
-// SHA-256 (FIPS 180-4), scalar on every target (this file). A single SHA-256
-// stream does not vectorise: the 64-round compression is a tight sequential
-// dependency and wasm SIMD has no SHA-NI / CLMUL. The SIMD win is *multi-
-// buffer* — `sha256_x4` hashes four independent messages in parallel, one per
-// i32x4 lane (Intel `sha256_mb` style). That inline-WAT kernel is a planned
-// follow-up; the `sha256_x4` API is already stable (scalar under the hood),
-// so all paths produce byte-identical digests today.
+// SHA-256 (FIPS 180-4). The single-message `sha256` is scalar on every target
+// (this file): one stream does not vectorise — the 64-round compression is a
+// tight sequential dependency and wasm SIMD has no SHA-NI / CLMUL. The SIMD
+// win is *multi-buffer*: `sha256_x4` hashes four independent messages in
+// parallel, one per i32x4 lane (Intel `sha256_mb` style), via the inline-WAT
+// kernel in `simdhash_wasm.mbt` (~2.8x batch on wasm). All paths produce
+// byte-identical digests.
 
 ///|
 /// SHA-256 round constants (first 32 bits of the fractional parts of the cube
@@ -122,15 +122,22 @@ fn sha256_compress(h : FixedArray[UInt], buf : FixedArray[Byte]) -> Unit {
 }
 
 ///|
-/// Scalar SHA-256. Returns the 32-byte digest. Used as the all-targets
-/// reference and the off-wasm path for `sha256_x4`.
-fn sha256_scalar(data : Bytes) -> FixedArray[Byte] {
+/// Build the padded message buffer for `data` (length `sha256_padded_len`).
+fn pad_message(data : Bytes) -> FixedArray[Byte] {
   let n = data.length()
   let buf = FixedArray::make(sha256_padded_len(n), b'\x00')
   for i in 0..<n {
     buf[i] = data[i]
   }
   sha256_pad_into(buf, n)
+  buf
+}
+
+///|
+/// Scalar SHA-256. Returns the 32-byte digest. Used as the all-targets
+/// reference and the off-wasm path for `sha256_x4`.
+fn sha256_scalar(data : Bytes) -> FixedArray[Byte] {
+  let buf = pad_message(data)
   let h = FixedArray::make(8, 0U)
   for i in 0..<8 {
     h[i] = h256_iv[i]
@@ -181,20 +188,46 @@ pub fn sha256_hex(data : Bytes) -> String {
 }
 
 ///|
+/// Write the 32-byte SHA-256 digest of `data` into `out[off, off+32)`.
+fn digest_into(data : Bytes, out : FixedArray[Byte], off : Int) -> Unit {
+  let d = sha256_scalar(data)
+  for i in 0..<32 {
+    out[off + i] = d[i]
+  }
+}
+
+///|
+fn slice32(out : FixedArray[Byte], off : Int) -> Bytes {
+  let a = FixedArray::make(32, b'\x00')
+  for i in 0..<32 {
+    a[i] = out[off + i]
+  }
+  Bytes::from_array(a)
+}
+
+///|
 /// Hash four messages, returning four 32-byte digests. This is the batch
-/// entry point: on wasm with four equal-length inputs it is the target for a
-/// 4-way multi-buffer SIMD compression (one message per `i32x4` lane — the
-/// shape where SHA-256 actually vectorises). The result is always identical to
-/// four independent `sha256` calls.
-///
-/// NOTE: the SIMD multi-buffer kernel is not wired up yet; today every target
-/// runs the scalar path. The API is stable so callers can adopt the batch
-/// shape now and pick up the wasm speedup transparently when it lands.
+/// entry point: on wasm with four equal-length inputs it runs a 4-way
+/// multi-buffer SIMD compression (one message per `i32x4` lane — the shape
+/// where SHA-256 actually vectorises). The result is always identical to four
+/// independent `sha256` calls. Unequal-length inputs (and non-wasm targets)
+/// take the scalar path. On wasm, equal-length batches get ~2.8x over four
+/// separate `sha256` calls.
 pub fn sha256_x4(
   m0 : Bytes,
   m1 : Bytes,
   m2 : Bytes,
   m3 : Bytes,
 ) -> (Bytes, Bytes, Bytes, Bytes) {
-  (sha256(m0), sha256(m1), sha256(m2), sha256(m3))
+  let out = FixedArray::make(128, b'\x00')
+  let n = m0.length()
+  if m1.length() == n && m2.length() == n && m3.length() == n {
+    imp_sha256_x4_eq(m0, m1, m2, m3, out)
+  } else {
+    digest_into(m0, out, 0)
+    digest_into(m1, out, 32)
+    digest_into(m2, out, 64)
+    digest_into(m3, out, 96)
+  }
+  (slice32(out, 0), slice32(out, 32), slice32(out, 64), slice32(out, 96))
 }

@@ -5,6 +5,8 @@ import {
 options(
   targets: {
     "simdhash.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdhash_wasm.mbt": [ "wasm" ],
+    "simdhash_fallback.mbt": [ "wasm-gc", "native", "js" ],
     "simdhash_test.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "simdhash_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
   },

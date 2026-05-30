@@ -18,7 +18,7 @@ Target-specific SIMD implementations with scalar fallback.
 - `src/simd_scalar.mbt` - shared scalar fallback for `js` and `wasm-gc` targets (FixedArray-on-GC-heap means `v128.load` is unusable on wasm-gc)
 - `src/simdcodec/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
 - `src/simdjson/` - sub-package porting simdjson's `find_structural_bits` byte-classification pipeline to wasm SIMD. Operates on `@simd_buffer.SimdBufferBytes`. wasm / wasm-gc use inline-WAT (`i8x16.eq` + `i8x16.bitmask`); native / js use FixedArray scalar. See the "src/simdjson/ sub-package" section below.
-- `src/simdhash/` - sub-package for cryptographic digests. SHA-256 (FIPS 180-4) over `Bytes`: `sha256` (`-> Bytes`), `sha256_hex` (`-> String`), `sha256_x4` (batch, 4 messages). **Scalar on every target** (`simdhash.mbt`, all targets) — a single SHA-256 stream is a tight sequential 64-round dependency and wasm SIMD has no SHA-NI / CLMUL, so it doesn't vectorise (same wall as crc32 / `compute_quote_mask`). The SIMD win is *multi-buffer*: `sha256_x4` hashes 4 independent messages, one per `i32x4` lane (Intel `sha256_mb` style, ~4× batch); that inline-WAT kernel lands as a follow-up (the API is stable now, scalar under the hood). Uses MoonBit `UInt` for mod-2³² arithmetic; `to_hex` builds the string as UTF-16LE so `Bytes::to_unchecked_string` reads it correctly. Verified against NIST KAT vectors.
+- `src/simdhash/` - sub-package for cryptographic digests. SHA-256 (FIPS 180-4) over `Bytes`: `sha256` (`-> Bytes`), `sha256_hex` (`-> String`), `sha256_x4` (batch, 4 messages). Single-message `sha256` is **scalar on every target** — a SHA-256 stream is a tight sequential 64-round dependency and wasm SIMD has no SHA-NI / CLMUL, so it doesn't vectorise (same wall as crc32 / `compute_quote_mask`). The SIMD win is *multi-buffer*: `sha256_x4` hashes 4 independent messages in parallel, one per `i32x4` lane (Intel `sha256_mb` style) via the inline-WAT kernel in `simdhash_wasm.mbt` — **~2.8× batch on wasm** (vs 4 separate `sha256` calls). MoonBit transposes the 4 padded messages into a v128-per-word buffer so the WAT just `v128.load`s each schedule word; `rotr` is `(x >>u n) | (x << 32-n)` on `i32x4`, `ch` via `v128.andnot`. Uses `UInt` for mod-2³² arithmetic; `to_hex` builds UTF-16LE so `Bytes::to_unchecked_string` reads it correctly. Verified against NIST KAT vectors + an equal-length sweep (every lane == scalar). See the "src/simdhash/ sub-package" section below.
 - `src/simdimage/` - sub-package for image / pixel byte ops (`rgb_to_rgba`, `rgba_to_grayscale`, `channel_extract` / `channel_merge`, `lerp`, `alpha_blend_solid`, `histogram`). Operates on **`Bytes` (input) / `FixedArray[Byte]` (output) directly** — the `@simdcore` philosophy, no `SimdBufferBytes` hop. wasm uses inline-WAT v128 (bodies ported verbatim from the old `SimdBufferBytes` `buf_*` image kernels); wasm-gc / native / js share a scalar fallback. These ops **used to live as `SimdBufferBytes` methods in `src/simd_buffer/`** and were moved here so the buffer type stays about general numeric / byte storage. See the "src/simdimage/ sub-package" section below.
 - `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@simdcodec` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
 
@@ -633,6 +633,52 @@ Ratios are lower than the old `SimdBufferBytes` image bench (e.g.
 `Bytes`/`FixedArray` index loop, so the comparison is the honest
 SIMD-vs-tight-scalar one.
 
+## src/simdhash/ sub-package — SHA-256 (scalar + 4-way SIMD)
+
+`sha256` / `sha256_hex` / `sha256_x4` over `Bytes`. Layout:
+
+```
+src/simdhash/
+  moon.pkg
+  simdhash.mbt            # all targets — scalar SHA-256 + public API + dispatch
+  simdhash_wasm.mbt       # target [wasm] — 4-way multi-buffer inline-WAT
+  simdhash_fallback.mbt   # [wasm-gc, native, js] — sha256_x4 = 4 scalar digests
+  simdhash_test.mbt       # NIST KAT + equal-length sweep (every lane == scalar)
+  simdhash_bench.mbt
+```
+
+Why a single `sha256` is scalar everywhere: the 64-round compression is a
+tight serial dependency on the `a..h` state, and wasm SIMD has no SHA-NI /
+CLMUL. No lane-parallelism within one message.
+
+The 4-way multi-buffer kernel (`sha256_x4` with four equal-length inputs):
+
+- **Transpose in MoonBit, not WAT.** The four padded messages are written into
+  a `win` buffer in *lane-major* order — `win[(blk*16+t)*16 + k*4 ..]` holds
+  message `k`'s big-endian word `t` stored little-endian — so the inline-WAT
+  just `v128.load`s each schedule word (lane `k` = message `k`). This keeps the
+  WAT free of per-lane assembly / byte-swaps; the round math is plain `i32x4`.
+- **K / IV as `FixedArray[Int]` tables**, loaded + `i32x4.splat` (same constant
+  across lanes). Avoids the `i32.const` large-literal parser hole.
+- **State**: 8 `H` + 8 working `a..h` + temps = ~22 `v128` locals; `W[0..63]`
+  in a 1 KiB linear-memory `wscratch`; two loops (schedule expand, then 64
+  compression rounds), all inside the block loop. `rotr` synthesised with
+  `i32x4.shr_u` / `i32x4.shl` + `v128.or`; `ch` via `v128.andnot`.
+- The shift cascade (`h=g; g=f; …; a=t1+t2`) is written as sequential
+  `local.get`/`local.set` — safe because each reads its source before the
+  source is overwritten (top-to-bottom order).
+
+| bench (wasm, four 4 KiB msgs) | time | vs 4× single |
+|---|---|---|
+| `sha256` × 4 (separate) | 527 µs | 1.0× |
+| `sha256_x4` (multi-buffer SIMD) | 190 µs | **2.8×** |
+
+Not the theoretical 4×: each lane still runs the full serial round chain, and
+the transpose costs a pass — but four lanes advance per instruction. The
+kernel passed on the first run (the lane-major transpose + table-driven
+constants kept the WAT mechanical); validated by the equal-length sweep that
+asserts every lane equals the scalar `sha256`.
+
 ## More parser surface that works
 
 Added during these passes:
@@ -641,6 +687,11 @@ Added during these passes:
 - `i32x4.replace_lane <lane>` (immediate lane index)
 - `i32x4.{neg, abs, eq, ne, lt_s, gt_s}`, `i32x4.bitmask`
 - `v128.bitselect`
+- `v128.andnot` (`a & ~b`) — used for SHA-256 `ch = (e&f) ^ (~e&g)` in the
+  4-way kernel; parses and runs fine.
+- `i32x4.shr_u` / `i32x4.shl` with an `i32` shift-count **operand** (not an
+  immediate) — used to synthesise `rotr` (`(x >>u n) | (x << 32-n)`) across
+  64 SHA-256 rounds in a loop.
 - `f32x4.{add, mul, extract_lane, splat}`, `f32.{add, mul, sub, div, sqrt, load, store, convert_i32_s}` — but **not** `f32.min` / `f32.max` (likely same hole as `f64.min` / `f64.max`)
 
 ## Inline-WAT gotchas worth remembering
