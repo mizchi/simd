@@ -440,3 +440,43 @@ test "bench/channel_extract" (bb : @bench.T) {
     SimdBufferBytes::channel_extract(rgba, 1, out)
   })
 }
+
+///|
+/// Scalar reference channel merge (per-pixel get/set).
+fn scalar_channel_merge(
+  r : SimdBufferBytes,
+  g : SimdBufferBytes,
+  b : SimdBufferBytes,
+  a : SimdBufferBytes,
+  out : SimdBufferBytes,
+) -> Unit {
+  let n = r.length()
+  for i in 0..<n {
+    out.set(i * 4, r.get(i))
+    out.set(i * 4 + 1, g.get(i))
+    out.set(i * 4 + 2, b.get(i))
+    out.set(i * 4 + 3, a.get(i))
+  }
+}
+
+///|
+test "bench/channel_merge" (bb : @bench.T) {
+  let npix = 4096
+  let r = SimdBufferBytes::make(npix)
+  let g = SimdBufferBytes::make(npix)
+  let b = SimdBufferBytes::make(npix)
+  let a = SimdBufferBytes::make(npix)
+  for i in 0..<npix {
+    r.set(i, (i % 256).to_byte())
+    g.set(i, ((i + 64) % 256).to_byte())
+    b.set(i, ((i + 128) % 256).to_byte())
+    a.set(i, 255)
+  }
+  let out = SimdBufferBytes::make(npix * 4)
+  bb.bench(name="scalar_channel_merge_4096px", fn() {
+    scalar_channel_merge(r, g, b, a, out)
+  })
+  bb.bench(name="simd_channel_merge_4096px", fn() {
+    SimdBufferBytes::channel_merge(r, g, b, a, out)
+  })
+}
