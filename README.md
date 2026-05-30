@@ -1,9 +1,20 @@
 # mizchi/simd
 
-SIMD primitives for MoonBit. The recommended portable API is the
-`SimdBuffer*` family — same public surface on **wasm / wasm-gc /
-native / js**, with SIMD acceleration where the target supports it and
-a transparent scalar fallback where it doesn't.
+SIMD primitives for MoonBit, with the **same public API on all four
+targets** (wasm / wasm-gc / native / js) and a transparent scalar
+fallback where a target can't accelerate. Two entry points:
+
+- **`@simdcore`** — drop-in faster equivalents of common
+  `moonbitlang/core` idioms (`sum`, `sort`, `Bytes` search, UTF-8
+  encode/decode, JSON structural indexing, …). Same shape as the core
+  idiom it replaces; results are identical on every target, only the
+  throughput differs. Start here if you just want core to be faster.
+- **`@simd_buffer`** — the `SimdBuffer*` buffer family for numeric /
+  byte / image pipelines that own their data across many SIMD ops.
+
+Native is real SIMD too: the C FFI stub is gcc/clang-compiled, so it
+uses **NEON on arm64 and a portable SSE2 baseline on any x86-64** (no
+`-march` needed) across the i32 / f64 / byte op surface.
 
 ```bash
 just test          # all 4 targets
@@ -25,15 +36,16 @@ Then in the consuming package's `moon.pkg`, import the sub-packages you need:
 
 ```
 import {
+  "mizchi/simd/src/simdcore",
   "mizchi/simd/src/simd_buffer",
   "mizchi/simd/src/simdjson",
   "mizchi/simd/src/base64",
 }
 ```
 
-Each import is exposed under the last path component — `@simd_buffer`,
-`@simdjson`, `@base64`. The root `mizchi/simd/src` package exports the
-FixedArray-based API as `@simd`.
+Each import is exposed under the last path component — `@simdcore`,
+`@simd_buffer`, `@simdjson`, `@base64`. The root `mizchi/simd/src`
+package exports the FixedArray-based API as `@simd`.
 
 ## Quick start (recommended)
 
@@ -54,7 +66,7 @@ The same code compiles and runs unchanged on every target.
 |---|---|---|---|
 | `wasm` | linear memory | inline-WAT `v128.*` | fastest (3-90× over scalar) |
 | `wasm-gc` | linear memory | inline-WAT `v128.*` | parity with `wasm` |
-| `native` | `FixedArray` | `@internal` → C FFI (NEON/SSE) where available, else clang auto-vec | parity with the FixedArray-API native fast paths |
+| `native` | `FixedArray` | C FFI — **NEON on arm64, SSE2 baseline on any x86-64** across i32/f64/byte ops | real SIMD; parity with the FixedArray-API native fast paths |
 | `js` | `FixedArray` | **scalar only** — no SIMD acceleration. See note below |
 
 > **js is scalar.** MoonBit on the js backend has no SIMD escape hatch.
@@ -77,14 +89,18 @@ The same code compiles and runs unchanged on every target.
   `transpose`
 - `SimdBufferBytes`: `popcount`, `memcpy`, `memset`, `equal`,
   `find_byte`, `count_byte`, `is_ascii`, `to_lower_ascii`,
-  `to_upper_ascii`, `validate_utf8`, `adler32`, `base64_encode` /
-  `base64_decode` (+ `_into` in-place variants)
+  `to_upper_ascii`, `validate_utf8` (structural), `validate_utf8_strict`
+  (RFC 3629 — rejects overlong / surrogate / > U+10FFFF), `adler32`,
+  `base64_encode` / `base64_decode` (+ `_into` in-place variants)
 - **0.3.0 byte arithmetic** (`SimdBufferBytes`): `byte_add`,
   `byte_sub`, `byte_avg`, `sat_add`, `sat_sub`, `clamp`,
   `byte_sub_offset` (PNG Sub-filter pattern)
-- **0.3.0 image / pixel** (`SimdBufferBytes`): `rgb_to_rgba`,
-  `rgba_to_grayscale`, `channel_extract`, `channel_merge`, `lerp`,
-  `histogram` (256-bin), `alpha_blend_solid` (premultiplied source-over)
+- **image / pixel** (`SimdBufferBytes`): `rgb_to_rgba` (63×),
+  `channel_extract` (24×), `channel_merge` (34×), `lerp` (57×),
+  `rgba_to_grayscale` (12×), `alpha_blend_solid` (premultiplied
+  source-over) — all **SIMD on wasm / wasm-gc** via `i8x16.shuffle` /
+  `i16x8.extmul` fixed-point; only `histogram` (256-bin) stays scalar
+  (wasm SIMD has no scatter)
 - **0.3.0 i32**: `SimdBuffer::array_equal(a, b, len) -> Bool` —
   SIMD all-equal reduction
 - `SimdBufferRing`: single-arena bump allocator. On wasm/wasm-gc it
@@ -93,6 +109,70 @@ The same code compiles and runs unchanged on every target.
   `make` because GC alloc is already cheap.
 - Copy bridges: `from_array` / `to_array` / `copy_from_array` /
   `copy_to_array` for `FixedArray` ↔ `SimdBuffer` interop.
+
+## `@simdcore` — faster `moonbitlang/core` equivalents
+
+The quickest win if you just want existing core-style code to go faster.
+`@simdcore` can't monkey-patch core, so it exposes functions **shaped like
+the core idioms they replace** — swap a hot call one line at a time:
+
+```moonbit
+a.iter().fold(init=0, fn(x, y) { x + y })  // core
+@simdcore.sum(a)                           // faster equivalent
+
+a.iter().maximum()   ->  @simdcore.maximum(a)    // Int?
+a.search(x)          ->  @simdcore.search(a, x)  // Int?
+a.sort()             ->  @simdcore.sort(a)       // FixedArray[Int]
+```
+
+**Results are identical to the core idiom on all four targets** — every
+test asserts equality. Only throughput is target-conditional (SIMD on
+`wasm`, NEON/SSE2 C-FFI on `native`, scalar on `wasm-gc` / `js`), so the
+substitution is always safe.
+
+Surface:
+
+- **`FixedArray[Int]`**: `sum`, `product`, `dot`, `maximum`/`minimum`,
+  `search`/`contains`, `count_nonzero`, `fill`, `sort`; element-wise
+  `add`, `sub`, `mul`, `neg`, `abs`, `saxpy`.
+- **`FixedArray[Double]`**: `sum_f64`, `dot_f64`, `mean_f64`,
+  `variance_f64`; `add_f64`, `sub_f64`, `mul_f64`, `div_f64`, `sqrt_f64`,
+  `min_elem_f64`, `max_elem_f64`.
+- **`Bytes` (zero-copy on wasm + native)**: `bytes_equal`,
+  `bytes_search`/`bytes_contains`, `bytes_count`, `bytes_is_ascii`,
+  `bytes_index_of`/`bytes_contains_sub` (substring), `bytes_rindex`
+  (last byte). Native binds these to libc `memchr` / `memmem` / `memrchr`.
+- **`FixedArray[Byte]` (in-place)**: `to_lower_ascii`, `to_upper_ascii`.
+- **`String` ↔ UTF-8** (MoonBit's biggest FFI bottleneck):
+  `encode_utf8` / `encode_utf8_into`, `is_ascii_string`,
+  `decode_utf8_unsafe` / `decode_utf8_unsafe_intrinsic`. ASCII fast path
+  vectorises the UTF-16↔UTF-8 narrow/widen; non-ASCII delegates to
+  `@encoding/utf8` so the result always matches core.
+- **`Array[Int]` / `Array[Double]` bridge**: `to_fixedarray` /
+  `of_fixedarray` plus copy-in one-shots `array_sum`, `array_sort`,
+  `array_dot`, `array_mean_f64`, …
+- **JSON structural indexing over `Bytes`**: `json_classify_structural`
+  (bitmap), `json_structural_indices` / `_into` (full pipeline).
+
+### Headlines (wasm, V8, Apple Silicon)
+
+| op | core idiom | `@simdcore` | x |
+|---|---|---|---|
+| `sum` (n=1024) | `iter().fold` 16.3 µs | 230 ns | **71** |
+| `maximum` | `iter().maximum()` 19.1 µs | 236 ns | **81** |
+| `sort` | `Array::sort` 264 µs | 29.6 µs | **8.9** |
+| `add` (i32 element-wise) | zip loop 3.26 µs | 302 ns | **10.8** |
+| `bytes_is_ascii` (4 KiB) | 5.08 µs | 241 ns | **21** |
+| `bytes_index_of` (4 KiB) | 12.6 µs | 257 ns | **49** |
+| `encode_utf8_into` (4 KiB ASCII) | 9.13 µs | 835 ns | **10.9** |
+| `json_classify_structural` (4 KiB) | 19.0 µs | 1.81 µs | **10.5** |
+
+The big `sum`/`maximum` ratios include the per-element closure overhead of
+the *idiomatic* `iter()` call; vs a raw scalar `for`-loop the pure-SIMD win
+is ~5×. `bytes_index_of` / `bytes_rindex` are also big native wins — they
+bind straight to libc (`memmem` 5.5×, `memrchr` 54× over a per-byte loop).
+
+Run: `moon bench --target wasm -p simdcore` (or `--target native`).
 
 ## `@simdjson` — JSON byte classification
 
@@ -169,7 +249,7 @@ let total = @simd.sum_i32(arr)                   // wasm SIMD, scalar on others
 |---|---|
 | `wasm` | inline-WAT `v128` SIMD (real SIMD) |
 | `wasm-gc` | scalar fallback (GC-ref FFI blocks `v128.load`) |
-| `native` | C FFI (NEON/SSE) for ~12 ops, scalar (auto-vec) otherwise |
+| `native` | C FFI — **NEON (arm64) / SSE2 baseline (x86-64)** across the i32 / f64 / byte op surface; reductions, element-wise, image, base64 all wired to the FFI |
 | `js` | scalar fallback |
 
 **Use FixedArray when**: storage lifetime is managed by GC, you don't
@@ -217,14 +297,20 @@ src/
   # FixedArray-API root package — imported as @simd
   simd_wasm_{i32,f64,f32,bytes,sort}.mbt   # wasm inline-WAT v128
   simd_native.mbt + simd_native_ffi.mbt    # native extern "C"
-  simd_native.c                            # NEON / SSE intrinsics
+  simd_native.c                            # NEON / SSE2-baseline intrinsics
   simd_scalar.mbt                          # js + wasm-gc fallback
-  internal/scalar.mbt                      # shared scalar reference impls
+  internal/scalar*.mbt                     # shared scalar reference impls
+
+  simdcore/                                # @simdcore — faster core equivalents
+    simdcore.mbt                           # facade (i32 / f64 / Bytes / Array)
+    simdcore_str_{wasm,fallback}.mbt       # String ↔ UTF-8
+    simdcore_json_{wasm,native,fallback}.mbt + simdcore.c   # JSON indexing
 
   base64/                                  # @base64 — RFC 4648 sub-package
     base64_common.mbt                      # tables + scalar
     base64_wasm.mbt                        # wasm SIMD encode/decode
-    base64_scalar.mbt                      # other targets
+    base64_scalar.mbt                      # wasm-gc + js scalar
+    base64_native.mbt + base64.c           # native C FFI (gcc scalar, LUT decode)
 
   simdjson/                                # @simdjson — JSON byte classification
     simdjson_wasm.mbt                      # wasm + wasm-gc inline-WAT
