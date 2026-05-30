@@ -131,12 +131,39 @@ pub fn md5_hex(data : Bytes) -> String {
 }
 
 ///|
-/// Hash four messages with MD5, returning four 16-byte digests.
+/// Write the 16-byte MD5 digest of `data` into `out[off, off+16)`.
+fn md5_into(data : Bytes, out : FixedArray[Byte], off : Int) -> Unit {
+  let d = md5_scalar(data)
+  for i in 0..<16 {
+    out[off + i] = d[i]
+  }
+}
+
+///|
+/// Hash four messages with MD5, returning four 16-byte digests. On native
+/// with four equal-length inputs this runs a 4-way multi-buffer SSE2 / NEON
+/// kernel; otherwise it is four scalar digests. Always identical to four
+/// `md5` calls.
 pub fn md5_x4(
   m0 : Bytes,
   m1 : Bytes,
   m2 : Bytes,
   m3 : Bytes,
 ) -> (Bytes, Bytes, Bytes, Bytes) {
-  (md5(m0), md5(m1), md5(m2), md5(m3))
+  let out = FixedArray::make(64, b'\x00')
+  let n = m0.length()
+  if m1.length() == n && m2.length() == n && m3.length() == n {
+    imp_md5_x4_eq(m0, m1, m2, m3, out)
+  } else {
+    md5_into(m0, out, 0)
+    md5_into(m1, out, 16)
+    md5_into(m2, out, 32)
+    md5_into(m3, out, 48)
+  }
+  (
+    slice_n(out, 0, 16),
+    slice_n(out, 16, 16),
+    slice_n(out, 32, 16),
+    slice_n(out, 48, 16),
+  )
 }
