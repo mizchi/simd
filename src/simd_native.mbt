@@ -724,6 +724,19 @@ pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
 }
 
 ///|
+/// Strict UTF-8 validation (RFC 3629) — rejects overlong / surrogate /
+/// > U+10FFFF. SIMD ASCII skip + strict scalar tail.
+pub fn validate_utf8_strict(data : FixedArray[Byte]) -> Bool {
+  let len = data.length()
+  let start = if len >= 16 {
+    simd_first_non_ascii_chunk_ffi(data, len)
+  } else {
+    0
+  }
+  @internal.scalar_validate_utf8_strict_from(data, start)
+}
+
+///|
 pub fn scatter_i32(
   out : FixedArray[Int],
   indices : FixedArray[Int],

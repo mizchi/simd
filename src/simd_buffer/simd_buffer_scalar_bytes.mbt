@@ -103,6 +103,13 @@ pub fn SimdBufferBytes::validate_utf8(self : SimdBufferBytes) -> Bool {
 }
 
 ///|
+/// Strict UTF-8 validation (RFC 3629): rejects overlong / surrogate /
+/// > U+10FFFF.
+pub fn SimdBufferBytes::validate_utf8_strict(self : SimdBufferBytes) -> Bool {
+  @internal.scalar_validate_utf8_strict(self.data)
+}
+
+///|
 pub fn SimdBufferBytes::adler32(self : SimdBufferBytes) -> UInt {
   @internal.scalar_adler32(self.data)
 }

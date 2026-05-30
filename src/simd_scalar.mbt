@@ -481,6 +481,13 @@ pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
 }
 
 ///|
+/// Strict UTF-8 validation (RFC 3629): rejects overlong / surrogate /
+/// > U+10FFFF.
+pub fn validate_utf8_strict(data : FixedArray[Byte]) -> Bool {
+  @internal.scalar_validate_utf8_strict(data)
+}
+
+///|
 pub fn scatter_i32(
   out : FixedArray[Int],
   indices : FixedArray[Int],

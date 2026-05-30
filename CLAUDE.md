@@ -288,11 +288,20 @@ scalar state machine (`scalar_validate_utf8_from`) starting at that
 chunk boundary. The handoff is safe because every chunk before it is
 pure ASCII, so no multi-byte sequence can be in flight.
 
-The scalar pass does *structural* validation only (start byte → expected
-number of `10xxxxxx` continuations, leading byte ranges 0xC2..0xF4). It
-does **not** reject overlong forms, surrogate pairs, or codepoints above
-U+10FFFF — those are a stricter pass that would need shuffle-table
-classifications (simdjson style).
+`validate_utf8`'s scalar pass does *structural* validation only (start byte →
+expected number of `10xxxxxx` continuations, leading byte ranges 0xC2..0xF4);
+it does **not** reject overlong forms, surrogate pairs, or codepoints above
+U+10FFFF.
+
+`validate_utf8_strict` (root `FixedArray[Byte]` + `SimdBufferBytes`, all four
+targets) **does** reject them (RFC 3629): the strict scalar DFA adds the tight
+first-continuation ranges per leading byte — `E0`→`A0..BF` (no overlong),
+`ED`→`80..9F` (no surrogate), `F0`→`90..BF` (no overlong), `F4`→`80..8F`
+(no > U+10FFFF), plus `C0`/`C1`/`F5..FF` rejected outright. It keeps the same
+SIMD all-ASCII skip as `validate_utf8`, so the fast path is unchanged and only
+the (already-scalar) non-ASCII pass is stricter. A full SIMD strict validator
+(Lemire/simdjson nibble shuffle-tables) would need `i8x16.swizzle` + a
+cross-chunk carry — deferred; the strict cost is on the non-ASCII bytes only.
 
 | input | size | scalar | simd | x |
 |---|---|---|---|---|
