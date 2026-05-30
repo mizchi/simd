@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/core/bench",
+}
+
+options(
+  targets: {
+    "simdhash.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdhash_test.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdhash_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+  },
+)

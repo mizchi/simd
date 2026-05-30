@@ -34,6 +34,7 @@ glance, which backends get real SIMD (✅) vs scalar fallback (·):
 | [`@simd_buffer`](src/simd_buffer/) — portable buffer family | ✅ | ✅ | ✅ | · | [README](src/simd_buffer/README.md) |
 | [`@simdjson`](src/simdjson/) — JSON indexing | ✅ | ✅ | · | · | [README](src/simdjson/README.md) |
 | [`@simdcodec`](src/simdcodec/) — byte codecs (base64) | ✅ | · | ⚠️² | · | [README](src/simdcodec/README.md) |
+| [`@simdhash`](src/simdhash/) — SHA-256 digests | ·³ | · | · | · | [README](src/simdhash/README.md) |
 | `@simd` — FixedArray root API | ✅ | · | ✅ | · | this file |
 
 ¹ native `@simdcore` uses NEON / SSE2 **and** libc (`memchr` / `memmem` /
@@ -41,6 +42,9 @@ glance, which backends get real SIMD (✅) vs scalar fallback (·):
 ² native `@simdcodec` base64 is a gcc-compiled scalar kernel (the SSSE3 `pshufb` a
 vectorised base64 needs isn't in the baseline x86-64 ABI), still ~2× over
 the tcc MoonBit scalar.
+³ `@simdhash` is scalar today on every backend — a single SHA-256 stream
+doesn't vectorise (no SHA-NI / CLMUL on wasm). The SIMD path is `sha256_x4`
+batch multi-buffer, landing as a follow-up.
 
 ## Install
 
@@ -61,11 +65,12 @@ import {
   "mizchi/simd/src/simd_buffer",
   "mizchi/simd/src/simdjson",
   "mizchi/simd/src/simdcodec",
+  "mizchi/simd/src/simdhash",
 }
 ```
 
 Each import is exposed under the last path component — `@simdcore`,
-`@simdimage`, `@simd_buffer`, `@simdjson`, `@simdcodec`. The root
+`@simdimage`, `@simd_buffer`, `@simdjson`, `@simdcodec`, `@simdhash`. The root
 `mizchi/simd/src` package exports the FixedArray-based API as `@simd`.
 
 ## Quick start (recommended)
@@ -378,6 +383,9 @@ src/
     base64_fallback.mbt                    # scalar tables + reference (all but native)
     base64_scalar.mbt                      # wasm-gc + js encode_into/decode_into
     base64_native.mbt + base64.c           # native C FFI (gcc scalar, LUT decode)
+
+  simdhash/                                # @simdhash — SHA-256 digests
+    simdhash.mbt                           # scalar SHA-256 + public API (all targets)
 
   simdjson/                                # @simdjson — JSON byte classification
     simdjson_wasm.mbt                      # wasm + wasm-gc inline-WAT
