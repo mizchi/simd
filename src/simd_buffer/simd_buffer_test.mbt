@@ -1350,3 +1350,24 @@ test "alpha_blend_solid: half-alpha src over white" {
     content="(255, 127, 127, 255)",
   )
 }
+
+///|
+test "channel_extract SIMD body + tail (all channels)" {
+  // counts hitting SIMD body (4,8,16), tail-only (1,2,3), and body+tail.
+  for npix in [0, 1, 3, 4, 7, 8, 13, 16, 17] {
+    let rgba = SimdBufferBytes::make(npix * 4)
+    for i in 0..<npix {
+      rgba.set(i * 4, (i % 256).to_byte())
+      rgba.set(i * 4 + 1, ((i * 2 + 1) % 256).to_byte())
+      rgba.set(i * 4 + 2, ((i * 3 + 2) % 256).to_byte())
+      rgba.set(i * 4 + 3, ((i * 5 + 7) % 256).to_byte())
+    }
+    for ch in 0..<4 {
+      let out = SimdBufferBytes::make(npix)
+      SimdBufferBytes::channel_extract(rgba, ch, out)
+      for i in 0..<npix {
+        assert_eq(out.get(i), rgba.get(i * 4 + ch))
+      }
+    }
+  }
+}
