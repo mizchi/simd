@@ -1,6 +1,6 @@
 name = "mizchi/simd"
 
-version = "0.3.0"
+version = "0.4.0"
 
 readme = "README.md"
 
@@ -8,6 +8,6 @@ repository = "https://github.com/mizchi/simd"
 
 license = "MIT"
 
-keywords = [ "simd", "wasm", "wasm-gc", "v128", "performance" ]
+keywords = [ "simd", "wasm", "wasm-gc", "v128", "performance", "hash", "sha256" ]
 
-description = "WebAssembly SIMD primitives for MoonBit — i32 / f32 / f64 / bytes / sort / base64 / simdjson, with a portable SimdBuffer API across wasm / wasm-gc / native / js."
+description = "SIMD primitives for MoonBit across wasm / wasm-gc / native / js — @simdcore (faster moonbitlang/core equivalents), @simd_buffer, @simdcodec (base64), @simdhash (SHA-256/512/1, MD5 + multi-buffer), @simdimage, @simdjson."
