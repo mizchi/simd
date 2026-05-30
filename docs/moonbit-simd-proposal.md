@@ -6,6 +6,40 @@ kernels to MoonBit's `wasm` target via inline-WAT, what the **hard wall on
 it. It is written as input for the MoonBit team; the concrete data behind
 every claim lives in this repo's `CLAUDE.md` and benches.
 
+## This is not hypothetical — it already works on `wasm`
+
+`mizchi/simd` ships working SIMD kernels today, with **measured, reproducible
+speedups** on the `wasm` target (V8 / Apple Silicon unless noted). A sample:
+
+| op | size | scalar | SIMD (v128) | **x** |
+|---|---|---|---|---|
+| `memset_bytes` | 4096 B | 6.03 µs | 67 ns | **90×** |
+| `memcpy_bytes` | 4096 B | 5.44 µs | 86 ns | **63×** |
+| `adler32` | 4096 B | 9.58 µs | 358 ns | **27×** |
+| `equal_bytes` | 4096 B | 5.11 µs | 208 ns | **25×** |
+| `is_ascii` | 4096 B | 3.13 µs | 162 ns | **19×** |
+| `popcount_bytes` | 4096 B | 7.78 µs | 414 ns | **19×** |
+| `saxpy` (i32) | 1024 | 1.82 µs | 131 ns | **14×** |
+| `add` (i32) | 1024 | 1.54 µs | 132 ns | **12×** |
+| `dot_product` (i32) | 1024 | 1.19 µs | 182 ns | **6.6×** |
+| `sum` (i32) | 1024 | 693 ns | 132 ns | **5.2×** |
+| `sort_i32` (full merge sort) | 1024 | 157 µs | 16.4 µs | **9.6×** |
+| `matmul_f64` | 64×64 | 359 µs | 65 µs | **5.5×** |
+| `base64 encode` | 4096 B | 7.45 µs | 2.06 µs | **3.6×** |
+| `sha256_x4` (4-way multi-buffer) | 4×4 KiB | 527 µs | 190 µs | **2.8×** |
+| `validate_utf8` (ASCII) | 4096 B | 3.41 µs | 334 ns | **10×** |
+| `classify_structural` (simdjson) | 4096 B | 2.94 µs | 428 ns | **6.9×** |
+
+Higher-level `@simdcore` facades over these kernels show **5–80×** vs idiomatic
+`moonbitlang/core` calls (e.g. `String→UTF-8 encode_utf8_into` 11×, `Bytes`
+substring search 49×). The native target (C FFI, SSE2/NEON) gets its own wins
+(`matmul` 6.2×, `popcount` 30×, `sha256_x4` 3.6×). Full tables in `CLAUDE.md`.
+
+**The point of this proposal:** these wins are real and already in users'
+hands on `wasm` — but they **stop dead at the `wasm-gc` boundary** for a single
+toolchain reason. Removing that one blocker would extend every number above to
+wasm-gc (and, via auto-vectorisation, beyond hand-written kernels entirely).
+
 ## TL;DR
 
 - On the `wasm` target, `FixedArray[T]` / `Bytes` / `String` cross the
