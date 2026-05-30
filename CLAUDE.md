@@ -440,7 +440,7 @@ head for `i < stride`, then SIMD body that loads `data + i` and
 PNG Sub encoder, which is the pattern that motivated bundling it
 in-simd rather than re-porting per consumer.
 
-### Tier 2 — image / pixel ops (RGBA shuffle ops SIMD; arithmetic ops scalar)
+### Tier 2 — image / pixel ops (most SIMD; `alpha_blend` + `histogram` scalar)
 
 `SimdBufferBytes` methods:
 
@@ -454,8 +454,11 @@ in-simd rather than re-porting per consumer.
   per-byte `buf_load_byte`/`buf_store_byte` FFI call — 12 per pixel — that
   the shuffle erases). native keeps the FixedArray scalar loop.
 - `rgba_to_grayscale(src, out)` — Rec. 601 fixed-point
-  `Y = (77*R + 150*G + 29*B) >> 8` (weights sum to 256). SIMD path
-  requires `i16x8.extmul` for the weighted sum across 4 pixels.
+  `Y = (77*R + 150*G + 29*B) >> 8` (weights sum to 256). **SIMD shipped**
+  (wasm / wasm-gc): 4 pixels per iter, three gather `i8x16.shuffle`s for
+  R/G/B then `i16x8.extmul_low_i8x16_u` × weight, `i16x8.add`, `>> 8`,
+  low-byte gather + `i32.store`; scalar tail. **wasm bench (4096 px):
+  91.9 µs → 7.82 µs = 12x.**
 - `channel_extract(src, ch, out)` / `channel_merge(r, g, b, a, out)` —
   interleaved RGBA ↔ planar. `channel_extract` **SIMD shipped** (wasm /
   wasm-gc): one `i8x16.shuffle` gathers channel `ch` of 4 pixels into the low
@@ -467,7 +470,11 @@ in-simd rather than re-porting per consumer.
   `v128.store`; scalar tail. **wasm bench (4096 px): 171.5 µs → 5.11 µs =
   34x.**
 - `lerp(a, b, t, out)` — `out[i] = (a[i]*(256-t) + b[i]*t) >> 8`, `t ∈
-  0..=256`. SIMD shape: `i16x8.mul` + add, requires lane width split.
+  0..=256`. **SIMD shipped** (wasm / wasm-gc): 16 bytes per iter via
+  `i16x8.extmul_{low,high}_i8x16_u` weighted widenings + `i16x8.add` +
+  `i16x8.shr_u 8` + low-byte gather-shuffle narrow; scalar tail. `t=0` / `t=256`
+  copy `a` / `b` (those weights overflow u8). **wasm bench (4096 B):
+  68.8 µs → 1.21 µs = 57x.**
 - `histogram(self, bins[256])` — 256-bin scalar (wasm SIMD has no
   scatter; this stays scalar).
 - `alpha_blend_solid(dst, sr, sg, sb, sa)` — premultiplied
@@ -482,13 +489,17 @@ The byte binary ops are mechanical 16-byte-chunk-with-different-SIMD-op
 skeletons. The image ops each need their own inline-WAT structure
 (shuffle patterns, lane-width conversions, fixed-point rescaling). The
 API surface shipped first (forward-compatible signatures); the wasm SIMD
-bodies fill in behind the same API. The pure-shuffle ops are all done:
-`rgb_to_rgba` (`i8x16.shuffle`, 63x), `channel_extract` (de-interleave, 24x —
-4 channel-specialised kernels since shuffle indices are immediates), and
-`channel_merge` (zip-interleave, 34x — 3 shuffles per 4 pixels). Remaining:
-`rgba_to_grayscale` / `lerp` / `alpha_blend_solid` need `i16x8.extmul`
-fixed-point arithmetic (not pure shuffles); `histogram` stays scalar (wasm
-SIMD has no scatter).
+bodies fill in behind the same API. Shipped so far:
+- pure-shuffle ops: `rgb_to_rgba` (63x), `channel_extract` (24x — 4 channel-
+  specialised kernels since shuffle indices are immediates), `channel_merge`
+  (34x — 3 shuffles per 4 pixels).
+- `i16x8.extmul` fixed-point ops: `lerp` (57x — 16 bytes/iter, weighted
+  widen + add + `shr_u 8` + gather-narrow) and `rgba_to_grayscale` (12x — 4
+  pixels/iter, R/G/B gather-shuffles + weighted extmul sum).
+
+Remaining: `alpha_blend_solid` (premultiplied source-over, fixed-point i16x8
+like `lerp` but in-place with per-channel α math); `histogram` stays scalar
+(wasm SIMD has no scatter).
 
 ## More parser surface that works
 

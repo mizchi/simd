@@ -520,12 +520,10 @@ pub fn SimdBufferBytes::rgba_to_grayscale(
   if out.len != n {
     abort("SimdBufferBytes.rgba_to_grayscale: out length must be src/4")
   }
-  for i in 0..<n {
-    let r = buf_load_byte(src.addr + i * 4)
-    let g = buf_load_byte(src.addr + i * 4 + 1)
-    let b = buf_load_byte(src.addr + i * 4 + 2)
-    buf_store_byte(out.addr + i, (77 * r + 150 * g + 29 * b) >> 8)
+  if n == 0 {
+    return
   }
+  buf_rgba_to_grayscale(src.addr, out.addr, n)
 }
 
 ///|
@@ -595,10 +593,17 @@ pub fn SimdBufferBytes::lerp(
   }
   let t_clamped = if t < 0 { 0 } else if t > 256 { 256 } else { t }
   let inv_t = 256 - t_clamped
-  for i in 0..<a.len {
-    let av = buf_load_byte(a.addr + i)
-    let bv = buf_load_byte(b.addr + i)
-    buf_store_byte(out.addr + i, (av * inv_t + bv * t_clamped) >> 8)
+  let n = a.len
+  if n == 0 {
+    return
+  }
+  // t=0 → out=a, t=256 → out=b; both weights would overflow u8, so copy.
+  if t_clamped == 0 {
+    buf_memcpy_bytes(a.addr, 0, out.addr, 0, n)
+  } else if t_clamped == 256 {
+    buf_memcpy_bytes(b.addr, 0, out.addr, 0, n)
+  } else {
+    buf_lerp(a.addr, b.addr, out.addr, n, inv_t, t_clamped)
   }
 }
 
@@ -1067,6 +1072,35 @@ fn buf_channel_merge(
   n : Int,
 ) -> Unit =
   #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) local.get 5 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 7 block loop local.get 6 local.get 7 i32.ge_s br_if 1 local.get 0 local.get 6 i32.add v128.load local.get 1 local.get 6 i32.add v128.load i8x16.shuffle 0 16 1 17 2 18 3 19 0 16 1 17 2 18 3 19 local.set 8 local.get 2 local.get 6 i32.add v128.load local.get 3 local.get 6 i32.add v128.load i8x16.shuffle 0 16 1 17 2 18 3 19 0 16 1 17 2 18 3 19 local.set 9 local.get 4 local.get 6 i32.const 2 i32.shl i32.add local.get 8 local.get 9 i8x16.shuffle 0 1 16 17 2 3 18 19 4 5 20 21 6 7 22 23 v128.store local.get 6 i32.const 4 i32.add local.set 6 br 0 end end block loop local.get 6 local.get 5 i32.ge_s br_if 1 local.get 4 local.get 6 i32.const 2 i32.shl i32.add local.get 0 local.get 6 i32.add i32.load8_u i32.store8 local.get 4 local.get 6 i32.const 2 i32.shl i32.add i32.const 1 i32.add local.get 1 local.get 6 i32.add i32.load8_u i32.store8 local.get 4 local.get 6 i32.const 2 i32.shl i32.add i32.const 2 i32.add local.get 2 local.get 6 i32.add i32.load8_u i32.store8 local.get 4 local.get 6 i32.const 2 i32.shl i32.add i32.const 3 i32.add local.get 3 local.get 6 i32.add i32.load8_u i32.store8 local.get 6 i32.const 1 i32.add local.set 6 br 0 end end)
+
+///|
+/// Byte lerp `out[i] = (a[i]*inv_t + b[i]*t) >> 8` for `inv_t`, `t` in 1..255
+/// (both fit u8; t=0 / t=256 are handled by the caller as a plain copy).
+/// 16 bytes per iter: two `i16x8.extmul_*_i8x16_u` weighted widenings per
+/// half, `i16x8.add`, `i16x8.shr_u 8`, then a low-byte gather shuffle narrows
+/// the two halves back to 16 u8; scalar tail.
+/// Locals: 6 = i, 7 = vec_end, 8 = wa_v, 9 = wb_v, 10 = va, 11 = vb,
+/// 12 = lo, 13 = hi.
+fn buf_lerp(
+  a : Int,
+  b : Int,
+  out : Int,
+  len : Int,
+  inv_t : Int,
+  t : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) local.get 4 i8x16.splat local.set 8 local.get 5 i8x16.splat local.set 9 local.get 3 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 7 block loop local.get 6 local.get 7 i32.ge_s br_if 1 local.get 0 local.get 6 i32.add v128.load local.set 10 local.get 1 local.get 6 i32.add v128.load local.set 11 local.get 10 local.get 8 i16x8.extmul_low_i8x16_u local.get 11 local.get 9 i16x8.extmul_low_i8x16_u i16x8.add i32.const 8 i16x8.shr_u local.set 12 local.get 10 local.get 8 i16x8.extmul_high_i8x16_u local.get 11 local.get 9 i16x8.extmul_high_i8x16_u i16x8.add i32.const 8 i16x8.shr_u local.set 13 local.get 2 local.get 6 i32.add local.get 12 local.get 13 i8x16.shuffle 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 30 v128.store local.get 6 i32.const 16 i32.add local.set 6 br 0 end end block loop local.get 6 local.get 3 i32.ge_s br_if 1 local.get 2 local.get 6 i32.add local.get 0 local.get 6 i32.add i32.load8_u local.get 4 i32.mul local.get 1 local.get 6 i32.add i32.load8_u local.get 5 i32.mul i32.add i32.const 8 i32.shr_u i32.store8 local.get 6 i32.const 1 i32.add local.set 6 br 0 end end)
+
+///|
+/// RGBA → grayscale `Y = (77*R + 150*G + 29*B) >> 8` (Rec. 601 fixed-point).
+/// 4 pixels per iter: three gather `i8x16.shuffle`s pull R/G/B of 4 pixels
+/// into the low lanes, each weighted-widened with `i16x8.extmul_low_i8x16_u`,
+/// summed (`i16x8.add`), `>> 8`, then a low-byte gather shuffle + `i32.store`
+/// writes the 4 Y bytes; scalar tail. Weights sum to 256 so the u16 lanes
+/// never overflow (max 255*256 = 65280).
+/// Locals: 3 = p, 4 = pix_end, 5/6/7 = wR/wG/wB, 8 = v, 9 = acc.
+fn buf_rgba_to_grayscale(src : Int, out : Int, n : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) (local v128) i32.const 77 i8x16.splat local.set 5 i32.const 150 i8x16.splat local.set 6 i32.const 29 i8x16.splat local.set 7 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 8 local.get 8 local.get 8 i8x16.shuffle 0 4 8 12 0 0 0 0 0 0 0 0 0 0 0 0 local.get 5 i16x8.extmul_low_i8x16_u local.get 8 local.get 8 i8x16.shuffle 1 5 9 13 0 0 0 0 0 0 0 0 0 0 0 0 local.get 6 i16x8.extmul_low_i8x16_u i16x8.add local.get 8 local.get 8 i8x16.shuffle 2 6 10 14 0 0 0 0 0 0 0 0 0 0 0 0 local.get 7 i16x8.extmul_low_i8x16_u i16x8.add i32.const 8 i16x8.shr_u local.set 9 local.get 1 local.get 3 i32.add local.get 9 local.get 9 i8x16.shuffle 0 2 4 6 0 0 0 0 0 0 0 0 0 0 0 0 i32x4.extract_lane 0 i32.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load8_u i32.const 77 i32.mul local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 1 i32.add i32.load8_u i32.const 150 i32.mul i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 2 i32.add i32.load8_u i32.const 29 i32.mul i32.add i32.const 8 i32.shr_u i32.store8 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
 
 ///|
 /// Shifted-self subtraction (PNG Sub filter): for i in stride..<len,

@@ -1418,3 +1418,46 @@ test "channel_extract / channel_merge round-trip large" {
     assert_eq(back.get(i), rgba.get(i))
   }
 }
+
+///|
+test "lerp SIMD body + tail + edges" {
+  for len in [0, 1, 15, 16, 17, 33, 100] {
+    let a = SimdBufferBytes::make(len)
+    let b = SimdBufferBytes::make(len)
+    for i in 0..<len {
+      a.set(i, (i * 3 % 256).to_byte())
+      b.set(i, ((255 - i * 7 % 256) % 256).to_byte())
+    }
+    for t in [0, 1, 64, 128, 200, 255, 256, -5, 300] {
+      let out = SimdBufferBytes::make(len)
+      SimdBufferBytes::lerp(a, b, t, out)
+      let tc = if t < 0 { 0 } else if t > 256 { 256 } else { t }
+      let inv = 256 - tc
+      for i in 0..<len {
+        let want = (a.get(i).to_int() * inv + b.get(i).to_int() * tc) >> 8
+        assert_eq(out.get(i).to_int(), want)
+      }
+    }
+  }
+}
+
+///|
+test "rgba_to_grayscale SIMD body + tail" {
+  for npix in [0, 1, 3, 4, 7, 8, 13, 16, 17] {
+    let rgba = SimdBufferBytes::make(npix * 4)
+    for i in 0..<npix {
+      rgba.set(i * 4, (i * 11 % 256).to_byte())
+      rgba.set(i * 4 + 1, (i * 29 % 256).to_byte())
+      rgba.set(i * 4 + 2, (i * 47 % 256).to_byte())
+      rgba.set(i * 4 + 3, 255)
+    }
+    let out = SimdBufferBytes::make(npix)
+    SimdBufferBytes::rgba_to_grayscale(rgba, out)
+    for i in 0..<npix {
+      let r = rgba.get(i * 4).to_int()
+      let g = rgba.get(i * 4 + 1).to_int()
+      let b = rgba.get(i * 4 + 2).to_int()
+      assert_eq(out.get(i).to_int(), (77 * r + 150 * g + 29 * b) >> 8)
+    }
+  }
+}
