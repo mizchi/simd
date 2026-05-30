@@ -3,8 +3,10 @@ import {
 }
 
 options(
+  "native-stub": [ "base64.c" ],
   targets: {
     "base64_wasm.mbt": [ "wasm" ],
-    "base64_scalar.mbt": [ "js", "wasm-gc", "native" ],
+    "base64_native.mbt": [ "native" ],
+    "base64_scalar.mbt": [ "js", "wasm-gc" ],
   },
 )

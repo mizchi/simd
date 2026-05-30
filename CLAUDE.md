@@ -628,6 +628,16 @@ padding.
 | encode | 4096 B | 7.45 µs | 2.06 µs | **3.6** |
 | decode | 5460 B | 7.97 µs | 2.28 µs | **3.5** |
 
+### Native (C FFI, `base64.c`)
+
+A vectorised base64 needs SSSE3 `pshufb` (the byte-layout shuffle), which is
+**not** in the baseline x86-64 ABI without `-march`, so the native path is a
+plain scalar C kernel instead — but it's gcc/clang-compiled (the stub isn't
+tcc), with a 256-entry decode LUT, so it still beats the tcc-run MoonBit
+scalar. native bench: **encode 9.2 µs → 4.15 µs (2.2x)**, **decode 8.3 µs →
+4.56 µs (1.8x)**. `SimdBufferBytes::base64_*` on native picks this up (it
+delegates to `@base64`).
+
 ### Inline-WAT gotcha caught here
 
 `i8x16.sub` (and by extension every `iNxM.sub`) is **non-commutative** and
