@@ -23,6 +23,27 @@
   #define USE_SSE2 0
 #endif
 
+/* The comment above is stale: moon compiles the native stub with the system
+   C compiler (gcc/clang), NOT tcc — only the MoonBit-generated glue runs
+   under tcc. So on x86-64 the SSE2 baseline below is active by default
+   (gcc/clang define __SSE2__ for the x86-64 ABI), and NEON on arm64. The
+   higher-ISA branches (__SSE4_1__ / __SSSE3__) light up additionally when the
+   stub is built with -march. Every kernel keeps a scalar tail/fallback so it
+   stays correct under tcc too. */
+
+#if USE_SSE2
+/* SSE2 has no packed 32-bit min/max (those are SSE4.1); emulate with a signed
+   compare mask + blend so the baseline x86-64 ABI still vectorises. */
+static inline __m128i mb_min_epi32_sse2(__m128i a, __m128i b) {
+  __m128i m = _mm_cmpgt_epi32(a, b); /* a>b ? -1 : 0 */
+  return _mm_or_si128(_mm_and_si128(m, b), _mm_andnot_si128(m, a));
+}
+static inline __m128i mb_max_epi32_sse2(__m128i a, __m128i b) {
+  __m128i m = _mm_cmpgt_epi32(a, b);
+  return _mm_or_si128(_mm_and_si128(m, a), _mm_andnot_si128(m, b));
+}
+#endif
+
 int32_t simd_sum_ffi(const int32_t* arr, int32_t len) {
   int32_t result = 0;
   int32_t i = 0;
@@ -163,6 +184,13 @@ void simd_min_elem_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t
     __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
     _mm_storeu_si128((__m128i*)(out + i), _mm_min_epi32(va, vb));
   }
+#elif USE_SSE2
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), mb_min_epi32_sse2(va, vb));
+  }
 #endif
   for (; i < len; i++) out[i] = a[i] < b[i] ? a[i] : b[i];
 }
@@ -181,6 +209,13 @@ void simd_max_elem_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t
     __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
     _mm_storeu_si128((__m128i*)(out + i), _mm_max_epi32(va, vb));
   }
+#elif USE_SSE2
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), mb_max_epi32_sse2(va, vb));
+  }
 #endif
   for (; i < len; i++) out[i] = a[i] > b[i] ? a[i] : b[i];
 }
@@ -198,6 +233,18 @@ int32_t simd_min_ffi(const int32_t* arr, int32_t len) {
       acc = vminq_s32(acc, vld1q_s32(arr + i));
     }
     result = vminvq_s32(acc);
+  }
+#elif USE_SSE2
+  if (len >= 4) {
+    __m128i acc = _mm_loadu_si128((const __m128i*)arr);
+    i = 4;
+    int32_t end4 = (len / 4) * 4;
+    for (; i < end4; i += 4)
+      acc = mb_min_epi32_sse2(acc, _mm_loadu_si128((const __m128i*)(arr + i)));
+    int32_t tmp[4];
+    _mm_storeu_si128((__m128i*)tmp, acc);
+    result = tmp[0];
+    for (int j = 1; j < 4; j++) if (tmp[j] < result) result = tmp[j];
   }
 #endif
   for (; i < len; i++) {
@@ -219,6 +266,18 @@ int32_t simd_max_ffi(const int32_t* arr, int32_t len) {
       acc = vmaxq_s32(acc, vld1q_s32(arr + i));
     }
     result = vmaxvq_s32(acc);
+  }
+#elif USE_SSE2
+  if (len >= 4) {
+    __m128i acc = _mm_loadu_si128((const __m128i*)arr);
+    i = 4;
+    int32_t end4 = (len / 4) * 4;
+    for (; i < end4; i += 4)
+      acc = mb_max_epi32_sse2(acc, _mm_loadu_si128((const __m128i*)(arr + i)));
+    int32_t tmp[4];
+    _mm_storeu_si128((__m128i*)tmp, acc);
+    result = tmp[0];
+    for (int j = 1; j < 4; j++) if (tmp[j] > result) result = tmp[j];
   }
 #endif
   for (; i < len; i++) {
@@ -694,6 +753,14 @@ void simd_abs_i32_ffi(const int32_t* a, int32_t* out, int32_t len) {
   int32_t end4 = (len / 4) * 4;
   for (; i < end4; i += 4)
     _mm_storeu_si128((__m128i*)(out + i), _mm_abs_epi32(_mm_loadu_si128((const __m128i*)(a + i))));
+#elif USE_SSE2
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i m = _mm_srai_epi32(v, 31);            /* sign mask */
+    _mm_storeu_si128((__m128i*)(out + i),
+                     _mm_sub_epi32(_mm_xor_si128(v, m), m));
+  }
 #endif
   for (; i < len; i++) out[i] = a[i] < 0 ? -a[i] : a[i];
 }
@@ -941,6 +1008,18 @@ void simd_to_lower_ascii_ffi(uint8_t* data, int32_t len) {
     uint8x16_t mask = vandq_u8(vcgeq_u8(v, a_v), vcleq_u8(v, z_v));
     vst1q_u8(data + i, vaddq_u8(v, vandq_u8(mask, s_v)));
   }
+#elif USE_SSE2
+  /* signed pcmpgtb is exact here: 'A'-1=64, 'Z'+1=91 are < 128, and any byte
+     >= 128 is negative so it never falls inside the A..Z window. */
+  __m128i lo = _mm_set1_epi8('A' - 1);
+  __m128i hi = _mm_set1_epi8('Z' + 1);
+  __m128i d = _mm_set1_epi8(0x20);
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(data + i));
+    __m128i m = _mm_and_si128(_mm_cmpgt_epi8(v, lo), _mm_cmpgt_epi8(hi, v));
+    _mm_storeu_si128((__m128i*)(data + i), _mm_add_epi8(v, _mm_and_si128(m, d)));
+  }
 #endif
   for (; i < len; i++) {
     if (data[i] >= 'A' && data[i] <= 'Z') data[i] += 0x20;
@@ -958,6 +1037,16 @@ void simd_to_upper_ascii_ffi(uint8_t* data, int32_t len) {
     uint8x16_t v = vld1q_u8(data + i);
     uint8x16_t mask = vandq_u8(vcgeq_u8(v, a_v), vcleq_u8(v, z_v));
     vst1q_u8(data + i, vsubq_u8(v, vandq_u8(mask, s_v)));
+  }
+#elif USE_SSE2
+  __m128i lo = _mm_set1_epi8('a' - 1);
+  __m128i hi = _mm_set1_epi8('z' + 1);
+  __m128i d = _mm_set1_epi8(0x20);
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(data + i));
+    __m128i m = _mm_and_si128(_mm_cmpgt_epi8(v, lo), _mm_cmpgt_epi8(hi, v));
+    _mm_storeu_si128((__m128i*)(data + i), _mm_sub_epi8(v, _mm_and_si128(m, d)));
   }
 #endif
   for (; i < len; i++) {
