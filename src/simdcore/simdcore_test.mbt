@@ -33,6 +33,36 @@ test "maximum / minimum" {
 }
 
 ///|
+test "maximum_f64 / minimum_f64" {
+  // odd and even lengths exercise the f64x2 body + scalar tail; negatives and
+  // a value in the tail-only position guard the select push order.
+  let cases : Array[FixedArray[Double]] = [
+    [3.5],
+    [3.5, -2.0],
+    [1.0, 9.0, -4.0, 2.0, 7.0],
+    [-1.0, -9.0, -4.0, -2.0, -7.0, -0.5],
+    [5.0, 3.0, 9.0, 1.0, 7.0, 2.0, 8.0, 4.0, 6.0, 0.0, -3.0, 11.0],
+  ]
+  for arr in cases {
+    let mut want_max = arr[0]
+    let mut want_min = arr[0]
+    for i in 1..<arr.length() {
+      if arr[i] > want_max {
+        want_max = arr[i]
+      }
+      if arr[i] < want_min {
+        want_min = arr[i]
+      }
+    }
+    assert_true(maximum_f64(arr) == Some(want_max))
+    assert_true(minimum_f64(arr) == Some(want_min))
+  }
+  let empty : FixedArray[Double] = []
+  assert_true(maximum_f64(empty) == None)
+  assert_true(minimum_f64(empty) == None)
+}
+
+///|
 test "search / contains" {
   let a : FixedArray[Int] = [4, 8, 15, 16, 23, 42]
   assert_true(search(a, 16) == Some(3))

@@ -191,6 +191,28 @@ pub fn dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
 }
 
 ///|
+/// Largest element, or `None` if empty. The f64 counterpart of `maximum`.
+/// Replaces `a.iter().maximum()` for `FixedArray[Double]`.
+pub fn maximum_f64(a : FixedArray[Double]) -> Double? {
+  if a.length() == 0 {
+    None
+  } else {
+    Some(@simd.max_f64(a))
+  }
+}
+
+///|
+/// Smallest element, or `None` if empty. The f64 counterpart of `minimum`.
+/// Replaces `a.iter().minimum()` for `FixedArray[Double]`.
+pub fn minimum_f64(a : FixedArray[Double]) -> Double? {
+  if a.length() == 0 {
+    None
+  } else {
+    Some(@simd.min_f64(a))
+  }
+}
+
+///|
 /// Arithmetic mean. Returns 0.0 for an empty array.
 pub fn mean_f64(a : FixedArray[Double]) -> Double {
   @simd.mean_f64(a)

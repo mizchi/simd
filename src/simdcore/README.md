@@ -9,7 +9,8 @@ a.iter().fold(init=0, fn(x, y) { x + y })   // core
 @simdcore.sum(a)                            // faster equivalent
 ```
 
-Surface: `FixedArray[Int]` / `FixedArray[Double]` reductions + element-wise,
+Surface: `FixedArray[Int]` / `FixedArray[Double]` reductions (`sum`,
+`maximum` / `minimum` and their `_f64` counterparts, …) + element-wise,
 `Bytes` search / substring (`bytes_index_of`, `bytes_rindex`, …),
 `String` ↔ UTF-8 (`encode_utf8`, `decode_utf8_unsafe`), `Array` bridge, and
 JSON structural indexing.

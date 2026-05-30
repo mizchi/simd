@@ -282,6 +282,40 @@ pub fn sum_f64(arr : FixedArray[Double]) -> Double {
 }
 
 ///|
+/// Horizontal max over f64x2 chunks (acc seeded with arr[0]), 2-lane reduce
+/// via `select` (`f64.max` is rejected by the inline-WAT parser), scalar tail.
+/// Caller guarantees `len >= 1`.
+/// Locals: 2 = i, 3 = vend, 4 = acc_s (f64), 5 = acc (v128).
+#borrow(arr)
+fn max_f64_v128(arr : FixedArray[Double], len : Int) -> Double =
+  #|(func (param i32) (param i32) (result f64) (local i32) (local i32) (local f64) (local v128) local.get 0 f64.load f64x2.splat local.set 5 local.get 1 i32.const 1 i32.shr_s i32.const 1 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 2 i32.const 3 i32.shl i32.add v128.load f64x2.max local.set 5 local.get 2 i32.const 2 i32.add local.set 2 br 0 end end local.get 5 f64x2.extract_lane 0 local.get 5 f64x2.extract_lane 1 local.get 5 f64x2.extract_lane 0 local.get 5 f64x2.extract_lane 1 f64.gt select local.set 4 block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.const 3 i32.shl i32.add f64.load local.get 4 local.get 0 local.get 2 i32.const 3 i32.shl i32.add f64.load f64.gt select local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4)
+
+///|
+pub fn max_f64(arr : FixedArray[Double]) -> Double {
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  max_f64_v128(arr, len)
+}
+
+///|
+/// Horizontal min — same shape as `max_f64_v128` with `f64x2.min` / `f64.lt`.
+/// Caller guarantees `len >= 1`.
+#borrow(arr)
+fn min_f64_v128(arr : FixedArray[Double], len : Int) -> Double =
+  #|(func (param i32) (param i32) (result f64) (local i32) (local i32) (local f64) (local v128) local.get 0 f64.load f64x2.splat local.set 5 local.get 1 i32.const 1 i32.shr_s i32.const 1 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 2 i32.const 3 i32.shl i32.add v128.load f64x2.min local.set 5 local.get 2 i32.const 2 i32.add local.set 2 br 0 end end local.get 5 f64x2.extract_lane 0 local.get 5 f64x2.extract_lane 1 local.get 5 f64x2.extract_lane 0 local.get 5 f64x2.extract_lane 1 f64.lt select local.set 4 block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.const 3 i32.shl i32.add f64.load local.get 4 local.get 0 local.get 2 i32.const 3 i32.shl i32.add f64.load f64.lt select local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4)
+
+///|
+pub fn min_f64(arr : FixedArray[Double]) -> Double {
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  min_f64_v128(arr, len)
+}
+
+///|
 #borrow(a, b)
 fn simd_dot_f64_v128(
   a : FixedArray[Double],

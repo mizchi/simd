@@ -18,32 +18,31 @@ extern "C" fn b64_decode_ffi(
 ) -> Int = "b64_decode"
 
 ///|
-/// Encode `input` as Base64 (RFC 4648, standard alphabet, `=` padding).
-pub fn encode(input : FixedArray[Byte]) -> FixedArray[Byte] {
+/// Encode `input` as Base64 into the caller-supplied `out` (no allocation).
+/// `out.length()` must be at least `encoded_len(input.length())`.
+pub fn encode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Unit {
   let n = input.length()
-  let out = FixedArray::make(encoded_len(n), b'\x00')
   if n > 0 {
     b64_encode_ffi(input, n, out)
   }
-  out
 }
 
 ///|
-/// Decode a Base64 buffer. `None` if the length is not a multiple of 4 or any
-/// non-alphabet character appears (other than valid trailing `=`).
-pub fn decode(input : FixedArray[Byte]) -> FixedArray[Byte]? {
+/// Decode a Base64 buffer into the caller-supplied `out` (no allocation),
+/// returning the number of bytes written or `None` on invalid input.
+/// `out.length()` must be at least `decoded_len(n, count_padding(input))`.
+pub fn decode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Int? {
   let n = input.length()
   if n == 0 {
-    return Some(FixedArray::make(0, b'\x00'))
+    return Some(0)
   }
   if n % 4 != 0 {
     return None
   }
   let pad = count_padding(input)
-  let out = FixedArray::make(decoded_len(n, pad), b'\x00')
   if b64_decode_ffi(input, n, out) < 0 {
     None
   } else {
-    Some(out)
+    Some(decoded_len(n, pad))
   }
 }

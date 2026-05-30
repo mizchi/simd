@@ -8,5 +8,6 @@ options(
     "base64_wasm.mbt": [ "wasm" ],
     "base64_native.mbt": [ "native" ],
     "base64_scalar.mbt": [ "js", "wasm-gc" ],
+    "base64_fallback.mbt": [ "wasm", "js", "wasm-gc" ],
   },
 )

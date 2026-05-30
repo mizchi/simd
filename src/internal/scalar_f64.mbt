@@ -161,6 +161,30 @@ pub fn scalar_dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double 
 }
 
 ///|
+/// Horizontal max reduction. Caller guarantees `arr` is non-empty.
+pub fn scalar_max_reduce_f64(arr : FixedArray[Double]) -> Double {
+  let mut acc = arr[0]
+  for i in 1..<arr.length() {
+    if arr[i] > acc {
+      acc = arr[i]
+    }
+  }
+  acc
+}
+
+///|
+/// Horizontal min reduction. Caller guarantees `arr` is non-empty.
+pub fn scalar_min_reduce_f64(arr : FixedArray[Double]) -> Double {
+  let mut acc = arr[0]
+  for i in 1..<arr.length() {
+    if arr[i] < acc {
+      acc = arr[i]
+    }
+  }
+  acc
+}
+
+///|
 /// Element-wise min (out[i] = min(a[i], b[i])).
 pub fn scalar_min_f64(
   a : FixedArray[Double],

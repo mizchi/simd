@@ -110,7 +110,7 @@ Element-wise: `simd_{add,sub,mul,div,sqrt,min,max}_f64`. Reductions: `simd_{sum,
 Notes specific to f64:
 
 - `FixedArray[Float]` (f32) cannot be passed across the FFI today — the compiler rejects it as "Invalid stub type". f32 ops are deferred; f64 is the practical numpy dtype anyway.
-- `f64.min` / `f64.max` are rejected by the Dwarfsm parser, and `f64.const` literals likely trip the same `Int32.of_string` path as `v128.const`. Workarounds: use `select` with `f64.lt` / `f64.gt` for the scalar tail, and synthesize `0.0` via `i32.const 0 f64.convert_i32_s` (then `f64x2.splat` for accumulators). The vector variants `f64x2.min` / `f64x2.max` parse fine.
+- `f64.min` / `f64.max` are rejected by the Dwarfsm parser, and `f64.const` literals likely trip the same `Int32.of_string` path as `v128.const`. Workarounds: use `select` with `f64.lt` / `f64.gt` for the scalar tail, and synthesize `0.0` via `i32.const 0 f64.convert_i32_s` (then `f64x2.splat` for accumulators). The vector variants `f64x2.min` / `f64x2.max` parse fine. This is exactly how the `max_f64` / `min_f64` horizontal reductions work: accumulate a running `f64x2` with `f64x2.max` / `f64x2.min` over chunks (seed the accumulator with `arr[0]` splatted — max/min have no zero identity), then fold the 2 lanes with `select` + `f64.gt` / `f64.lt`, and a `select`-based scalar tail. Verified correct on all four targets (odd/even lengths, negatives, tail-only extremum).
 
 ## Numpy-style ops (B / C / D)
 
@@ -724,6 +724,26 @@ scalar. native bench: **encode 9.2 µs → 4.15 µs (2.2x)**, **decode 8.3 µs �
 4.56 µs (1.8x)**. `SimdBufferBytes::base64_*` on native picks this up (it
 delegates to `@base64`).
 
+### Public API (post API-surface review)
+
+`@base64` exposes `encode` / `decode` (allocating) **plus `encode_into` /
+`decode_into`** (in-place, no alloc — `decode_into` returns the byte count as
+`Int?`), matching the `_into` convention used across the library. The scalar
+reference `scalar_encode` / `scalar_decode` are now **package-private** (they
+were leaking as public API). File layout:
+
+- `base64_common.mbt` (all targets): `encoded_len` / `decoded_len` /
+  `count_padding` + the allocating `encode` / `decode` wrappers (which call the
+  per-target `encode_into` / `decode_into`).
+- `base64_wasm.mbt` (wasm): SIMD `encode_into` / `decode_into`.
+- `base64_native.mbt` (native): C-FFI `encode_into` / `decode_into`.
+- `base64_scalar.mbt` (wasm-gc / js): `encode_into` / `decode_into` =
+  `scalar_*`.
+- `base64_fallback.mbt` (**wasm / wasm-gc / js**, i.e. every target *except*
+  native): the scalar tables + `scalar_encode` / `scalar_decode`. Native is
+  excluded because it uses the C kernels exclusively — leaving the scalar
+  functions in an all-targets file tripped `unused_value` under `--deny-warn`.
+
 ### Inline-WAT gotcha caught here
 
 `i8x16.sub` (and by extension every `iNxM.sub`) is **non-commutative** and
@@ -1221,7 +1241,11 @@ Surface today:
 - `FixedArray[Int]` element-wise (write into `out`): `add`, `sub`, `mul`,
   `neg`, `abs`, `saxpy` (`out = k*a + b`).
 - `FixedArray[Double]` (the practical numpy dtype): reductions `sum_f64`,
-  `dot_f64`, `mean_f64`, `variance_f64`; element-wise `add_f64`, `sub_f64`,
+  `dot_f64`, `mean_f64`, `variance_f64`, `maximum_f64` / `minimum_f64`
+  (`Double?`, the f64 counterpart of `maximum` / `minimum` — added for
+  int/f64 symmetry; backed by new `@simd.max_f64` / `min_f64` reductions:
+  wasm f64x2 horizontal max/min + scalar fallback); element-wise `add_f64`,
+  `sub_f64`,
   `mul_f64`, `div_f64`, `sqrt_f64`, `min_elem_f64`, `max_elem_f64`.
 - `Bytes` (read-only, **zero-copy** on wasm): `bytes_equal`, `bytes_search`
   (`Int?`) / `bytes_contains`, `bytes_rindex` (last byte, `Int?`),
