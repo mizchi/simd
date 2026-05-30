@@ -18,7 +18,7 @@ Target-specific SIMD implementations with scalar fallback.
 - `src/simd_scalar.mbt` - shared scalar fallback for `js` and `wasm-gc` targets (FixedArray-on-GC-heap means `v128.load` is unusable on wasm-gc)
 - `src/simdcodec/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
 - `src/simdjson/` - sub-package porting simdjson's `find_structural_bits` byte-classification pipeline to wasm SIMD. Operates on `@simd_buffer.SimdBufferBytes`. wasm / wasm-gc use inline-WAT (`i8x16.eq` + `i8x16.bitmask`); native / js use FixedArray scalar. See the "src/simdjson/ sub-package" section below.
-- `src/simdhash/` - sub-package for cryptographic digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-1** (`sha1.mbt`), **MD5** (`md5.mbt`, RFC 1321) — each with `*` (`-> Bytes`), `*_hex` (`-> String`), `*_x4` (batch). SHA-1/MD5 are collision-broken — legacy interop only. MD5 is little-endian throughout (word loads / length suffix / digest), SHA-1/256 are big-endian. SHA-256 specifics: Single-message `sha256` is **scalar on every target** — a SHA-256 stream is a tight sequential 64-round dependency and wasm SIMD has no SHA-NI / CLMUL, so it doesn't vectorise (same wall as crc32 / `compute_quote_mask`). The SIMD win is *multi-buffer*: `sha256_x4` hashes 4 independent messages in parallel, one per `i32x4` lane (Intel `sha256_mb` style) via the inline-WAT kernel in `simdhash_wasm.mbt` — **~2.8× batch on wasm** (vs 4 separate `sha256` calls) — and via a C SSE2/NEON kernel (`simdhash.c`) on **native** (`sha256_x4` ~3.6×, `sha1_x4` ~3.4×, `md5_x4` ~4.1×). MoonBit transposes the 4 padded messages into a v128-per-word buffer so the WAT just `v128.load`s each schedule word; `rotr` is `(x >>u n) | (x << 32-n)` on `i32x4`, `ch` via `v128.andnot`. Uses `UInt` for mod-2³² arithmetic; `to_hex` builds UTF-16LE so `Bytes::to_unchecked_string` reads it correctly. Verified against NIST KAT vectors + an equal-length sweep (every lane == scalar). See the "src/simdhash/ sub-package" section below.
+- `src/simdhash/` - sub-package for cryptographic digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-1** (`sha1.mbt`), **MD5** (`md5.mbt`, RFC 1321) — each with `*` (`-> Bytes`), `*_hex` (`-> String`), `*_x4` (batch). SHA-1/MD5 are collision-broken — legacy interop only. MD5 is little-endian throughout (word loads / length suffix / digest), SHA-1/256 are big-endian. SHA-256 specifics: Single-message `sha256` is **scalar on every target** — a SHA-256 stream is a tight sequential 64-round dependency and wasm SIMD has no SHA-NI / CLMUL, so it doesn't vectorise (same wall as crc32 / `compute_quote_mask`). The SIMD win is *multi-buffer*: `sha256_x4` hashes 4 independent messages in parallel, one per `i32x4` lane (Intel `sha256_mb` style) via the inline-WAT kernel in `simdhash_wasm.mbt` — **~2.8× batch on wasm** (sha1_x4 also wasm-SIMD ~2.1×) — and via a C SSE2/NEON kernel (`simdhash.c`) on **native** (`sha256_x4` ~3.6×, `sha1_x4` ~3.4×, `md5_x4` ~4.1×). MoonBit transposes the 4 padded messages into a v128-per-word buffer so the WAT just `v128.load`s each schedule word; `rotr` is `(x >>u n) | (x << 32-n)` on `i32x4`, `ch` via `v128.andnot`. Uses `UInt` for mod-2³² arithmetic; `to_hex` builds UTF-16LE so `Bytes::to_unchecked_string` reads it correctly. Verified against NIST KAT vectors + an equal-length sweep (every lane == scalar). See the "src/simdhash/ sub-package" section below.
 - `src/simdimage/` - sub-package for image / pixel byte ops (`rgb_to_rgba`, `rgba_to_grayscale`, `channel_extract` / `channel_merge`, `lerp`, `alpha_blend_solid`, `histogram`). Operates on **`Bytes` (input) / `FixedArray[Byte]` (output) directly** — the `@simdcore` philosophy, no `SimdBufferBytes` hop. wasm uses inline-WAT v128 (bodies ported verbatim from the old `SimdBufferBytes` `buf_*` image kernels); wasm-gc / native / js share a scalar fallback. These ops **used to live as `SimdBufferBytes` methods in `src/simd_buffer/`** and were moved here so the buffer type stays about general numeric / byte storage. See the "src/simdimage/ sub-package" section below.
 - `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@simdcodec` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
 
@@ -642,7 +642,7 @@ src/simdhash/
   moon.pkg
   simdhash.mbt            # all targets — scalar SHA-256 + public API + dispatch
   sha1.mbt / md5.mbt      # all targets — scalar SHA-1 / MD5 + dispatch
-  simdhash_wasm.mbt       # [wasm] — sha256_x4 4-way multi-buffer inline-WAT
+  simdhash_wasm.mbt       # [wasm] — sha256_x4 + sha1_x4 4-way inline-WAT
   simdhash_native.mbt     # [native] — sha256_x4 / sha1_x4 → C FFI (SSE2/NEON)
   simdhash.c              # native 4-way SSE2 / NEON / scalar-lane-struct kernel
   simdhash_fallback.mbt   # [wasm-gc, js] — *_x4 = 4 scalar digests
@@ -675,8 +675,17 @@ The 4-way multi-buffer kernel (`sha256_x4` with four equal-length inputs):
 |---|---|---|
 | `sha256` × 4 (separate) | 527 µs | 166 µs |
 | `sha256_x4` (multi-buffer) | 190 µs (**2.8×**) | 46 µs (**3.6×**) |
-| `sha1_x4` (native multi-buffer) | scalar | 36 µs (**3.4×**, vs 121 µs) |
+| `sha1_x4` (multi-buffer) | 246 µs (**2.1×**, vs 515 µs) | 36 µs (**3.4×**, vs 121 µs) |
 | `md5_x4` (native multi-buffer) | scalar | 24 µs (**4.1×**, vs 98 µs) |
+
+`sha1_x4` also has a **wasm inline-WAT** 4-way kernel (`sha1_x4_wat`): same
+lane-major transpose as SHA-256, `W[0..79]` in `wscratch`, 5-word state, and
+the 80 rounds run as **four 20-round group loops** — each loop pre-splats its
+group constant (`k1_int[g]`) and has its own `f` shape (`(b&c)|(~b&d)` /
+`b^c^d` / `(b&c)|(b&d)|(c&d)` / `b^c^d`), so no per-round branch inside the
+loop. `rotl` via `i32x4.shl`/`shr_u` + `v128.or`. 2.1× (a touch below
+SHA-256's 2.8× — 80 rounds + the 4-way schedule xor + group-loop overhead).
+`md5_x4` stays scalar on wasm.
 
 Not the theoretical 4×: each lane still runs the full serial round chain, and
 the transpose costs a pass — but four lanes advance per instruction. The wasm
