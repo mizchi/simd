@@ -109,3 +109,18 @@ fn imp_sha1_x4_eq(
   sha1_into(m2, out, 40)
   sha1_into(m3, out, 60)
 }
+
+///|
+/// MD5 has no SIMD multi-buffer kernel here — four scalar digests.
+fn imp_md5_x4_eq(
+  m0 : Bytes,
+  m1 : Bytes,
+  m2 : Bytes,
+  m3 : Bytes,
+  out : FixedArray[Byte],
+) -> Unit {
+  md5_into(m0, out, 0)
+  md5_into(m1, out, 16)
+  md5_into(m2, out, 32)
+  md5_into(m3, out, 48)
+}

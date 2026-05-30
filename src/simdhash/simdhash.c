@@ -277,3 +277,126 @@ void mb_sha1_x4(const uint8_t *m0, const uint8_t *m1, const uint8_t *m2,
   }
   free(pad);
 }
+
+// ---- MD5 (little-endian; variable per-round rotation) ----
+
+#if defined(__SSE2__)
+static inline v4 v_rotl_var(v4 x, int s) {
+  return _mm_or_si128(_mm_sll_epi32(x, _mm_cvtsi32_si128(s)),
+                      _mm_srl_epi32(x, _mm_cvtsi32_si128(32 - s)));
+}
+#elif defined(__aarch64__) || defined(__ARM_NEON)
+static inline v4 v_rotl_var(v4 x, int s) {
+  return vorrq_u32(vshlq_u32(x, vdupq_n_s32(s)),
+                   vshlq_u32(x, vdupq_n_s32(s - 32)));
+}
+#else
+static inline v4 v_rotl_var(v4 x, int s) {
+  v4 r;
+  for (int i = 0; i < 4; i++) r.l[i] = (x.l[i] << s) | (x.l[i] >> (32 - s));
+  return r;
+}
+#endif
+
+#define V_NOT(x) V_XOR((x), V_SET1(0xFFFFFFFFu))
+
+static const uint32_t MD5_K[64] = {
+    0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a,
+    0xa8304613, 0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
+    0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340,
+    0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+    0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8,
+    0x676f02d9, 0x8d2a4c8a, 0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
+    0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70, 0x289b7ec6, 0xeaa127fa,
+    0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+    0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92,
+    0xffeff47d, 0x85845dd1, 0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
+    0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391};
+static const int MD5_S[64] = {7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7,
+                              12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9,
+                              14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16,
+                              23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21,
+                              6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21};
+static const uint32_t MD5_IV[4] = {0x67452301, 0xefcdab89, 0x98badcfe,
+                                   0x10325476};
+
+// Padding with a *little-endian* 64-bit bit length (MD5).
+static uint8_t *pad4_le(const uint8_t *const ms[4], int n, size_t *plen_out,
+                        int *blocks_out) {
+  size_t plen = ((size_t)(n + 8) / 64) * 64 + 64;
+  uint8_t *pad = (uint8_t *)calloc(4, plen);
+  uint64_t bits = (uint64_t)n * 8;
+  for (int k = 0; k < 4; k++) {
+    uint8_t *p = pad + (size_t)k * plen;
+    if (n > 0) memcpy(p, ms[k], (size_t)n);
+    p[n] = 0x80;
+    for (int i = 0; i < 8; i++) p[plen - 8 + i] = (uint8_t)(bits >> (i * 8));
+  }
+  *plen_out = plen;
+  *blocks_out = (int)(plen / 64);
+  return pad;
+}
+
+static inline uint32_t rd_le32(const uint8_t *p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
+         ((uint32_t)p[3] << 24);
+}
+
+void mb_md5_x4(const uint8_t *m0, const uint8_t *m1, const uint8_t *m2,
+               const uint8_t *m3, int n, uint8_t *out) {
+  const uint8_t *ms[4] = {m0, m1, m2, m3};
+  size_t plen;
+  int blocks;
+  uint8_t *pad = pad4_le(ms, n, &plen, &blocks);
+  v4 A = V_SET1(MD5_IV[0]), B = V_SET1(MD5_IV[1]), C = V_SET1(MD5_IV[2]),
+     D = V_SET1(MD5_IV[3]);
+  v4 M[16];
+  for (int blk = 0; blk < blocks; blk++) {
+    for (int j = 0; j < 16; j++) {
+      uint32_t w[4];
+      for (int k = 0; k < 4; k++)
+        w[k] = rd_le32(pad + (size_t)k * plen + (size_t)blk * 64 + j * 4);
+      M[j] = v_set4(w[0], w[1], w[2], w[3]);
+    }
+    v4 a = A, b = B, c = C, d = D;
+    for (int i = 0; i < 64; i++) {
+      v4 f;
+      int g;
+      if (i < 16) {
+        f = V_OR(V_AND(b, c), V_ANDNOT(b, d));
+        g = i;
+      } else if (i < 32) {
+        f = V_OR(V_AND(d, b), V_ANDNOT(d, c));
+        g = (5 * i + 1) & 15;
+      } else if (i < 48) {
+        f = V_XOR(V_XOR(b, c), d);
+        g = (3 * i + 5) & 15;
+      } else {
+        f = V_XOR(c, V_OR(b, V_NOT(d)));
+        g = (7 * i) & 15;
+      }
+      v4 f2 = V_ADD(V_ADD(V_ADD(f, a), V_SET1(MD5_K[i])), M[g]);
+      a = d;
+      d = c;
+      c = b;
+      b = V_ADD(b, v_rotl_var(f2, MD5_S[i]));
+    }
+    A = V_ADD(A, a);
+    B = V_ADD(B, b);
+    C = V_ADD(C, c);
+    D = V_ADD(D, d);
+  }
+  v4 St[4] = {A, B, C, D};
+  for (int i = 0; i < 4; i++) {
+    uint32_t o[4];
+    v_get4(St[i], o);
+    for (int k = 0; k < 4; k++) {
+      uint8_t *p = out + k * 16 + i * 4;
+      p[0] = (uint8_t)o[k]; // little-endian
+      p[1] = (uint8_t)(o[k] >> 8);
+      p[2] = (uint8_t)(o[k] >> 16);
+      p[3] = (uint8_t)(o[k] >> 24);
+    }
+  }
+  free(pad);
+}

@@ -18,7 +18,7 @@ Target-specific SIMD implementations with scalar fallback.
 - `src/simd_scalar.mbt` - shared scalar fallback for `js` and `wasm-gc` targets (FixedArray-on-GC-heap means `v128.load` is unusable on wasm-gc)
 - `src/simdcodec/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
 - `src/simdjson/` - sub-package porting simdjson's `find_structural_bits` byte-classification pipeline to wasm SIMD. Operates on `@simd_buffer.SimdBufferBytes`. wasm / wasm-gc use inline-WAT (`i8x16.eq` + `i8x16.bitmask`); native / js use FixedArray scalar. See the "src/simdjson/ sub-package" section below.
-- `src/simdhash/` - sub-package for cryptographic digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-1** (`sha1.mbt`), **MD5** (`md5.mbt`, RFC 1321) — each with `*` (`-> Bytes`), `*_hex` (`-> String`), `*_x4` (batch). SHA-1/MD5 are collision-broken — legacy interop only. MD5 is little-endian throughout (word loads / length suffix / digest), SHA-1/256 are big-endian. SHA-256 specifics: Single-message `sha256` is **scalar on every target** — a SHA-256 stream is a tight sequential 64-round dependency and wasm SIMD has no SHA-NI / CLMUL, so it doesn't vectorise (same wall as crc32 / `compute_quote_mask`). The SIMD win is *multi-buffer*: `sha256_x4` hashes 4 independent messages in parallel, one per `i32x4` lane (Intel `sha256_mb` style) via the inline-WAT kernel in `simdhash_wasm.mbt` — **~2.8× batch on wasm** (vs 4 separate `sha256` calls) — and via a C SSE2/NEON kernel (`simdhash.c`) on **native** (~3.6×; `sha1_x4` also native-SIMD at ~3.4×). MoonBit transposes the 4 padded messages into a v128-per-word buffer so the WAT just `v128.load`s each schedule word; `rotr` is `(x >>u n) | (x << 32-n)` on `i32x4`, `ch` via `v128.andnot`. Uses `UInt` for mod-2³² arithmetic; `to_hex` builds UTF-16LE so `Bytes::to_unchecked_string` reads it correctly. Verified against NIST KAT vectors + an equal-length sweep (every lane == scalar). See the "src/simdhash/ sub-package" section below.
+- `src/simdhash/` - sub-package for cryptographic digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-1** (`sha1.mbt`), **MD5** (`md5.mbt`, RFC 1321) — each with `*` (`-> Bytes`), `*_hex` (`-> String`), `*_x4` (batch). SHA-1/MD5 are collision-broken — legacy interop only. MD5 is little-endian throughout (word loads / length suffix / digest), SHA-1/256 are big-endian. SHA-256 specifics: Single-message `sha256` is **scalar on every target** — a SHA-256 stream is a tight sequential 64-round dependency and wasm SIMD has no SHA-NI / CLMUL, so it doesn't vectorise (same wall as crc32 / `compute_quote_mask`). The SIMD win is *multi-buffer*: `sha256_x4` hashes 4 independent messages in parallel, one per `i32x4` lane (Intel `sha256_mb` style) via the inline-WAT kernel in `simdhash_wasm.mbt` — **~2.8× batch on wasm** (vs 4 separate `sha256` calls) — and via a C SSE2/NEON kernel (`simdhash.c`) on **native** (`sha256_x4` ~3.6×, `sha1_x4` ~3.4×, `md5_x4` ~4.1×). MoonBit transposes the 4 padded messages into a v128-per-word buffer so the WAT just `v128.load`s each schedule word; `rotr` is `(x >>u n) | (x << 32-n)` on `i32x4`, `ch` via `v128.andnot`. Uses `UInt` for mod-2³² arithmetic; `to_hex` builds UTF-16LE so `Bytes::to_unchecked_string` reads it correctly. Verified against NIST KAT vectors + an equal-length sweep (every lane == scalar). See the "src/simdhash/ sub-package" section below.
 - `src/simdimage/` - sub-package for image / pixel byte ops (`rgb_to_rgba`, `rgba_to_grayscale`, `channel_extract` / `channel_merge`, `lerp`, `alpha_blend_solid`, `histogram`). Operates on **`Bytes` (input) / `FixedArray[Byte]` (output) directly** — the `@simdcore` philosophy, no `SimdBufferBytes` hop. wasm uses inline-WAT v128 (bodies ported verbatim from the old `SimdBufferBytes` `buf_*` image kernels); wasm-gc / native / js share a scalar fallback. These ops **used to live as `SimdBufferBytes` methods in `src/simd_buffer/`** and were moved here so the buffer type stays about general numeric / byte storage. See the "src/simdimage/ sub-package" section below.
 - `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@simdcodec` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
 
@@ -676,6 +676,7 @@ The 4-way multi-buffer kernel (`sha256_x4` with four equal-length inputs):
 | `sha256` × 4 (separate) | 527 µs | 166 µs |
 | `sha256_x4` (multi-buffer) | 190 µs (**2.8×**) | 46 µs (**3.6×**) |
 | `sha1_x4` (native multi-buffer) | scalar | 36 µs (**3.4×**, vs 121 µs) |
+| `md5_x4` (native multi-buffer) | scalar | 24 µs (**4.1×**, vs 98 µs) |
 
 Not the theoretical 4×: each lane still runs the full serial round chain, and
 the transpose costs a pass — but four lanes advance per instruction. The wasm
@@ -695,13 +696,20 @@ a portable scalar **lane-struct** fallback for other ISAs. The `v4` type +
 (`pad4`, big-endian length) and the transpose (build each `W[t]` lane via
 `v_set4`), so MoonBit just passes the four `Bytes` pointers + common length
 (`Bytes` crosses the native FFI as `const uint8_t*` under `#borrow`).
-Rotations are compile-time constants → the NEON `vshrq_n_u32` / `vshlq_n_u32`
-immediate forms work. `sha1_x4` on native is **3.4×**, `sha256_x4` **3.6×**
-(both beat the wasm ratio — gcc `-O` on the SSE2 path is tighter than the
-inline-WAT under V8/moonrun). The SSE2 path was validated here on x86-64; NEON
-is written behind `__aarch64__` (untested on this box) with the scalar fallback
-guaranteeing correctness everywhere. `md5_x4` stays scalar (its LE structure
-wasn't ported to the C kernel).
+For the **SHA** kernels rotations are compile-time constants → the NEON
+`vshrq_n_u32` / `vshlq_n_u32` immediate forms work directly. **MD5**
+(`mb_md5_x4`) is also wired up — but it's little-endian (`pad4_le` + `rd_le32`
++ LE digest output) and its per-round rotation amount `MD5_S[i]` is a
+*runtime* value, so it needs a variable-shift `v_rotl_var` (SSE
+`_mm_sll_epi32`/`_mm_srl_epi32` with an xmm count; NEON `vshlq_u32` with a
+`vdupq_n_s32(s)` / `vdupq_n_s32(s-32)` vector — negative = right shift). The
+`I = c ^ (b | ~d)` round uses `V_NOT(x) = V_XOR(x, V_SET1(0xFFFFFFFF))`.
+native ratios (4 KiB × 4): `md5_x4` **4.1×**, `sha256_x4` **3.6×**, `sha1_x4`
+**3.4×** (all beat the wasm ratio — gcc `-O` on SSE2 is tighter than inline-WAT
+under V8/moonrun; MD5 edges ahead with fewer rounds). The SSE2 path was
+validated here on x86-64; NEON is written behind `__aarch64__` (untested on
+this box) with the scalar lane-struct fallback guaranteeing correctness
+everywhere.
 
 ## More parser surface that works
 
