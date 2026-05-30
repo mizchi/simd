@@ -440,7 +440,7 @@ head for `i < stride`, then SIMD body that loads `data + i` and
 PNG Sub encoder, which is the pattern that motivated bundling it
 in-simd rather than re-porting per consumer.
 
-### Tier 2 — image / pixel ops (`rgb_to_rgba` + `channel_extract` SIMD; rest scalar)
+### Tier 2 — image / pixel ops (RGBA shuffle ops SIMD; arithmetic ops scalar)
 
 `SimdBufferBytes` methods:
 
@@ -461,7 +461,11 @@ in-simd rather than re-porting per consumer.
   wasm-gc): one `i8x16.shuffle` gathers channel `ch` of 4 pixels into the low
   4 lanes (`i32.store`), scalar tail; one specialised kernel per channel
   because shuffle lane indices are immediates. **wasm bench (4096 px):
-  45.2 µs → 1.91 µs = 24x.** `channel_merge` (4-way interleave) stays scalar.
+  45.2 µs → 1.91 µs = 24x.** `channel_merge` (planar → RGBA) is also **SIMD
+  shipped** (wasm / wasm-gc): 4 pixels per iter via two zip `i8x16.shuffle`s
+  (R+G, B+A into 16-bit pairs) + one final pair-interleave shuffle, one
+  `v128.store`; scalar tail. **wasm bench (4096 px): 171.5 µs → 5.11 µs =
+  34x.**
 - `lerp(a, b, t, out)` — `out[i] = (a[i]*(256-t) + b[i]*t) >> 8`, `t ∈
   0..=256`. SIMD shape: `i16x8.mul` + add, requires lane width split.
 - `histogram(self, bins[256])` — 256-bin scalar (wasm SIMD has no
@@ -478,12 +482,13 @@ The byte binary ops are mechanical 16-byte-chunk-with-different-SIMD-op
 skeletons. The image ops each need their own inline-WAT structure
 (shuffle patterns, lane-width conversions, fixed-point rescaling). The
 API surface shipped first (forward-compatible signatures); the wasm SIMD
-bodies fill in behind the same API. Done so far: `rgb_to_rgba`
-(`i8x16.shuffle`, 63x) and `channel_extract` (`i8x16.shuffle` de-interleave,
-24x — 4 channel-specialised kernels since shuffle indices are immediates).
-Remaining in priority order: `rgba_to_grayscale` / `lerp` /
-`alpha_blend_solid` (need `i16x8.extmul` fixed-point), `channel_merge` (4-way
-interleave); `histogram` stays scalar (wasm SIMD has no scatter).
+bodies fill in behind the same API. The pure-shuffle ops are all done:
+`rgb_to_rgba` (`i8x16.shuffle`, 63x), `channel_extract` (de-interleave, 24x —
+4 channel-specialised kernels since shuffle indices are immediates), and
+`channel_merge` (zip-interleave, 34x — 3 shuffles per 4 pixels). Remaining:
+`rgba_to_grayscale` / `lerp` / `alpha_blend_solid` need `i16x8.extmul`
+fixed-point arithmetic (not pure shuffles); `histogram` stays scalar (wasm
+SIMD has no scatter).
 
 ## More parser surface that works
 

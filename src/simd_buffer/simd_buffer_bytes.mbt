@@ -574,12 +574,10 @@ pub fn SimdBufferBytes::channel_merge(
   if out.len != n * 4 {
     abort("SimdBufferBytes.channel_merge: out length must be n * 4")
   }
-  for i in 0..<n {
-    buf_store_byte(out.addr + i * 4, buf_load_byte(r.addr + i))
-    buf_store_byte(out.addr + i * 4 + 1, buf_load_byte(g.addr + i))
-    buf_store_byte(out.addr + i * 4 + 2, buf_load_byte(b.addr + i))
-    buf_store_byte(out.addr + i * 4 + 3, buf_load_byte(a.addr + i))
+  if n == 0 {
+    return
   }
+  buf_channel_merge(r.addr, g.addr, b.addr, a.addr, out.addr, n)
 }
 
 ///|
@@ -1052,6 +1050,23 @@ fn buf_channel_extract_2(src : Int, out : Int, n : Int) -> Unit =
 ///|
 fn buf_channel_extract_3(src : Int, out : Int, n : Int) -> Unit =
   #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 5 local.get 5 local.get 5 i8x16.shuffle 3 7 11 15 0 0 0 0 0 0 0 0 0 0 0 0 i32x4.extract_lane 0 i32.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 3 i32.add i32.load8_u i32.store8 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+/// Channel interleave (4 planar streams → RGBA): 4 pixels per iter via two
+/// zip `i8x16.shuffle`s (R+G, B+A into 16-bit pairs) then one final shuffle
+/// that interleaves the pairs into `r g b a r g b a ...`; one `v128.store`.
+/// Scalar tail. The 4 `v128.load`s over-read up to 12 bytes past each plane's
+/// logical end into `SimdBuffer::make`'s 16-byte slack (unused lanes).
+/// Locals: 6 = p, 7 = pix_end, 8 = rg (v128), 9 = ba (v128).
+fn buf_channel_merge(
+  r : Int,
+  g : Int,
+  b : Int,
+  a : Int,
+  out : Int,
+  n : Int,
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) local.get 5 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 7 block loop local.get 6 local.get 7 i32.ge_s br_if 1 local.get 0 local.get 6 i32.add v128.load local.get 1 local.get 6 i32.add v128.load i8x16.shuffle 0 16 1 17 2 18 3 19 0 16 1 17 2 18 3 19 local.set 8 local.get 2 local.get 6 i32.add v128.load local.get 3 local.get 6 i32.add v128.load i8x16.shuffle 0 16 1 17 2 18 3 19 0 16 1 17 2 18 3 19 local.set 9 local.get 4 local.get 6 i32.const 2 i32.shl i32.add local.get 8 local.get 9 i8x16.shuffle 0 1 16 17 2 3 18 19 4 5 20 21 6 7 22 23 v128.store local.get 6 i32.const 4 i32.add local.set 6 br 0 end end block loop local.get 6 local.get 5 i32.ge_s br_if 1 local.get 4 local.get 6 i32.const 2 i32.shl i32.add local.get 0 local.get 6 i32.add i32.load8_u i32.store8 local.get 4 local.get 6 i32.const 2 i32.shl i32.add i32.const 1 i32.add local.get 1 local.get 6 i32.add i32.load8_u i32.store8 local.get 4 local.get 6 i32.const 2 i32.shl i32.add i32.const 2 i32.add local.get 2 local.get 6 i32.add i32.load8_u i32.store8 local.get 4 local.get 6 i32.const 2 i32.shl i32.add i32.const 3 i32.add local.get 3 local.get 6 i32.add i32.load8_u i32.store8 local.get 6 i32.const 1 i32.add local.set 6 br 0 end end)
 
 ///|
 /// Shifted-self subtraction (PNG Sub filter): for i in stride..<len,

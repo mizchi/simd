@@ -1371,3 +1371,50 @@ test "channel_extract SIMD body + tail (all channels)" {
     }
   }
 }
+
+///|
+test "channel_merge SIMD body + tail" {
+  for npix in [0, 1, 3, 4, 7, 8, 13, 16, 17] {
+    let r = SimdBufferBytes::make(npix)
+    let g = SimdBufferBytes::make(npix)
+    let b = SimdBufferBytes::make(npix)
+    let a = SimdBufferBytes::make(npix)
+    for i in 0..<npix {
+      r.set(i, (i % 256).to_byte())
+      g.set(i, ((i * 2 + 1) % 256).to_byte())
+      b.set(i, ((i * 3 + 2) % 256).to_byte())
+      a.set(i, ((i * 5 + 7) % 256).to_byte())
+    }
+    let out = SimdBufferBytes::make(npix * 4)
+    SimdBufferBytes::channel_merge(r, g, b, a, out)
+    for i in 0..<npix {
+      assert_eq(out.get(i * 4), r.get(i))
+      assert_eq(out.get(i * 4 + 1), g.get(i))
+      assert_eq(out.get(i * 4 + 2), b.get(i))
+      assert_eq(out.get(i * 4 + 3), a.get(i))
+    }
+  }
+}
+
+///|
+test "channel_extract / channel_merge round-trip large" {
+  // de-interleave then re-interleave a 100-pixel image must be identity.
+  let npix = 100
+  let rgba = SimdBufferBytes::make(npix * 4)
+  for i in 0..<(npix * 4) {
+    rgba.set(i, ((i * 7 + 3) % 256).to_byte())
+  }
+  let r = SimdBufferBytes::make(npix)
+  let g = SimdBufferBytes::make(npix)
+  let b = SimdBufferBytes::make(npix)
+  let a = SimdBufferBytes::make(npix)
+  SimdBufferBytes::channel_extract(rgba, 0, r)
+  SimdBufferBytes::channel_extract(rgba, 1, g)
+  SimdBufferBytes::channel_extract(rgba, 2, b)
+  SimdBufferBytes::channel_extract(rgba, 3, a)
+  let back = SimdBufferBytes::make(npix * 4)
+  SimdBufferBytes::channel_merge(r, g, b, a, back)
+  for i in 0..<(npix * 4) {
+    assert_eq(back.get(i), rgba.get(i))
+  }
+}
