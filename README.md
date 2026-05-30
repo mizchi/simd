@@ -22,6 +22,26 @@ just bench-wasm    # wasm benchmark
 just bench-native  # native benchmark
 ```
 
+## Packages & backend acceleration
+
+Each package has its own README with a per-backend comparison table. At a
+glance, which backends get real SIMD (✅) vs scalar fallback (·):
+
+| package | wasm | wasm-gc | native | js | docs |
+|---|:--:|:--:|:--:|:--:|---|
+| [`@simdcore`](src/simdcore/) — faster core idioms | ✅ | · | ✅¹ | · | [README](src/simdcore/README.md) |
+| [`@simdimage`](src/simdimage/) — image / pixel ops | ✅ | · | · | · | [README](src/simdimage/README.md) |
+| [`@simd_buffer`](src/simd_buffer/) — portable buffer family | ✅ | ✅ | ✅ | · | [README](src/simd_buffer/README.md) |
+| [`@simdjson`](src/simdjson/) — JSON indexing | ✅ | ✅ | · | · | [README](src/simdjson/README.md) |
+| [`@base64`](src/base64/) — RFC 4648 Base64 | ✅ | · | ⚠️² | · | [README](src/base64/README.md) |
+| `@simd` — FixedArray root API | ✅ | · | ✅ | · | this file |
+
+¹ native `@simdcore` uses NEON / SSE2 **and** libc (`memchr` / `memmem` /
+`memrchr`) — biggest wins where a tuned libc primitive exists.
+² native `@base64` is a gcc-compiled scalar kernel (the SSSE3 `pshufb` a
+vectorised base64 needs isn't in the baseline x86-64 ABI), still ~2× over
+the tcc MoonBit scalar.
+
 ## Install
 
 Add to your `moon.mod.json`:
