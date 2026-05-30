@@ -26,7 +26,22 @@ Target-specific SIMD implementations with scalar fallback.
 - The one parser gap: `v128.const i32x4 ...` literal trips the Dwarfsm parser (`Int32.of_string` failure). Build the constant via `i32.const N i32x4.splat` (or load from a precomputed `FixedArray[Byte]`).
 - `wasm` FixedArray ABI: the FFI parameter pointer = address of element[0]; elements are tightly packed i32 / i8 in linear memory. Object header sits at negative offsets (`[-12]` size, `[-8]` refcount, `[-4]` type tag).
 - `wasm-gc` FixedArray is passed as a GC `(ref N)`, not a linear-memory pointer, so `v128.load` is unusable. SIMD lift on wasm-gc would require a copy-to-buffer hop that erases the win. Keep scalar fallback.
-- TCC (default native compiler) doesn't support NEON/SSE intrinsics, but C FFI still provides significant speedup via optimized scalar code.
+- **Native C stubs are compiled with the system compiler (gcc/clang), NOT
+  tcc** (verified via `moon test --target native --dry-run`: the
+  `native-stub` `.c` files go through `/usr/bin/cc`; only the MoonBit-
+  *generated* glue runs under the bundled tcc). So the SSE2/NEON intrinsics
+  in `simd_native.c` (gated `#if !defined(__TINYC__)`) **do activate**: on
+  x86-64 the baseline ABI defines `__SSE2__`, and on arm64 `__aarch64__`
+  selects NEON. Confirmed in the asm (`simd_add_ffi` → `movdqu`/`paddd`).
+  Some kernels' SSE paths were gated on `__SSE4_1__` / `__SSSE3__` (not in the
+  baseline x86-64 ABI without `-march`), so they fell back to scalar on
+  x64 — those now also have a portable `#elif USE_SSE2` branch
+  (`min`/`max`/`min_elem`/`max_elem` via `pcmpgtd`+blend, `abs` via the
+  sign-mask trick, `to_lower`/`to_upper` via `pcmpgtb`+`paddb`). native bench
+  (1024 / 4 KiB) for those: `abs` 4.7x, `min_elem` 5.7x, `max_elem` 3.8x,
+  `to_lower` 3.1x vs the MoonBit scalar; reductions (`min`/`max`) are a wash
+  (memory-bound). Every kernel keeps a scalar tail so tcc-only builds (and
+  unknown ISAs) stay correct.
 - `native-stub` in moon.pkg.json links C source files for native target.
 - `#borrow(param)` annotation needed for FixedArray/Bytes FFI parameters.
 
@@ -1141,8 +1156,8 @@ exercised by `simdcore` on wasm **and** native.
 `Bytes` substring search (core has none) is the cleanest libc win after
 `find_byte_b`/`memchr`:
 
-- **native** → glibc `memmem` (declared via `#define _GNU_SOURCE`; works under
-  the bundled TCC since it links system glibc).
+- **native** → glibc `memmem` (declared via `#define _GNU_SOURCE`; the stub is
+  gcc/clang-compiled and links system glibc).
 - **wasm** → a new `find_byte_from_b` inline-WAT (SIMD `i8x16.eq` first-byte
   scan that **early-returns on the first matching chunk** — `i32.ctz` gives
   the earliest lane) drives a MoonBit candidate loop with a scalar verify of
@@ -1353,13 +1368,15 @@ indexer when the quote-aware offsets are required.
 **Native path (C FFI, `simdcore.c`).** The native target binds `Bytes` /
 `FixedArray[Int]` to C kernels (`#borrow` → `const uint8_t*` / `int32_t*`),
 fusing the three stages into one call. The win is modest — full pipeline
-**32.0 µs → 27.8 µs ≈ 1.15x**, classify roughly flat — because moon's default
-native compiler is **TCC**, which neither auto-vectorises nor exposes SSE/NEON
-intrinsics, and (unlike `find_byte_b`'s `memchr`) JSON classification has no
-libc primitive to lean on. So the C loop is essentially the scalar loop minus
-MoonBit's bounds checks. Recorded as a data point: native C FFI pays off
-hugely where a tuned libc primitive exists (bytes ops) and only marginally for
-plain classification loops under TCC.
+**32.0 µs → 27.8 µs ≈ 1.15x**, classify roughly flat. The stub *is*
+gcc-compiled (so `__SSE2__` is available), but this kernel has no **explicit**
+SIMD — it's a plain bitmap-packing loop, and the `out[i>>5] |= …` carry into
+the 32-bit word is a serial dependency gcc won't auto-vectorise at `-Og`.
+Unlike `find_byte_b`'s `memchr`, JSON classification has no libc primitive to
+lean on either. A hand-written SSE2 classify (`pcmpeqb` per delimiter +
+`pmovmskb`) would help — queued. Recorded as a data point: the native FFI win
+is huge where a tuned libc primitive (`memchr`/`memmem`) or an explicit
+intrinsic kernel exists, and only marginal for an un-vectorised serial loop.
 
 Run: `moon bench --target wasm -p simdcore` (or `--target native`).
 
