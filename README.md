@@ -44,8 +44,8 @@ vectorised base64 needs isn't in the baseline x86-64 ABI), still ~2× over
 the tcc MoonBit scalar.
 ³ `@simdhash`: single `sha256` / `sha1` / `md5` are scalar everywhere (a hash
 stream is serial; no SHA-NI / CLMUL on wasm). The SIMD path is the **batch
-multi-buffer** kernel: `sha256_x4` + `sha1_x4` on wasm (inline-WAT, ~2.1–2.8×)
-and `sha256_x4` / `sha1_x4` / `md5_x4` on native (SSE2 / NEON, ~3.4–4.1×).
+multi-buffer** kernel: all three `*_x4` on wasm (inline-WAT, ~1.4–2.8×) and on
+native (SSE2 / NEON, ~3.4–4.1×).
 
 ## Install
 
@@ -387,7 +387,7 @@ src/
 
   simdhash/                                # @simdhash — SHA-256 / SHA-1 / MD5
     simdhash.mbt + sha1.mbt + md5.mbt      # scalar digests + public API
-    simdhash_wasm.mbt                      # wasm 4-way inline-WAT (sha256_x4 + sha1_x4)
+    simdhash_wasm.mbt                      # wasm 4-way inline-WAT (sha256/sha1/md5 _x4)
     simdhash_native.mbt + simdhash.c       # native SSE2/NEON 4-way (sha256/sha1)
 
   simdjson/                                # @simdjson — JSON byte classification

@@ -21,7 +21,7 @@ let (d0, d1, d2, d3) = @simdhash.sha256_x4(m0, m1, m2, m3)   // batch
 
 | backend | single (`sha256` / `sha1` / `md5`) | `*_x4` batch |
 |---|---|---|
-| **wasm** | scalar¹ | `sha256_x4` + `sha1_x4` **inline-WAT 4-way SIMD**²; `md5_x4` scalar |
+| **wasm** | scalar¹ | `sha256_x4` / `sha1_x4` / `md5_x4` **inline-WAT 4-way SIMD**² |
 | **wasm-gc** | scalar | scalar |
 | **native** | scalar (gcc-compiled) | `sha256_x4` / `sha1_x4` / `md5_x4` **SSE2 / NEON 4-way multi-buffer**³ |
 | **js** | scalar | scalar |
@@ -36,9 +36,9 @@ tight sequential dependency, and wasm SIMD has no SHA-NI / CLMUL equivalent
 `sha256` / `sha1` / `md5` are scalar on every backend by design.
 
 ² **The SIMD win is multi-buffer.** `*_x4` hashes four *independent* messages
-in parallel — one per SIMD lane (Intel's `sha256_mb` approach). On wasm,
-`sha256_x4` and `sha1_x4` run inline-WAT `i32x4` kernels (SHA-1 as four
-20-round group loops); `md5_x4` stays scalar on wasm.
+in parallel — one per SIMD lane (Intel's `sha256_mb` approach). All three run
+inline-WAT `i32x4` kernels on wasm (SHA-1 / MD5 as four 16/20-round group
+loops; MD5's variable per-round rotation uses a dynamic `i32x4.shl` count).
 
 ³ **Native uses real SSE2 / NEON** (`simdhash.c`, gcc/clang-compiled — SSE2 is
 baseline on x86-64, NEON on arm64; a portable scalar lane-struct covers other
@@ -54,8 +54,8 @@ Merkle leaves, …).
 | **`sha256_x4`** (multi-buffer) | **190 µs (2.8×)** | **46 µs (3.6×)** |
 | `sha1` × 4 (separate calls) | 515 µs | 121 µs |
 | **`sha1_x4`** (multi-buffer) | **246 µs (2.1×)** | **36 µs (3.4×)** |
-| `md5` × 4 (separate calls) | — | 98 µs |
-| **`md5_x4`** (native multi-buffer) | scalar | **24 µs (4.1×)** |
+| `md5` × 4 (separate calls) | 231 µs | 98 µs |
+| **`md5_x4`** (multi-buffer) | **165 µs (1.4×)** | **24 µs (4.1×)** |
 
 Not the theoretical 4×: each lane still runs the full serial round chain and
 the padding/transpose costs a pass — but four lanes advance per instruction.

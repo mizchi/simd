@@ -182,7 +182,47 @@ fn imp_sha1_x4_eq(
 }
 
 ///|
-/// MD5 has no SIMD multi-buffer kernel here — four scalar digests.
+let md5_k_int : FixedArray[Int] = {
+  let t = FixedArray::make(64, 0)
+  for i in 0..<64 {
+    t[i] = md5_k[i].reinterpret_as_int()
+  }
+  t
+}
+
+///|
+let md5_iv_int : FixedArray[Int] = {
+  let t = FixedArray::make(4, 0)
+  for i in 0..<4 {
+    t[i] = md5_iv[i].reinterpret_as_int()
+  }
+  t
+}
+
+///|
+/// 4-way multi-buffer MD5 compression. Little-endian throughout; `win` holds
+/// the 16 LE message words per block (lane-major v128-per-word), `wscratch`
+/// the 16 M words for the current block, `hout` the 4 state v128. `kptr` = the
+/// 64 K constants, `sptr` = the 64 per-round rotation amounts, `ivptr` = the 4
+/// IV words. The 64 rounds run as four 16-round group loops (each its own `f`
+/// shape + `g` index formula). Rotation is *variable* per round — wasm's
+/// `i32x4.shl` / `shr_u` take the shift count as a stack operand, so `s` is
+/// loaded from `sptr[i]` and used directly (no per-round unrolling).
+#borrow(win, kptr, sptr, ivptr, wscratch, hout)
+fn md5_x4_wat(
+  win : FixedArray[Byte],
+  blocks : Int,
+  kptr : FixedArray[Int],
+  sptr : FixedArray[Int],
+  ivptr : FixedArray[Int],
+  wscratch : FixedArray[Byte],
+  hout : FixedArray[Byte],
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) local.get 4 i32.load i32x4.splat local.set 12 local.get 4 i32.const 4 i32.add i32.load i32x4.splat local.set 13 local.get 4 i32.const 8 i32.add i32.load i32x4.splat local.set 14 local.get 4 i32.const 12 i32.add i32.load i32x4.splat local.set 15 i32.const 255 i8x16.splat local.set 22 i32.const 0 local.set 7 block loop local.get 7 local.get 1 i32.ge_s br_if 1 local.get 7 i32.const 8 i32.shl local.set 11 i32.const 0 local.set 8 block loop local.get 8 i32.const 16 i32.ge_s br_if 1 local.get 5 local.get 8 i32.const 4 i32.shl i32.add local.get 0 local.get 11 i32.add local.get 8 i32.const 4 i32.shl i32.add v128.load v128.store local.get 8 i32.const 1 i32.add local.set 8 br 0 end end local.get 12 local.set 16 local.get 13 local.set 17 local.get 14 local.set 18 local.get 15 local.set 19 i32.const 0 local.set 8 block loop local.get 8 i32.const 16 i32.ge_s br_if 1 local.get 8 local.set 9 local.get 17 local.get 18 v128.and local.get 19 local.get 17 v128.andnot v128.or local.set 20 local.get 20 local.get 16 i32x4.add local.get 2 local.get 8 i32.const 2 i32.shl i32.add i32.load i32x4.splat i32x4.add local.get 5 local.get 9 i32.const 4 i32.shl i32.add v128.load i32x4.add local.set 21 local.get 3 local.get 8 i32.const 2 i32.shl i32.add i32.load local.set 10 local.get 19 local.set 16 local.get 18 local.set 19 local.get 17 local.set 18 local.get 17 local.get 21 local.get 10 i32x4.shl local.get 21 i32.const 32 local.get 10 i32.sub i32x4.shr_u v128.or i32x4.add local.set 17 local.get 8 i32.const 1 i32.add local.set 8 br 0 end end block loop local.get 8 i32.const 32 i32.ge_s br_if 1 local.get 8 i32.const 5 i32.mul i32.const 1 i32.add i32.const 15 i32.and local.set 9 local.get 19 local.get 17 v128.and local.get 18 local.get 19 v128.andnot v128.or local.set 20 local.get 20 local.get 16 i32x4.add local.get 2 local.get 8 i32.const 2 i32.shl i32.add i32.load i32x4.splat i32x4.add local.get 5 local.get 9 i32.const 4 i32.shl i32.add v128.load i32x4.add local.set 21 local.get 3 local.get 8 i32.const 2 i32.shl i32.add i32.load local.set 10 local.get 19 local.set 16 local.get 18 local.set 19 local.get 17 local.set 18 local.get 17 local.get 21 local.get 10 i32x4.shl local.get 21 i32.const 32 local.get 10 i32.sub i32x4.shr_u v128.or i32x4.add local.set 17 local.get 8 i32.const 1 i32.add local.set 8 br 0 end end block loop local.get 8 i32.const 48 i32.ge_s br_if 1 local.get 8 i32.const 3 i32.mul i32.const 5 i32.add i32.const 15 i32.and local.set 9 local.get 17 local.get 18 v128.xor local.get 19 v128.xor local.set 20 local.get 20 local.get 16 i32x4.add local.get 2 local.get 8 i32.const 2 i32.shl i32.add i32.load i32x4.splat i32x4.add local.get 5 local.get 9 i32.const 4 i32.shl i32.add v128.load i32x4.add local.set 21 local.get 3 local.get 8 i32.const 2 i32.shl i32.add i32.load local.set 10 local.get 19 local.set 16 local.get 18 local.set 19 local.get 17 local.set 18 local.get 17 local.get 21 local.get 10 i32x4.shl local.get 21 i32.const 32 local.get 10 i32.sub i32x4.shr_u v128.or i32x4.add local.set 17 local.get 8 i32.const 1 i32.add local.set 8 br 0 end end block loop local.get 8 i32.const 64 i32.ge_s br_if 1 local.get 8 i32.const 7 i32.mul i32.const 15 i32.and local.set 9 local.get 18 local.get 17 local.get 19 local.get 22 v128.xor v128.or v128.xor local.set 20 local.get 20 local.get 16 i32x4.add local.get 2 local.get 8 i32.const 2 i32.shl i32.add i32.load i32x4.splat i32x4.add local.get 5 local.get 9 i32.const 4 i32.shl i32.add v128.load i32x4.add local.set 21 local.get 3 local.get 8 i32.const 2 i32.shl i32.add i32.load local.set 10 local.get 19 local.set 16 local.get 18 local.set 19 local.get 17 local.set 18 local.get 17 local.get 21 local.get 10 i32x4.shl local.get 21 i32.const 32 local.get 10 i32.sub i32x4.shr_u v128.or i32x4.add local.set 17 local.get 8 i32.const 1 i32.add local.set 8 br 0 end end local.get 12 local.get 16 i32x4.add local.set 12 local.get 13 local.get 17 i32x4.add local.set 13 local.get 14 local.get 18 i32x4.add local.set 14 local.get 15 local.get 19 i32x4.add local.set 15 local.get 7 i32.const 1 i32.add local.set 7 br 0 end end local.get 6 local.get 12 v128.store local.get 6 i32.const 16 i32.add local.get 13 v128.store local.get 6 i32.const 32 i32.add local.get 14 v128.store local.get 6 i32.const 48 i32.add local.get 15 v128.store)
+
+///|
+/// 4-way MD5 (one message per i32x4 lane). Little-endian word loads + LE
+/// digest output (vs the SHA kernels' big-endian).
 fn imp_md5_x4_eq(
   m0 : Bytes,
   m1 : Bytes,
@@ -190,8 +230,42 @@ fn imp_md5_x4_eq(
   m3 : Bytes,
   out : FixedArray[Byte],
 ) -> Unit {
-  md5_into(m0, out, 0)
-  md5_into(m1, out, 16)
-  md5_into(m2, out, 32)
-  md5_into(m3, out, 48)
+  let p0 = md5_pad_message(m0)
+  let p1 = md5_pad_message(m1)
+  let p2 = md5_pad_message(m2)
+  let p3 = md5_pad_message(m3)
+  let ps = [p0, p1, p2, p3]
+  let blocks = p0.length() / 64
+  let win = FixedArray::make(blocks * 16 * 16, b'\x00')
+  for k in 0..<4 {
+    let pk = ps[k]
+    for blk in 0..<blocks {
+      for t in 0..<16 {
+        let word = load_le_u32(pk, blk * 64 + t * 4)
+        let off = (blk * 16 + t) * 16 + k * 4
+        win[off] = (word & 0xFF).reinterpret_as_int().to_byte()
+        win[off + 1] = ((word >> 8) & 0xFF).reinterpret_as_int().to_byte()
+        win[off + 2] = ((word >> 16) & 0xFF).reinterpret_as_int().to_byte()
+        win[off + 3] = ((word >> 24) & 0xFF).reinterpret_as_int().to_byte()
+      }
+    }
+  }
+  let wscratch = FixedArray::make(16 * 16, b'\x00')
+  let hout = FixedArray::make(4 * 16, b'\x00')
+  md5_x4_wat(win, blocks, md5_k_int, md5_s, md5_iv_int, wscratch, hout)
+  for k in 0..<4 {
+    for i in 0..<4 {
+      let base = i * 16 + k * 4
+      let word = hout[base].to_uint() |
+        (hout[base + 1].to_uint() << 8) |
+        (hout[base + 2].to_uint() << 16) |
+        (hout[base + 3].to_uint() << 24)
+      let o = k * 16 + i * 4
+      // little-endian digest
+      out[o] = (word & 0xFF).reinterpret_as_int().to_byte()
+      out[o + 1] = ((word >> 8) & 0xFF).reinterpret_as_int().to_byte()
+      out[o + 2] = ((word >> 16) & 0xFF).reinterpret_as_int().to_byte()
+      out[o + 3] = ((word >> 24) & 0xFF).reinterpret_as_int().to_byte()
+    }
+  }
 }
