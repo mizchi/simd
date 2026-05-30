@@ -136,12 +136,20 @@ pub fn max_i32(arr : FixedArray[Int]) -> Int {
 
 ///|
 pub fn argmin_i32(arr : FixedArray[Int]) -> Int {
-  @internal.scalar_argmin(arr)
+  let len = arr.length()
+  if len == 0 {
+    return -1
+  }
+  simd_argmin_i32_ffi(arr, len)
 }
 
 ///|
 pub fn argmax_i32(arr : FixedArray[Int]) -> Int {
-  @internal.scalar_argmax(arr)
+  let len = arr.length()
+  if len == 0 {
+    return -1
+  }
+  simd_argmax_i32_ffi(arr, len)
 }
 
 ///|
@@ -504,12 +512,20 @@ pub fn prod_i32(arr : FixedArray[Int]) -> Int {
 
 ///|
 pub fn mean_f64(arr : FixedArray[Double]) -> Double {
-  @internal.scalar_mean_f64(arr)
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  simd_mean_f64_ffi(arr, len)
 }
 
 ///|
 pub fn var_f64(arr : FixedArray[Double]) -> Double {
-  @internal.scalar_var_f64(arr)
+  let len = arr.length()
+  if len == 0 {
+    return 0.0
+  }
+  simd_var_f64_ffi(arr, len)
 }
 
 ///|

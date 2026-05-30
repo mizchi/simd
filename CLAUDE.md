@@ -46,15 +46,19 @@ Target-specific SIMD implementations with scalar fallback.
     early-exit); `prod` via the `mb_mullo` helper; the f64 `matmul` 4×4
     register tile ported from NEON (`mul_pd`+`add_pd` for the missing FMA,
     `mb_hadd_pd` for the horizontal add).
+  - `mean_f64` (= SSE2 `sum`/n), `var_f64` (two-pass SSE2: mean then
+    `sum (x-mu)²`), and `argmin`/`argmax` (plain gcc-compiled scalar — no
+    bounds checks — beats the tcc MoonBit scalar).
 
   native bench vs the MoonBit scalar (1024 / 4 KiB / 64×64): **`matmul` 6.2x**
   (318 µs → 51 µs), `popcount` 30x, `min_elem` 5.7x, `abs` 4.7x, `mul` 4.7x,
   `max_elem` 3.8x, `all` 3.2x, `to_lower`/`saxpy` 3.1x, `min`/`max` 2.5x,
-  `dot` 2.3x, `sum` 1.7x, `prod`/`count_nonzero` 1.5x. The MoonBit scalar
-  baseline runs under tcc (no auto-vec), so even memory-bound reductions win.
-  Wash only where the scalar early-exits (`any` on dense input) or there's no
-  C kernel (`mean`/`var`). Every kernel keeps a scalar tail so tcc-only builds
-  (and unknown ISAs) stay correct — the native FFI uses NEON on arm64 and a
+  `dot` 2.3x, `var_f64` 2.0x, `sum`/`mean` 1.7x, `argmin` 1.6x,
+  `prod`/`count_nonzero` 1.5x. The MoonBit scalar baseline runs under tcc (no
+  auto-vec), so even memory-bound reductions win. Wash only where the scalar
+  early-exits (`any` on dense input). Every kernel keeps a scalar tail so
+  tcc-only builds (and unknown ISAs) stay correct — the native FFI uses NEON
+  on arm64 and a
   portable SSE2 baseline on any x86-64 (no `-march` needed) across the
   i32 / f64 / byte op surface.
 - **The reduction wrappers (`sum`/`dot`/`min`/`max`/`prod`/`count_nonzero`)

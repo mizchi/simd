@@ -508,6 +508,62 @@ double simd_dot_f64_ffi(const double* a, const double* b, int32_t len) {
   return result;
 }
 
+double simd_mean_f64_ffi(const double* a, int32_t len) {
+  if (len <= 0) return 0.0;
+  return simd_sum_f64_ffi(a, len) / (double)len;
+}
+
+/* Population variance, two-pass (mean, then sum of squared deviations) to
+   match the scalar reference's rounding. */
+double simd_var_f64_ffi(const double* a, int32_t len) {
+  if (len <= 0) return 0.0;
+  double mu = simd_sum_f64_ffi(a, len) / (double)len;
+  double acc = 0.0;
+  int32_t i = 0;
+#if USE_NEON
+  float64x2_t mv = vdupq_n_f64(mu), accv = vdupq_n_f64(0.0);
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    float64x2_t d = vsubq_f64(vld1q_f64(a + i), mv);
+    accv = vaddq_f64(accv, vmulq_f64(d, d));
+  }
+  acc = vaddvq_f64(accv);
+#elif USE_SSE2
+  __m128d mv = _mm_set1_pd(mu), accv = _mm_setzero_pd();
+  int32_t end2 = (len / 2) * 2;
+  for (; i < end2; i += 2) {
+    __m128d d = _mm_sub_pd(_mm_loadu_pd(a + i), mv);
+    accv = _mm_add_pd(accv, _mm_mul_pd(d, d));
+  }
+  acc = mb_hadd_pd(accv);
+#endif
+  for (; i < len; i++) {
+    double d = a[i] - mu;
+    acc += d * d;
+  }
+  return acc / (double)len;
+}
+
+/* argmin/argmax: first-occurrence index. Plain gcc/clang-compiled scalar
+   (no MoonBit bounds checks, optimised) beats the tcc-run MoonBit scalar. */
+int32_t simd_argmin_i32_ffi(const int32_t* a, int32_t len) {
+  if (len <= 0) return -1;
+  int32_t idx = 0, best = a[0];
+  for (int32_t i = 1; i < len; i++) {
+    if (a[i] < best) { best = a[i]; idx = i; }
+  }
+  return idx;
+}
+
+int32_t simd_argmax_i32_ffi(const int32_t* a, int32_t len) {
+  if (len <= 0) return -1;
+  int32_t idx = 0, best = a[0];
+  for (int32_t i = 1; i < len; i++) {
+    if (a[i] > best) { best = a[i]; idx = i; }
+  }
+  return idx;
+}
+
 // --- f32 (byte-buffer ABI: caller hands us uint8_t* containing 4 byte LE f32) ---
 
 void simd_add_f32_ffi(const uint8_t* a_bytes, const uint8_t* b_bytes, uint8_t* out_bytes, int32_t n) {
