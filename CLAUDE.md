@@ -440,7 +440,7 @@ head for `i < stride`, then SIMD body that loads `data + i` and
 PNG Sub encoder, which is the pattern that motivated bundling it
 in-simd rather than re-porting per consumer.
 
-### Tier 2 — image / pixel ops (`rgb_to_rgba` SIMD shipped; rest API + scalar)
+### Tier 2 — image / pixel ops (`rgb_to_rgba` + `channel_extract` SIMD; rest scalar)
 
 `SimdBufferBytes` methods:
 
@@ -457,8 +457,11 @@ in-simd rather than re-porting per consumer.
   `Y = (77*R + 150*G + 29*B) >> 8` (weights sum to 256). SIMD path
   requires `i16x8.extmul` for the weighted sum across 4 pixels.
 - `channel_extract(src, ch, out)` / `channel_merge(r, g, b, a, out)` —
-  interleaved RGBA ↔ planar. SIMD shape: `i8x16.shuffle` for the
-  de-interleave and 4-way `i8x16.shuffle` interleave.
+  interleaved RGBA ↔ planar. `channel_extract` **SIMD shipped** (wasm /
+  wasm-gc): one `i8x16.shuffle` gathers channel `ch` of 4 pixels into the low
+  4 lanes (`i32.store`), scalar tail; one specialised kernel per channel
+  because shuffle lane indices are immediates. **wasm bench (4096 px):
+  45.2 µs → 1.91 µs = 24x.** `channel_merge` (4-way interleave) stays scalar.
 - `lerp(a, b, t, out)` — `out[i] = (a[i]*(256-t) + b[i]*t) >> 8`, `t ∈
   0..=256`. SIMD shape: `i16x8.mul` + add, requires lane width split.
 - `histogram(self, bins[256])` — 256-bin scalar (wasm SIMD has no
@@ -475,12 +478,12 @@ The byte binary ops are mechanical 16-byte-chunk-with-different-SIMD-op
 skeletons. The image ops each need their own inline-WAT structure
 (shuffle patterns, lane-width conversions, fixed-point rescaling). The
 API surface shipped first (forward-compatible signatures); the wasm SIMD
-bodies fill in behind the same API. `rgb_to_rgba` is the first done
-(`i8x16.shuffle`, 63x — above). The remaining ones in priority order:
-`channel_extract` (`i8x16.shuffle` de-interleave, the same shape),
-`rgba_to_grayscale` / `lerp` / `alpha_blend_solid` (need `i16x8.extmul`
-fixed-point), `channel_merge` (4-way interleave); `histogram` stays scalar
-(wasm SIMD has no scatter).
+bodies fill in behind the same API. Done so far: `rgb_to_rgba`
+(`i8x16.shuffle`, 63x) and `channel_extract` (`i8x16.shuffle` de-interleave,
+24x — 4 channel-specialised kernels since shuffle indices are immediates).
+Remaining in priority order: `rgba_to_grayscale` / `lerp` /
+`alpha_blend_solid` (need `i16x8.extmul` fixed-point), `channel_merge` (4-way
+interleave); `histogram` stays scalar (wasm SIMD has no scatter).
 
 ## More parser surface that works
 

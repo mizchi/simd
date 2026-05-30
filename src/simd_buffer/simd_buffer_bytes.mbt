@@ -546,8 +546,14 @@ pub fn SimdBufferBytes::channel_extract(
   if out.len != n {
     abort("SimdBufferBytes.channel_extract: out length must be src/4")
   }
-  for i in 0..<n {
-    buf_store_byte(out.addr + i, buf_load_byte(src.addr + i * 4 + ch))
+  if n == 0 {
+    return
+  }
+  match ch {
+    0 => buf_channel_extract_0(src.addr, out.addr, n)
+    1 => buf_channel_extract_1(src.addr, out.addr, n)
+    2 => buf_channel_extract_2(src.addr, out.addr, n)
+    _ => buf_channel_extract_3(src.addr, out.addr, n)
   }
 }
 
@@ -1025,6 +1031,27 @@ fn buf_clamp_u8(src : Int, lo : Int, hi : Int, out : Int, len : Int) -> Unit =
 /// Locals: 4 = alpha_v (v128), 5 = p (pixel index), 6 = pix_end (multiple of 4).
 fn buf_rgb_to_rgba(src : Int, out : Int, npix : Int, alpha : Int) -> Unit =
   #|(func (param i32) (param i32) (param i32) (param i32) (local v128) (local i32) (local i32) local.get 3 i8x16.splat local.set 4 local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 6 block loop local.get 5 local.get 6 i32.ge_s br_if 1 local.get 1 local.get 5 i32.const 2 i32.shl i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add v128.load local.get 4 i8x16.shuffle 0 1 2 16 3 4 5 16 6 7 8 16 9 10 11 16 v128.store local.get 5 i32.const 4 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 5 i32.const 2 i32.shl i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add i32.load8_u i32.store8 local.get 1 local.get 5 i32.const 2 i32.shl i32.add i32.const 1 i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add i32.const 1 i32.add i32.load8_u i32.store8 local.get 1 local.get 5 i32.const 2 i32.shl i32.add i32.const 2 i32.add local.get 0 local.get 5 i32.const 1 i32.shl local.get 5 i32.add i32.add i32.const 2 i32.add i32.load8_u i32.store8 local.get 1 local.get 5 i32.const 2 i32.shl i32.add i32.const 3 i32.add local.get 3 i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+
+///|
+/// Channel de-interleave (RGBA → planar), one specialised kernel per channel
+/// because `i8x16.shuffle` lane indices are immediates. Each gathers the
+/// channel byte of 4 pixels (`v128.load` of 16 src bytes) into the low 4
+/// lanes via shuffle, then writes them with one `i32.store`; scalar tail.
+/// Locals: 3 = p (pixel idx), 4 = pix_end, 5 = v.
+fn buf_channel_extract_0(src : Int, out : Int, n : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 5 local.get 5 local.get 5 i8x16.shuffle 0 4 8 12 0 0 0 0 0 0 0 0 0 0 0 0 i32x4.extract_lane 0 i32.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.load8_u i32.store8 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+fn buf_channel_extract_1(src : Int, out : Int, n : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 5 local.get 5 local.get 5 i8x16.shuffle 1 5 9 13 0 0 0 0 0 0 0 0 0 0 0 0 i32x4.extract_lane 0 i32.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 1 i32.add i32.load8_u i32.store8 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+fn buf_channel_extract_2(src : Int, out : Int, n : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 5 local.get 5 local.get 5 i8x16.shuffle 2 6 10 14 0 0 0 0 0 0 0 0 0 0 0 0 i32x4.extract_lane 0 i32.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 2 i32.add i32.load8_u i32.store8 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
+
+///|
+fn buf_channel_extract_3(src : Int, out : Int, n : Int) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) local.get 2 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add v128.load local.set 5 local.get 5 local.get 5 i8x16.shuffle 3 7 11 15 0 0 0 0 0 0 0 0 0 0 0 0 i32x4.extract_lane 0 i32.store local.get 3 i32.const 4 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 1 local.get 3 i32.add local.get 0 local.get 3 i32.const 2 i32.shl i32.add i32.const 3 i32.add i32.load8_u i32.store8 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end)
 
 ///|
 /// Shifted-self subtraction (PNG Sub filter): for i in stride..<len,

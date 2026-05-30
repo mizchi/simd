@@ -411,3 +411,32 @@ test "bench/rgb_to_rgba" (bb : @bench.T) {
     SimdBufferBytes::rgb_to_rgba(rgb, b'\xFF', rgba)
   })
 }
+
+///|
+/// Scalar reference channel extract (per-pixel get/set).
+fn scalar_channel_extract(
+  src : SimdBufferBytes,
+  ch : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  let n = src.length() / 4
+  for i in 0..<n {
+    out.set(i, src.get(i * 4 + ch))
+  }
+}
+
+///|
+test "bench/channel_extract" (bb : @bench.T) {
+  let npix = 4096
+  let rgba = SimdBufferBytes::make(npix * 4)
+  for i in 0..<(npix * 4) {
+    rgba.set(i, (i % 256).to_byte())
+  }
+  let out = SimdBufferBytes::make(npix)
+  bb.bench(name="scalar_channel_extract_4096px", fn() {
+    scalar_channel_extract(rgba, 1, out)
+  })
+  bb.bench(name="simd_channel_extract_4096px", fn() {
+    SimdBufferBytes::channel_extract(rgba, 1, out)
+  })
+}
