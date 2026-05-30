@@ -835,6 +835,67 @@ pub fn SimdBufferBytes::validate_utf8(self : SimdBufferBytes) -> Bool {
 }
 
 ///|
+/// Strict UTF-8 validation (RFC 3629): also rejects overlong encodings,
+/// surrogates, and code points > U+10FFFF. SIMD ASCII skip + strict scalar.
+pub fn SimdBufferBytes::validate_utf8_strict(self : SimdBufferBytes) -> Bool {
+  let n = self.len
+  let start = if n >= 16 { buf_first_non_ascii_chunk(self.addr, n) } else { 0 }
+  self.validate_utf8_strict_scalar(start)
+}
+
+///|
+/// Strict scalar UTF-8 walk from `start` (tight first-continuation ranges per
+/// leading byte). Reads via `buf_load_byte` on the linear-memory buffer.
+fn SimdBufferBytes::validate_utf8_strict_scalar(
+  self : SimdBufferBytes,
+  start : Int,
+) -> Bool {
+  let n = self.len
+  let mut i = start
+  while i < n {
+    let b = buf_load_byte(self.addr + i)
+    if b < 0x80 {
+      i = i + 1
+    } else if b < 0xC2 {
+      return false
+    } else if b < 0xE0 {
+      if i + 1 >= n || (buf_load_byte(self.addr + i + 1) & 0xC0) != 0x80 {
+        return false
+      }
+      i = i + 2
+    } else if b < 0xF0 {
+      if i + 2 >= n {
+        return false
+      }
+      let c1 = buf_load_byte(self.addr + i + 1)
+      let c2 = buf_load_byte(self.addr + i + 2)
+      let lo = if b == 0xE0 { 0xA0 } else { 0x80 }
+      let hi = if b == 0xED { 0x9F } else { 0xBF }
+      if c1 < lo || c1 > hi || c2 < 0x80 || c2 > 0xBF {
+        return false
+      }
+      i = i + 3
+    } else if b < 0xF5 {
+      if i + 3 >= n {
+        return false
+      }
+      let c1 = buf_load_byte(self.addr + i + 1)
+      let c2 = buf_load_byte(self.addr + i + 2)
+      let c3 = buf_load_byte(self.addr + i + 3)
+      let lo = if b == 0xF0 { 0x90 } else { 0x80 }
+      let hi = if b == 0xF4 { 0x8F } else { 0xBF }
+      if c1 < lo || c1 > hi || c2 < 0x80 || c2 > 0xBF || c3 < 0x80 || c3 > 0xBF {
+        return false
+      }
+      i = i + 4
+    } else {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// Scalar UTF-8 structural validation from `start` to end-of-buffer.
 /// Inlined from `@internal.scalar_validate_utf8_from` so we don't depend on
 /// FixedArray storage.

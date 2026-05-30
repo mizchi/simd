@@ -1494,3 +1494,28 @@ test "alpha_blend_solid SIMD body + tail vs reference" {
     }
   }
 }
+
+///|
+test "SimdBufferBytes validate_utf8_strict" {
+  // valid: ASCII + é + € + 😀
+  let ok = buf_from_array([
+    0x68, 0x69, 0xC3, 0xA9, 0xE2, 0x82, 0xAC, 0xF0, 0x9F, 0x98, 0x80,
+  ])
+  assert_true(ok.validate_utf8_strict())
+  // surrogate ED A0 80 — strict rejects, lax accepts
+  let surr = buf_from_array([0xED, 0xA0, 0x80])
+  assert_false(surr.validate_utf8_strict())
+  assert_true(surr.validate_utf8())
+  // overlong E0 80 80 and > U+10FFFF F4 90 80 80 — strict rejects
+  assert_false(buf_from_array([0xE0, 0x80, 0x80]).validate_utf8_strict())
+  assert_false(buf_from_array([0xF4, 0x90, 0x80, 0x80]).validate_utf8_strict())
+  // strict after a >16-byte ASCII SIMD-skip region
+  let big = SimdBufferBytes::make(35)
+  for i in 0..<32 {
+    big.set(i, b'A')
+  }
+  big.set(32, b'\xED')
+  big.set(33, b'\xA0')
+  big.set(34, b'\x80')
+  assert_false(big.validate_utf8_strict())
+}

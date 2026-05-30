@@ -163,6 +163,17 @@ pub fn validate_utf8(data : FixedArray[Byte]) -> Bool {
 }
 
 ///|
+/// Strict UTF-8 validation (RFC 3629): also rejects overlong encodings,
+/// surrogates, and code points > U+10FFFF. SIMD fast path skips all-ASCII
+/// chunks, then a strict scalar pass takes over at the first possibly-non-
+/// ASCII chunk boundary (safe — no multi-byte sequence crosses it).
+pub fn validate_utf8_strict(data : FixedArray[Byte]) -> Bool {
+  let len = data.length()
+  let start = if len >= 16 { first_non_ascii_chunk_v128(data, len) } else { 0 }
+  @internal.scalar_validate_utf8_strict_from(data, start)
+}
+
+///|
 /// Fold each chunk's MSB-bitmask via OR, then check it's zero (no high bit
 /// set means pure ASCII). Tail bytes use `data[i] & 0x80`.
 #borrow(data)

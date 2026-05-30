@@ -1488,3 +1488,42 @@ test "dot_f64 matches scalar" {
   // 2 + 6 + 12 + 20 + 30 = 70
   assert_f64_close(dot_f64(a, b), 70.0)
 }
+
+///|
+test "validate_utf8_strict: valid sequences" {
+  // ASCII, é (C3 A9), € (E2 82 AC), 😀 (F0 9F 98 80)
+  assert_true(validate_utf8_strict([b'h', b'e', b'l', b'l', b'o']))
+  assert_true(validate_utf8_strict([b'\xC3', b'\xA9']))
+  assert_true(validate_utf8_strict([b'\xE2', b'\x82', b'\xAC']))
+  assert_true(validate_utf8_strict([b'\xF0', b'\x9F', b'\x98', b'\x80']))
+}
+
+///|
+test "validate_utf8_strict: rejects overlong / surrogate / >10FFFF" {
+  // overlong 2-byte C0 80 — both strict and lax reject (b < 0xC2)
+  assert_false(validate_utf8_strict([b'\xC0', b'\x80']))
+  // overlong 3-byte E0 80 80 — strict rejects; lax (structural) accepts
+  assert_false(validate_utf8_strict([b'\xE0', b'\x80', b'\x80']))
+  assert_true(validate_utf8([b'\xE0', b'\x80', b'\x80']))
+  // surrogate ED A0 80 (U+D800) — strict rejects; lax accepts
+  assert_false(validate_utf8_strict([b'\xED', b'\xA0', b'\x80']))
+  assert_true(validate_utf8([b'\xED', b'\xA0', b'\x80']))
+  // > U+10FFFF: F4 90 80 80 — strict rejects; lax accepts
+  assert_false(validate_utf8_strict([b'\xF4', b'\x90', b'\x80', b'\x80']))
+  assert_true(validate_utf8([b'\xF4', b'\x90', b'\x80', b'\x80']))
+  // truncated 3-byte — both reject
+  assert_false(validate_utf8_strict([b'\xE2', b'\x82']))
+}
+
+///|
+test "validate_utf8_strict: after ASCII SIMD-skip region" {
+  // >16 ASCII bytes then a surrogate -> strict scalar pass starts past the
+  // SIMD-skipped chunks and must still catch it.
+  let ok = FixedArray::make(32, b'A')
+  assert_true(validate_utf8_strict(ok))
+  let bad = FixedArray::make(35, b'A')
+  bad[32] = b'\xED'
+  bad[33] = b'\xA0'
+  bad[34] = b'\x80'
+  assert_false(validate_utf8_strict(bad))
+}

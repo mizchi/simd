@@ -144,6 +144,71 @@ pub fn scalar_validate_utf8(data : FixedArray[Byte]) -> Bool {
 }
 
 ///|
+/// Strict UTF-8 validation from `start` (RFC 3629). Unlike
+/// `scalar_validate_utf8_from`, this rejects overlong encodings, UTF-16
+/// surrogates (U+D800..U+DFFF), and code points > U+10FFFF by applying the
+/// tight first-continuation-byte ranges per leading byte.
+pub fn scalar_validate_utf8_strict_from(
+  data : FixedArray[Byte],
+  start : Int,
+) -> Bool {
+  let n = data.length()
+  let mut i = start
+  while i < n {
+    let b = data[i].to_int()
+    if b < 0x80 {
+      i = i + 1
+    } else if b < 0xC2 {
+      return false // continuation byte as leader, or overlong C0/C1
+    } else if b < 0xE0 {
+      if i + 1 >= n {
+        return false
+      }
+      let c1 = data[i + 1].to_int()
+      if c1 < 0x80 || c1 > 0xBF {
+        return false
+      }
+      i = i + 2
+    } else if b < 0xF0 {
+      if i + 2 >= n {
+        return false
+      }
+      let c1 = data[i + 1].to_int()
+      let c2 = data[i + 2].to_int()
+      // E0: c1 >= A0 (no overlong); ED: c1 <= 9F (no surrogate)
+      let lo = if b == 0xE0 { 0xA0 } else { 0x80 }
+      let hi = if b == 0xED { 0x9F } else { 0xBF }
+      if c1 < lo || c1 > hi || c2 < 0x80 || c2 > 0xBF {
+        return false
+      }
+      i = i + 3
+    } else if b < 0xF5 {
+      if i + 3 >= n {
+        return false
+      }
+      let c1 = data[i + 1].to_int()
+      let c2 = data[i + 2].to_int()
+      let c3 = data[i + 3].to_int()
+      // F0: c1 >= 90 (no overlong); F4: c1 <= 8F (no > U+10FFFF)
+      let lo = if b == 0xF0 { 0x90 } else { 0x80 }
+      let hi = if b == 0xF4 { 0x8F } else { 0xBF }
+      if c1 < lo || c1 > hi || c2 < 0x80 || c2 > 0xBF || c3 < 0x80 || c3 > 0xBF {
+        return false
+      }
+      i = i + 4
+    } else {
+      return false // F5..FF
+    }
+  }
+  true
+}
+
+///|
+pub fn scalar_validate_utf8_strict(data : FixedArray[Byte]) -> Bool {
+  scalar_validate_utf8_strict_from(data, 0)
+}
+
+///|
 /// True iff every byte in `data` is < 0x80 (pure ASCII).
 pub fn scalar_is_ascii(data : FixedArray[Byte]) -> Bool {
   let len = data.length()
