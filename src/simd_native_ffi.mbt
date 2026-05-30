@@ -289,7 +289,11 @@ extern "C" fn simd_sum_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_sum_
 
 ///|
 #borrow(a, b)
-extern "C" fn simd_dot_product_ffi(a : FixedArray[Int], b : FixedArray[Int], len : Int) -> Int = "simd_dot_product_ffi"
+extern "C" fn simd_dot_product_ffi(
+  a : FixedArray[Int],
+  b : FixedArray[Int],
+  len : Int,
+) -> Int = "simd_dot_product_ffi"
 
 ///|
 #borrow(arr)
@@ -305,7 +309,10 @@ extern "C" fn simd_prod_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd
 
 ///|
 #borrow(arr)
-extern "C" fn simd_count_nonzero_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_count_nonzero_i32_ffi"
+extern "C" fn simd_count_nonzero_i32_ffi(
+  arr : FixedArray[Int],
+  len : Int,
+) -> Int = "simd_count_nonzero_i32_ffi"
 
 ///|
 #borrow(src, dst)

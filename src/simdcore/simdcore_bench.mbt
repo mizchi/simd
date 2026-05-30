@@ -17,7 +17,7 @@ fn bench_bytes(size : Int) -> Bytes {
   for i in 0..<size {
     arr[i] = (i % 95 + 32).to_byte()
   }
-  Bytes::from_fixedarray(arr)
+  Bytes::from_array(arr)
 }
 
 ///|
@@ -212,7 +212,7 @@ test "bench/f64_dot" (b : @bench.T) {
 fn bench_ascii_string(n : Int) -> String {
   let arr = Array::new()
   for i in 0..<n {
-    arr.push(Char::from_int(0x41 + i % 26))
+    arr.push((0x41 + i % 26).unsafe_to_char())
   }
   String::from_array(arr)
 }
@@ -246,7 +246,7 @@ fn bench_ascii_bytes(n : Int) -> Bytes {
   for i in 0..<n {
     a[i] = (0x41 + i % 26).to_byte()
   }
-  Bytes::from_fixedarray(a)
+  Bytes::from_array(a)
 }
 
 ///|
@@ -385,7 +385,7 @@ fn json_indices_scalar_ref(
       escape_pending = false
       bit_set = in_string
     } else if b == 0x22 {
-      in_string = not(in_string)
+      in_string = !in_string
     } else if b == 0x5C && in_string {
       escape_pending = true
       bit_set = true
@@ -465,7 +465,7 @@ test "bench/bytes_index_of" (b : @bench.T) {
   for j in 0..<tail.length() {
     arr[4096 - tail.length() + j] = tail[j]
   }
-  let hay = Bytes::from_fixedarray(arr)
+  let hay = Bytes::from_array(arr)
   b.bench(name="bytes_index_of_scalar", fn() {
     b.keep(ref_index_of_bench(hay, tail))
   })
@@ -482,7 +482,7 @@ test "bench/bytes_rindex" (b : @bench.T) {
     arr[i] = (0x61 + i % 25).to_byte() // 'a'..'y' (no 'z')
   }
   arr[3] = b'z'
-  let hay = Bytes::from_fixedarray(arr)
+  let hay = Bytes::from_array(arr)
   b.bench(name="bytes_rindex_scalar", fn() {
     let mut r = -1
     for i in 0..<hay.length() {

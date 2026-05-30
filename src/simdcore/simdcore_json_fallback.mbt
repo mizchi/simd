@@ -62,7 +62,7 @@ pub fn json_structural_indices_into(
       escape_pending = false
       bit_set = in_string
     } else if b == 0x22 {
-      in_string = not(in_string)
+      in_string = !in_string
     } else if b == 0x5C && in_string {
       escape_pending = true
       bit_set = true

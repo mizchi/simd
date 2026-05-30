@@ -7,7 +7,7 @@ fn Double::to_f32(self : Double) -> Float {
 ///|
 test "SimdBuffer make + length" {
   let b = SimdBuffer::make(8)
-  inspect(b.length(), content="8")
+  assert_true(b.length() == 8)
 }
 
 ///|
@@ -225,7 +225,7 @@ fn buf_eq_bytes(a : SimdBufferBytes, expected : Array[Int]) -> Bool {
 test "SimdBufferBytes base64_encode RFC 4648 vectors" {
   // ""  -> ""
   let r0 = SimdBufferBytes::base64_encode(buf_from_array([]))
-  inspect(r0.length(), content="0")
+  assert_true(r0.length() == 0)
   // "f"  -> "Zg=="
   let r1 = SimdBufferBytes::base64_encode(buf_from_array([0x66]))
   if !buf_eq_bytes(r1, [0x5a, 0x67, 0x3d, 0x3d]) {
@@ -1092,23 +1092,23 @@ test "byte_add / byte_sub / byte_avg (mod 256, rounding)" {
   SimdBufferBytes::byte_add(a, b, out)
   // (0x10+0x20, 0x80+0x80=0 mod 256, 0xFF+0x01=0, 0x05+0x0A=0x0F)
   let r = out.to_array()
-  inspect(
-    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
-    content="(48, 0, 0, 15)",
+  assert_true(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()) ==
+    (48, 0, 0, 15),
   )
   SimdBufferBytes::byte_sub(a, b, out)
   // (0x10-0x20=-0x10=0xF0, 0x80-0x80=0, 0xFF-0x01=0xFE, 0x05-0x0A=-5=0xFB)
   let r2 = out.to_array()
-  inspect(
-    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int(), r2[3].to_int()),
-    content="(240, 0, 254, 251)",
+  assert_true(
+    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int(), r2[3].to_int()) ==
+    (240, 0, 254, 251),
   )
   SimdBufferBytes::byte_avg(a, b, out)
   // ((0x10+0x20+1)/2=0x18, (0x80+0x80+1)/2=0x80, (0xFF+0x01+1)/2=0x80, (5+10+1)/2=8)
   let r3 = out.to_array()
-  inspect(
-    (r3[0].to_int(), r3[1].to_int(), r3[2].to_int(), r3[3].to_int()),
-    content="(24, 128, 128, 8)",
+  assert_true(
+    (r3[0].to_int(), r3[1].to_int(), r3[2].to_int(), r3[3].to_int()) ==
+    (24, 128, 128, 8),
   )
 }
 
@@ -1119,15 +1119,15 @@ test "sat_add / sat_sub clamp at 255 / 0" {
   let out = SimdBufferBytes::make(4)
   SimdBufferBytes::sat_add(a, b, out)
   let r = out.to_array()
-  inspect(
-    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
-    content="(255, 255, 144, 255)",
+  assert_true(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()) ==
+    (255, 255, 144, 255),
   )
   SimdBufferBytes::sat_sub(a, b, out)
   let r2 = out.to_array()
-  inspect(
-    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int(), r2[3].to_int()),
-    content="(234, 0, 112, 0)",
+  assert_true(
+    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int(), r2[3].to_int()) ==
+    (234, 0, 112, 0),
   )
 }
 
@@ -1137,9 +1137,9 @@ test "clamp byte-wise" {
   let out = SimdBufferBytes::make(4)
   src.clamp(b'\x20', b'\xC0', out)
   let r = out.to_array()
-  inspect(
-    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
-    content="(32, 64, 128, 192)",
+  assert_true(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()) ==
+    (32, 64, 128, 192),
   )
 }
 
@@ -1152,7 +1152,7 @@ test "byte_sub_offset (PNG Sub-filter pattern, stride 1)" {
   // i=1: src[1]-src[0]=30-10=20
   // i=2: src[2]-src[1]=50-30=20
   let r = out.to_array()
-  inspect((r[0].to_int(), r[1].to_int(), r[2].to_int()), content="(10, 20, 20)")
+  assert_true((r[0].to_int(), r[1].to_int(), r[2].to_int()) == (10, 20, 20))
 }
 
 ///|
@@ -1181,7 +1181,7 @@ test "rgb_to_rgba" {
   let rgba = SimdBufferBytes::make(12)
   SimdBufferBytes::rgb_to_rgba(rgb, b'\xFF', rgba)
   let r = rgba.to_array()
-  inspect(
+  assert_true(
     (
       r[0].to_int(),
       r[1].to_int(),
@@ -1195,8 +1195,8 @@ test "rgb_to_rgba" {
       r[9].to_int(),
       r[10].to_int(),
       r[11].to_int(),
-    ),
-    content="(255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255)",
+    ) ==
+    (255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255),
   )
 }
 
@@ -1214,10 +1214,10 @@ test "rgb_to_rgba SIMD body + tail" {
     let rgba = SimdBufferBytes::make(npix * 4)
     SimdBufferBytes::rgb_to_rgba(rgb, b'\xAB', rgba)
     for i in 0..<npix {
-      assert_eq(rgba.get(i * 4), rgb.get(i * 3))
-      assert_eq(rgba.get(i * 4 + 1), rgb.get(i * 3 + 1))
-      assert_eq(rgba.get(i * 4 + 2), rgb.get(i * 3 + 2))
-      assert_eq(rgba.get(i * 4 + 3), 0xAB)
+      assert_true(rgba.get(i * 4) == rgb.get(i * 3))
+      assert_true(rgba.get(i * 4 + 1) == rgb.get(i * 3 + 1))
+      assert_true(rgba.get(i * 4 + 2) == rgb.get(i * 3 + 2))
+      assert_true(rgba.get(i * 4 + 3) == 0xAB)
     }
   }
 }
@@ -1234,7 +1234,7 @@ test "rgba_to_grayscale" {
   let g = gray.to_array()
   // 77+150+29 = 256, so white = (77+150+29)*255/256 = 255
   // red = 77*255/256 = 76 (rounded down)
-  inspect((g[0].to_int(), g[1].to_int(), g[2].to_int()), content="(255, 0, 76)")
+  assert_true((g[0].to_int(), g[1].to_int(), g[2].to_int()) == (255, 0, 76))
 }
 
 ///|
@@ -1267,24 +1267,17 @@ test "lerp at t=0, t=128, t=256" {
   SimdBufferBytes::lerp(a, b, 0, out)
   // t=0 → all a
   let r0 = out.to_array()
-  inspect(
-    (r0[0].to_int(), r0[1].to_int(), r0[2].to_int()),
-    content="(0, 16, 255)",
-  )
+  assert_true((r0[0].to_int(), r0[1].to_int(), r0[2].to_int()) == (0, 16, 255))
   SimdBufferBytes::lerp(a, b, 256, out)
   // t=256 → all b
   let r1 = out.to_array()
-  inspect(
-    (r1[0].to_int(), r1[1].to_int(), r1[2].to_int()),
-    content="(255, 128, 0)",
-  )
+  assert_true((r1[0].to_int(), r1[1].to_int(), r1[2].to_int()) == (255, 128, 0))
   SimdBufferBytes::lerp(a, b, 128, out)
   // t=128 → midpoint, (a + b) / 2 approximately
   // (0*128+255*128)/256=127, (16*128+128*128)/256=72, (255*128+0*128)/256=127
   let r2 = out.to_array()
-  inspect(
-    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int()),
-    content="(127, 72, 127)",
+  assert_true(
+    (r2[0].to_int(), r2[1].to_int(), r2[2].to_int()) == (127, 72, 127),
   )
 }
 
@@ -1319,7 +1312,7 @@ test "alpha_blend_solid: src over transparent dst" {
   //   out = src + dst*0 = (255, 0, 0, 255)
   // pixel 1: dst was white (255,255,255,255), src is (255,0,0,255), inv_a=0
   //   out = (255, 0, 0, 255)
-  inspect(
+  assert_true(
     (
       r[0].to_int(),
       r[1].to_int(),
@@ -1329,8 +1322,8 @@ test "alpha_blend_solid: src over transparent dst" {
       r[5].to_int(),
       r[6].to_int(),
       r[7].to_int(),
-    ),
-    content="(255, 0, 0, 255, 255, 0, 0, 255)",
+    ) ==
+    (255, 0, 0, 255, 255, 0, 0, 255),
   )
 }
 
@@ -1345,9 +1338,9 @@ test "alpha_blend_solid: half-alpha src over white" {
   // out.g = 0 + 255*127/255 = 127
   // out.b = 0 + 255*127/255 = 127
   // out.a = 128 + 255*127/255 = 255
-  inspect(
-    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()),
-    content="(255, 127, 127, 255)",
+  assert_true(
+    (r[0].to_int(), r[1].to_int(), r[2].to_int(), r[3].to_int()) ==
+    (255, 127, 127, 255),
   )
 }
 
@@ -1366,7 +1359,7 @@ test "channel_extract SIMD body + tail (all channels)" {
       let out = SimdBufferBytes::make(npix)
       SimdBufferBytes::channel_extract(rgba, ch, out)
       for i in 0..<npix {
-        assert_eq(out.get(i), rgba.get(i * 4 + ch))
+        assert_true(out.get(i) == rgba.get(i * 4 + ch))
       }
     }
   }
@@ -1388,10 +1381,10 @@ test "channel_merge SIMD body + tail" {
     let out = SimdBufferBytes::make(npix * 4)
     SimdBufferBytes::channel_merge(r, g, b, a, out)
     for i in 0..<npix {
-      assert_eq(out.get(i * 4), r.get(i))
-      assert_eq(out.get(i * 4 + 1), g.get(i))
-      assert_eq(out.get(i * 4 + 2), b.get(i))
-      assert_eq(out.get(i * 4 + 3), a.get(i))
+      assert_true(out.get(i * 4) == r.get(i))
+      assert_true(out.get(i * 4 + 1) == g.get(i))
+      assert_true(out.get(i * 4 + 2) == b.get(i))
+      assert_true(out.get(i * 4 + 3) == a.get(i))
     }
   }
 }
@@ -1415,7 +1408,7 @@ test "channel_extract / channel_merge round-trip large" {
   let back = SimdBufferBytes::make(npix * 4)
   SimdBufferBytes::channel_merge(r, g, b, a, back)
   for i in 0..<(npix * 4) {
-    assert_eq(back.get(i), rgba.get(i))
+    assert_true(back.get(i) == rgba.get(i))
   }
 }
 
@@ -1435,7 +1428,7 @@ test "lerp SIMD body + tail + edges" {
       let inv = 256 - tc
       for i in 0..<len {
         let want = (a.get(i).to_int() * inv + b.get(i).to_int() * tc) >> 8
-        assert_eq(out.get(i).to_int(), want)
+        assert_true(out.get(i).to_int() == want)
       }
     }
   }
@@ -1457,7 +1450,7 @@ test "rgba_to_grayscale SIMD body + tail" {
       let r = rgba.get(i * 4).to_int()
       let g = rgba.get(i * 4 + 1).to_int()
       let b = rgba.get(i * 4 + 2).to_int()
-      assert_eq(out.get(i).to_int(), (77 * r + 150 * g + 29 * b) >> 8)
+      assert_true(out.get(i).to_int() == (77 * r + 150 * g + 29 * b) >> 8)
     }
   }
 }
