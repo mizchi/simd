@@ -42,6 +42,17 @@ static inline __m128i mb_max_epi32_sse2(__m128i a, __m128i b) {
   __m128i m = _mm_cmpgt_epi32(a, b);
   return _mm_or_si128(_mm_and_si128(m, a), _mm_andnot_si128(m, b));
 }
+/* SSE2 packed 32-bit low multiply (pmulld is SSE4.1): two pmuludq of the
+   even lanes (after shifting odd lanes into place) recombined. The low 32
+   bits of a product are the same signed or unsigned. */
+static inline __m128i mb_mullo_epi32_sse2(__m128i a, __m128i b) {
+  __m128i t1 = _mm_mul_epu32(a, b);                              /* a0*b0, a2*b2 */
+  __m128i t2 = _mm_mul_epu32(_mm_srli_si128(a, 4),
+                             _mm_srli_si128(b, 4));               /* a1*b1, a3*b3 */
+  return _mm_unpacklo_epi32(
+      _mm_shuffle_epi32(t1, _MM_SHUFFLE(0, 0, 2, 0)),
+      _mm_shuffle_epi32(t2, _MM_SHUFFLE(0, 0, 2, 0)));
+}
 #endif
 
 int32_t simd_sum_ffi(const int32_t* arr, int32_t len) {
@@ -165,6 +176,13 @@ void simd_mul_ffi(const int32_t* a, const int32_t* b, int32_t* out, int32_t len)
     __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
     __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
     _mm_storeu_si128((__m128i*)(out + i), _mm_mullo_epi32(va, vb));
+  }
+#elif USE_SSE2
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i), mb_mullo_epi32_sse2(va, vb));
   }
 #endif
   for (; i < len; i++) out[i] = a[i] * b[i];
@@ -301,6 +319,15 @@ void simd_saxpy_ffi(int32_t k, const int32_t* a, const int32_t* b, int32_t* out,
     __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
     __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
     _mm_storeu_si128((__m128i*)(out + i), _mm_add_epi32(_mm_mullo_epi32(kv, va), vb));
+  }
+#elif USE_SSE2
+  __m128i kv = _mm_set1_epi32(k);
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i va = _mm_loadu_si128((const __m128i*)(a + i));
+    __m128i vb = _mm_loadu_si128((const __m128i*)(b + i));
+    _mm_storeu_si128((__m128i*)(out + i),
+                     _mm_add_epi32(mb_mullo_epi32_sse2(kv, va), vb));
   }
 #endif
   for (; i < len; i++) out[i] = k * a[i] + b[i];
@@ -969,6 +996,25 @@ int32_t simd_popcount_bytes_ffi(const uint8_t* data, int32_t len) {
     uint8x16_t v = vld1q_u8(data + i);
     total += vaddvq_u8(vcntq_u8(v));
   }
+#elif USE_SSE2
+  /* SWAR per-byte popcount (no pshufb / SSSE3), then psadbw horizontal sum. */
+  __m128i m1 = _mm_set1_epi8(0x55);
+  __m128i m2 = _mm_set1_epi8(0x33);
+  __m128i m4 = _mm_set1_epi8(0x0F);
+  __m128i zero = _mm_setzero_si128();
+  __m128i acc = zero;
+  int32_t end16 = (len / 16) * 16;
+  for (; i < end16; i += 16) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(data + i));
+    /* SSE2 has no per-byte shift; emulate with 16-bit shift + mask. */
+    v = _mm_sub_epi8(v, _mm_and_si128(_mm_srli_epi16(v, 1), m1));
+    v = _mm_add_epi8(_mm_and_si128(v, m2),
+                     _mm_and_si128(_mm_srli_epi16(v, 2), m2));
+    v = _mm_and_si128(_mm_add_epi8(v, _mm_srli_epi16(v, 4)), m4);
+    acc = _mm_add_epi64(acc, _mm_sad_epu8(v, zero));
+  }
+  total += (int32_t)_mm_cvtsi128_si32(acc) +
+           (int32_t)_mm_cvtsi128_si32(_mm_srli_si128(acc, 8));
 #endif
   for (; i < len; i++) total += __builtin_popcount(data[i]);
   return total;
