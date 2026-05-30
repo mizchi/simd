@@ -284,6 +284,30 @@ extern "C" fn simd_all_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_
 extern "C" fn simd_any_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_any_i32_ffi"
 
 ///|
+#borrow(arr)
+extern "C" fn simd_sum_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_sum_ffi"
+
+///|
+#borrow(a, b)
+extern "C" fn simd_dot_product_ffi(a : FixedArray[Int], b : FixedArray[Int], len : Int) -> Int = "simd_dot_product_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_min_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_min_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_max_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_max_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_prod_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_prod_i32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_count_nonzero_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_count_nonzero_i32_ffi"
+
+///|
 #borrow(src, dst)
 extern "C" fn simd_memcpy_bytes_ffi(
   src : FixedArray[Byte],

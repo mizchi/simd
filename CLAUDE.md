@@ -49,12 +49,20 @@ Target-specific SIMD implementations with scalar fallback.
 
   native bench vs the MoonBit scalar (1024 / 4 KiB / 64×64): **`matmul` 6.2x**
   (318 µs → 51 µs), `popcount` 30x, `min_elem` 5.7x, `abs` 4.7x, `mul` 4.7x,
-  `max_elem` 3.8x, `all` 3.2x, `to_lower`/`saxpy` 3.1x, `count_nonzero` 1.3x.
-  Wash (memory-bound or scalar early-exits): `min`/`max`/`prod`, `sum`/`dot`,
-  `any`. Every kernel keeps a scalar tail so tcc-only builds (and unknown
-  ISAs) stay correct — the native FFI now uses NEON on arm64 and a portable
-  SSE2 baseline on any x86-64 (no `-march` needed) across the i32 / f64 / byte
-  op surface.
+  `max_elem` 3.8x, `all` 3.2x, `to_lower`/`saxpy` 3.1x, `min`/`max` 2.5x,
+  `dot` 2.3x, `sum` 1.7x, `prod`/`count_nonzero` 1.5x. The MoonBit scalar
+  baseline runs under tcc (no auto-vec), so even memory-bound reductions win.
+  Wash only where the scalar early-exits (`any` on dense input) or there's no
+  C kernel (`mean`/`var`). Every kernel keeps a scalar tail so tcc-only builds
+  (and unknown ISAs) stay correct — the native FFI uses NEON on arm64 and a
+  portable SSE2 baseline on any x86-64 (no `-march` needed) across the
+  i32 / f64 / byte op surface.
+- **The reduction wrappers (`sum`/`dot`/`min`/`max`/`prod`/`count_nonzero`)
+  used to route to `@internal.scalar_*`** under a stale "scalar auto-vec wins"
+  assumption — but that compared scalar-vs-scalar (the C FFI had no `extern`
+  binding, so it was unreachable). Wiring them to the SSE2/NEON FFI gives the
+  1.5–2.5x above and means **`simdcore`'s native path now uses SIMD through
+  the same unified API** (it delegates to these `@simd` wrappers).
 - `native-stub` in moon.pkg.json links C source files for native target.
 - `#borrow(param)` annotation needed for FixedArray/Bytes FFI parameters.
 
