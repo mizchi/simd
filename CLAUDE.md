@@ -35,13 +35,20 @@ Target-specific SIMD implementations with scalar fallback.
   selects NEON. Confirmed in the asm (`simd_add_ffi` → `movdqu`/`paddd`).
   Some kernels' SSE paths were gated on `__SSE4_1__` / `__SSSE3__` (not in the
   baseline x86-64 ABI without `-march`), so they fell back to scalar on
-  x64 — those now also have a portable `#elif USE_SSE2` branch
-  (`min`/`max`/`min_elem`/`max_elem` via `pcmpgtd`+blend, `abs` via the
-  sign-mask trick, `to_lower`/`to_upper` via `pcmpgtb`+`paddb`). native bench
-  (1024 / 4 KiB) for those: `abs` 4.7x, `min_elem` 5.7x, `max_elem` 3.8x,
-  `to_lower` 3.1x vs the MoonBit scalar; reductions (`min`/`max`) are a wash
-  (memory-bound). Every kernel keeps a scalar tail so tcc-only builds (and
-  unknown ISAs) stay correct.
+  x64 — those now also have a portable `#elif USE_SSE2` branch:
+  - `min`/`max`/`min_elem`/`max_elem` via `pcmpgtd`+blend; `abs` via the
+    sign-mask trick; `to_lower`/`to_upper` via `pcmpgtb`+`paddb`.
+  - `mul`/`saxpy` (i32) via a `pmuludq`-pair emulation of `pmulld` (low 32
+    bits of a product are signedness-independent).
+  - `popcount_bytes` via a SWAR per-byte popcount (16-bit shift + mask, since
+    SSE2 has no per-byte shift) summed with `psadbw`.
+
+  native bench vs the MoonBit scalar (1024 / 4 KiB): `popcount` **30x**,
+  `min_elem` 5.7x, `abs` 4.7x, `mul` 4.7x, `max_elem` 3.8x, `to_lower` 3.1x,
+  `saxpy` 3.1x; the `min`/`max` *reductions* are a wash (memory-bound). Every
+  kernel keeps a scalar tail so tcc-only builds (and unknown ISAs) stay
+  correct. Still scalar-on-x64: `count_nonzero`/`all`/`any`/`prod` and the
+  f64 `matmul` tile (NEON-only or no SSE path yet).
 - `native-stub` in moon.pkg.json links C source files for native target.
 - `#borrow(param)` annotation needed for FixedArray/Bytes FFI parameters.
 
