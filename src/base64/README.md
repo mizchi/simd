@@ -7,6 +7,15 @@ let enc = @base64.encode(input)          // FixedArray[Byte] -> FixedArray[Byte]
 let dec = @base64.decode(enc)            // -> FixedArray[Byte]?
 ```
 
+For hot loops, reuse a buffer and skip the allocation with the in-place
+variants (same `_into` convention as the rest of the library):
+
+```moonbit
+let out = FixedArray::make(@base64.encoded_len(input.length()), b'\x00')
+@base64.encode_into(input, out)                              // -> Unit
+let n = @base64.decode_into(enc, dst)                        // -> Int?  (bytes written)
+```
+
 ## Backend comparison
 
 | backend | mechanism | accelerated? | encode (4 KiB) | decode (5.4 KiB) |

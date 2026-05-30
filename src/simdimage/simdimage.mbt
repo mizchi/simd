@@ -146,29 +146,30 @@ pub fn lerp(a : Bytes, b : Bytes, t : Int, out : FixedArray[Byte]) -> Unit {
 /// standard blend approximation — differs from an exact floor by at most 1 LSB.
 pub fn alpha_blend_solid(
   dst : FixedArray[Byte],
-  src_r : Int,
-  src_g : Int,
-  src_b : Int,
-  src_a : Int,
+  src_r : Byte,
+  src_g : Byte,
+  src_b : Byte,
+  src_a : Byte,
 ) -> Unit {
   if dst.length() % 4 != 0 {
     abort("@simdimage.alpha_blend_solid: dst must be a multiple of 4 bytes")
   }
-  let inv_a = 255 - src_a
+  let r = src_r.to_int()
+  let g = src_g.to_int()
+  let b = src_b.to_int()
+  let a = src_a.to_int()
+  let inv_a = 255 - a
   let n = dst.length() / 4
   if n == 0 {
     return
   }
-  let src_packed = (src_r & 0xFF) |
-    ((src_g & 0xFF) << 8) |
-    ((src_b & 0xFF) << 16) |
-    ((src_a & 0xFF) << 24)
+  let src_packed = r | (g << 8) | (b << 16) | (a << 24)
   let full = n / 4
   if full > 0 {
     imp_alpha_blend_solid(dst, full * 16, inv_a, src_packed)
   }
   // scalar tail (same round-div255 formula as the SIMD body)
-  let chans = [src_r, src_g, src_b, src_a]
+  let chans = [r, g, b, a]
   for i in (full * 4)..<n {
     for c in 0..<4 {
       let d = dst[i * 4 + c].to_int()

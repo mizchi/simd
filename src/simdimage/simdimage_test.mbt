@@ -132,7 +132,7 @@ test "alpha_blend_solid: src over transparent dst" {
   for c in 4..<8 {
     dst[c] = b'\xFF'
   }
-  alpha_blend_solid(dst, 255, 0, 0, 255) // opaque red
+  alpha_blend_solid(dst, b'\xFF', b'\x00', b'\x00', b'\xFF') // opaque red
   assert_true(
     (
       dst[0].to_int(),
@@ -151,7 +151,7 @@ test "alpha_blend_solid: src over transparent dst" {
 ///|
 test "alpha_blend_solid: half-alpha src over white" {
   let dst = FixedArray::make(4, b'\xFF')
-  alpha_blend_solid(dst, 128, 0, 0, 128)
+  alpha_blend_solid(dst, b'\x80', b'\x00', b'\x00', b'\x80')
   assert_true(
     (dst[0].to_int(), dst[1].to_int(), dst[2].to_int(), dst[3].to_int()) ==
     (255, 127, 127, 255),
@@ -278,7 +278,13 @@ test "alpha_blend_solid SIMD body + tail vs reference" {
         want[i * 4 + c] = blend(dst[i * 4 + c].to_int(), inv, src[c]).to_byte()
       }
     }
-    alpha_blend_solid(dst, src[0], src[1], src[2], src[3])
+    alpha_blend_solid(
+      dst,
+      src[0].to_byte(),
+      src[1].to_byte(),
+      src[2].to_byte(),
+      src[3].to_byte(),
+    )
     for i in 0..<(npix * 4) {
       assert_true(dst[i] == want[i])
     }

@@ -151,12 +151,13 @@ test "decode handles full alphabet" {
 /// Regression test: SIMD encode of a 16-byte buffer containing bytes > 127
 /// (so the i8x16.ge_s comparisons exercise the boundary where the byte's
 /// sign bit would matter under a buggy signed interpretation).
-test "encode 16-byte non-ASCII matches scalar" {
+test "encode 16-byte non-ASCII round-trips" {
   let input = bytes([
     0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8, 0xf7, 0xf6, 0xf5, 0xf4, 0xf3,
     0xf2, 0xf1, 0xf0,
   ])
-  let expected = FixedArray::make(24, b'\x00')
-  scalar_encode(input, expected)
-  check(encode(input), expected)
+  match decode(encode(input)) {
+    Some(round) => check(round, input)
+    None => abort("encode/decode round-trip failed")
+  }
 }

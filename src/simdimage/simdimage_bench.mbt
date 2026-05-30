@@ -188,7 +188,7 @@ test "bench/alpha_blend_solid" (bb : @bench.T) {
     bb.keep(dst)
   })
   bb.bench(name="simd_alpha_blend_4096px", fn() {
-    alpha_blend_solid(dst, 200, 100, 50, 128)
+    alpha_blend_solid(dst, b'\xC8', b'\x64', b'\x32', b'\x80')
     bb.keep(dst)
   })
 }

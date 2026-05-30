@@ -164,6 +164,24 @@ pub fn sum_f64(arr : FixedArray[Double]) -> Double {
 }
 
 ///|
+pub fn max_f64(arr : FixedArray[Double]) -> Double {
+  if arr.length() == 0 {
+    0.0
+  } else {
+    @internal.scalar_max_reduce_f64(arr)
+  }
+}
+
+///|
+pub fn min_f64(arr : FixedArray[Double]) -> Double {
+  if arr.length() == 0 {
+    0.0
+  } else {
+    @internal.scalar_min_reduce_f64(arr)
+  }
+}
+
+///|
 pub fn dot_f64(a : FixedArray[Double], b : FixedArray[Double]) -> Double {
   @internal.scalar_dot_f64(a, b)
 }
