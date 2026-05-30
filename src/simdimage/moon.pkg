@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/core/bench",
+}
+
+options(
+  targets: {
+    "simdimage.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdimage_wasm.mbt": [ "wasm" ],
+    "simdimage_fallback.mbt": [ "wasm-gc", "native", "js" ],
+    "simdimage_test.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "simdimage_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+  },
+)

@@ -18,6 +18,7 @@ Target-specific SIMD implementations with scalar fallback.
 - `src/simd_scalar.mbt` - shared scalar fallback for `js` and `wasm-gc` targets (FixedArray-on-GC-heap means `v128.load` is unusable on wasm-gc)
 - `src/base64/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
 - `src/simdjson/` - sub-package porting simdjson's `find_structural_bits` byte-classification pipeline to wasm SIMD. Operates on `@simd_buffer.SimdBufferBytes`. wasm / wasm-gc use inline-WAT (`i8x16.eq` + `i8x16.bitmask`); native / js use FixedArray scalar. See the "src/simdjson/ sub-package" section below.
+- `src/simdimage/` - sub-package for image / pixel byte ops (`rgb_to_rgba`, `rgba_to_grayscale`, `channel_extract` / `channel_merge`, `lerp`, `alpha_blend_solid`, `histogram`). Operates on **`Bytes` (input) / `FixedArray[Byte]` (output) directly** — the `@simdcore` philosophy, no `SimdBufferBytes` hop. wasm uses inline-WAT v128 (bodies ported verbatim from the old `SimdBufferBytes` `buf_*` image kernels); wasm-gc / native / js share a scalar fallback. These ops **used to live as `SimdBufferBytes` methods in `src/simd_buffer/`** and were moved here so the buffer type stays about general numeric / byte storage. See the "src/simdimage/ sub-package" section below.
 - `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@base64` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
 
 ## Key Findings
@@ -554,6 +555,82 @@ bodies fill in behind the same API. Shipped so far:
 **All Tier-2 image ops are now SIMD on wasm / wasm-gc**, except `histogram`
 (wasm SIMD has no scatter — stays scalar). native keeps the FixedArray scalar
 loops for the image ops.
+
+> **Moved (post-0.3.0):** the Tier-2 image / pixel ops above were lifted out
+> of `SimdBufferBytes` into the standalone `@simdimage` package (see the
+> "src/simdimage/ sub-package" section below). The Tier-1 byte-arithmetic
+> ops (`byte_add` / `byte_sub` / `byte_avg` / `sat_add` / `sat_sub` / `clamp`
+> / `byte_sub_offset`) stayed on `SimdBufferBytes` — they're general byte ops
+> (audio, PNG filters), not pixel-specific. The wasm inline-WAT bodies were
+> ported verbatim; only the FFI param types changed (`Int` addr →
+> `Bytes` / `FixedArray[Byte]`).
+
+## src/simdimage/ sub-package — image / pixel ops on core types
+
+`src/simdimage/` holds the pixel-oriented byte kernels that previously hung
+off `SimdBufferBytes`. They now take core types directly — `Bytes` for
+read-only inputs, `FixedArray[Byte]` for mutable outputs — so a downstream
+image library (which holds `Bytes` / `FixedArray[Byte]`, not
+`SimdBufferBytes`) calls in with no copy hop, the same zero-copy-on-wasm
+rationale as `@simdcore`'s `Bytes`-direct surface.
+
+Layout (mirrors the `@simdcore` target split):
+
+```
+src/simdimage/
+  moon.pkg                  # imports @bench
+  simdimage.mbt             # all targets — public API + validation + histogram
+  simdimage_wasm.mbt        # target [wasm] — inline-WAT v128 (Bytes/FixedArray FFI)
+  simdimage_fallback.mbt    # targets [wasm-gc, native, js] — scalar workers
+  simdimage_test.mbt        # all targets (parity assertions)
+  simdimage_bench.mbt       # all targets
+```
+
+Public API (free functions, identical signatures on all four targets):
+`rgb_to_rgba(src, alpha, out)`, `rgba_to_grayscale(src, out)`,
+`channel_extract(src, ch, out)`, `channel_merge(r, g, b, a, out)`,
+`lerp(a, b, t, out)`, `alpha_blend_solid(dst, r, g, b, a)`,
+`histogram(src, bins)`.
+
+Design notes:
+
+- The shared `simdimage.mbt` does all argument validation, the `lerp`
+  `t=0` / `t=256` copy edges, the `alpha_blend_solid` `npix % 4` scalar
+  tail, and the always-scalar `histogram`. It dispatches the SIMD body to
+  a per-target `imp_*` worker (inline-WAT on wasm, scalar elsewhere) — so
+  validation lives once and only the kernel is target-split. (MoonBit
+  methods must be defined in the type's package, so these are **free
+  functions**, not `Type::method`s — you can't re-home a method to another
+  package and keep it a method.)
+- **Over-read:** `rgb_to_rgba` and `channel_merge` `v128.load` a few bytes
+  (≤4 / ≤12) past the last full group; the lanes are discarded by the
+  following `i8x16.shuffle`. With the old `SimdBuffer::make` those reads
+  landed in the 16-byte allocation slack; on raw `Bytes` they land in the
+  MoonBit heap after the object and don't trap in practice (same pattern
+  `@simdcore`'s String/Bytes SIMD relies on). Documented in
+  `simdimage_wasm.mbt`.
+- wasm-gc / native / js are scalar because `Bytes` / `FixedArray[Byte]`
+  cross the inline-WAT FFI as GC refs there (not linear-memory pointers).
+  native has no C kernel for these yet (a future `simdimage.c` with SSE2
+  `pshufb` would help; `pshufb` is SSSE3, not baseline — same wall as
+  base64).
+
+### Bench (wasm, V8, 4096 px, vs a plain per-byte `Bytes`/`FixedArray` loop)
+
+| op | scalar | simd | x |
+|---|---|---|---|
+| `rgb_to_rgba` | 25.6 µs | 1.63 µs | **15.7** |
+| `alpha_blend_solid` | 57.3 µs | 3.09 µs | **18.5** |
+| `lerp` (4096 B) | 12.0 µs | 866 ns | **13.9** |
+| `channel_merge` | 27.0 µs | 2.54 µs | **10.6** |
+| `channel_extract` | 7.33 µs | 1.10 µs | **6.7** |
+| `rgba_to_grayscale` | 16.2 µs | 4.84 µs | **3.3** |
+
+Ratios are lower than the old `SimdBufferBytes` image bench (e.g.
+`rgb_to_rgba` 63x) because that baseline paid a per-byte `buf_load_byte` /
+`buf_store_byte` FFI call; here the scalar baseline is a direct
+`Bytes`/`FixedArray` index loop, so the comparison is the honest
+SIMD-vs-tight-scalar one.
 
 ## More parser surface that works
 

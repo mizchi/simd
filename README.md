@@ -37,6 +37,7 @@ Then in the consuming package's `moon.pkg`, import the sub-packages you need:
 ```
 import {
   "mizchi/simd/src/simdcore",
+  "mizchi/simd/src/simdimage",
   "mizchi/simd/src/simd_buffer",
   "mizchi/simd/src/simdjson",
   "mizchi/simd/src/base64",
@@ -44,8 +45,8 @@ import {
 ```
 
 Each import is exposed under the last path component — `@simdcore`,
-`@simd_buffer`, `@simdjson`, `@base64`. The root `mizchi/simd/src`
-package exports the FixedArray-based API as `@simd`.
+`@simdimage`, `@simd_buffer`, `@simdjson`, `@base64`. The root
+`mizchi/simd/src` package exports the FixedArray-based API as `@simd`.
 
 ## Quick start (recommended)
 
@@ -95,12 +96,9 @@ The same code compiles and runs unchanged on every target.
 - **0.3.0 byte arithmetic** (`SimdBufferBytes`): `byte_add`,
   `byte_sub`, `byte_avg`, `sat_add`, `sat_sub`, `clamp`,
   `byte_sub_offset` (PNG Sub-filter pattern)
-- **image / pixel** (`SimdBufferBytes`): `rgb_to_rgba` (63×),
-  `channel_extract` (24×), `channel_merge` (34×), `lerp` (57×),
-  `rgba_to_grayscale` (12×), `alpha_blend_solid` (premultiplied
-  source-over) — all **SIMD on wasm / wasm-gc** via `i8x16.shuffle` /
-  `i16x8.extmul` fixed-point; only `histogram` (256-bin) stays scalar
-  (wasm SIMD has no scatter)
+- **image / pixel ops** now live in their own `@simdimage` package and
+  operate on `Bytes` / `FixedArray[Byte]` directly (no `SimdBuffer` hop) —
+  see the `@simdimage` section below
 - **0.3.0 i32**: `SimdBuffer::array_equal(a, b, len) -> Bool` —
   SIMD all-equal reduction
 - `SimdBufferRing`: single-arena bump allocator. On wasm/wasm-gc it
@@ -173,6 +171,49 @@ is ~5×. `bytes_index_of` / `bytes_rindex` are also big native wins — they
 bind straight to libc (`memmem` 5.5×, `memrchr` 54× over a per-byte loop).
 
 Run: `moon bench --target wasm -p simdcore` (or `--target native`).
+
+## `@simdimage` — SIMD image / pixel ops
+
+Pixel-oriented byte kernels, kept in their own package so the numeric
+`@simd_buffer` family stays about general storage. Like `@simdcore`,
+these operate on core types directly — `Bytes` for read-only inputs,
+`FixedArray[Byte]` for mutable outputs — so an image library holding
+those types can call straight in with no `SimdBufferBytes` copy hop.
+
+```moonbit
+let rgb = Bytes::from_array(pixels)          // n*3 RGB bytes
+let rgba : FixedArray[Byte] = FixedArray::make(n * 4, b'\x00')
+@simdimage.rgb_to_rgba(rgb, 0xFF, rgba)      // expand to RGBA, opaque
+```
+
+| op | what it does |
+|---|---|
+| `rgb_to_rgba(src, alpha, out)` | 3 byte/px RGB → 4 byte/px RGBA, constant alpha |
+| `rgba_to_grayscale(src, out)` | Rec. 601 `Y = (77R+150G+29B) >> 8` |
+| `channel_extract(src, ch, out)` | pull one RGBA channel into a planar buffer |
+| `channel_merge(r, g, b, a, out)` | interleave 4 planar streams → RGBA |
+| `lerp(a, b, t, out)` | `(a*(256-t) + b*t) >> 8`, `t ∈ 0..=256` |
+| `alpha_blend_solid(dst, r, g, b, a)` | in-place premultiplied source-over of a solid color |
+| `histogram(src, bins)` | 256-bin byte histogram (scalar — no SIMD scatter) |
+
+Same target story as the rest of the library: **SIMD on `wasm`**
+(`i8x16.shuffle` / `i16x8.extmul` inline-WAT; `Bytes` / `FixedArray`
+cross the FFI as linear-memory pointers), **scalar on `wasm-gc` / `native`
+/ `js`** (GC-ref FFI blocks `v128.load`). Results are byte-identical on
+all four.
+
+### Bench (wasm, V8, 4096 px, vs a plain per-byte loop)
+
+| op | scalar | SIMD | x |
+|---|---|---|---|
+| `rgb_to_rgba` | 25.6 µs | 1.63 µs | **15.7** |
+| `alpha_blend_solid` | 57.3 µs | 3.09 µs | **18.5** |
+| `lerp` (4096 B) | 12.0 µs | 866 ns | **13.9** |
+| `channel_merge` | 27.0 µs | 2.54 µs | **10.6** |
+| `channel_extract` | 7.33 µs | 1.10 µs | **6.7** |
+| `rgba_to_grayscale` | 16.2 µs | 4.84 µs | **3.3** |
+
+Run: `moon bench --target wasm -p simdimage`.
 
 ## `@simdjson` — JSON byte classification
 
@@ -305,6 +346,11 @@ src/
     simdcore.mbt                           # facade (i32 / f64 / Bytes / Array)
     simdcore_str_{wasm,fallback}.mbt       # String ↔ UTF-8
     simdcore_json_{wasm,native,fallback}.mbt + simdcore.c   # JSON indexing
+
+  simdimage/                               # @simdimage — image / pixel ops
+    simdimage.mbt                          # public API (Bytes / FixedArray[Byte])
+    simdimage_wasm.mbt                     # wasm inline-WAT v128
+    simdimage_fallback.mbt                 # wasm-gc + native + js scalar
 
   base64/                                  # @base64 — RFC 4648 sub-package
     base64_common.mbt                      # tables + scalar
