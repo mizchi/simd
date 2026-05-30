@@ -5,40 +5,40 @@
 ///|
 test "sum / product / dot" {
   let a : FixedArray[Int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-  assert_eq(sum(a), a.iter().fold(init=0, fn(x, y) { x + y }))
-  assert_eq(product(a), a.iter().fold(init=1, fn(x, y) { x * y }))
+  assert_true(sum(a) == a.iter().fold(init=0, fn(x, y) { x + y }))
+  assert_true(product(a) == a.iter().fold(init=1, fn(x, y) { x * y }))
   let b : FixedArray[Int] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
   let mut want = 0
   for i in 0..<a.length() {
     want = want + a[i] * b[i]
   }
-  assert_eq(dot(a, b), want)
+  assert_true(dot(a, b) == want)
 }
 
 ///|
 test "sum empty" {
   let a : FixedArray[Int] = []
-  assert_eq(sum(a), 0)
-  assert_eq(product(a), 1)
+  assert_true(sum(a) == 0)
+  assert_true(product(a) == 1)
 }
 
 ///|
 test "maximum / minimum" {
   let a : FixedArray[Int] = [5, 3, 9, 1, 7, 2, 8, 4, 6, 0, -3, 11]
-  assert_eq(maximum(a), Some(11))
-  assert_eq(minimum(a), Some(-3))
+  assert_true(maximum(a) == Some(11))
+  assert_true(minimum(a) == Some(-3))
   let empty : FixedArray[Int] = []
-  assert_eq(maximum(empty), None)
-  assert_eq(minimum(empty), None)
+  assert_true(maximum(empty) == None)
+  assert_true(minimum(empty) == None)
 }
 
 ///|
 test "search / contains" {
   let a : FixedArray[Int] = [4, 8, 15, 16, 23, 42]
-  assert_eq(search(a, 16), Some(3))
-  assert_eq(search(a, 4), Some(0))
-  assert_eq(search(a, 42), Some(5))
-  assert_eq(search(a, 99), None)
+  assert_true(search(a, 16) == Some(3))
+  assert_true(search(a, 4) == Some(0))
+  assert_true(search(a, 42) == Some(5))
+  assert_true(search(a, 99) == None)
   assert_true(contains(a, 23))
   assert_false(contains(a, 24))
 }
@@ -48,7 +48,7 @@ test "fill" {
   let a : FixedArray[Int] = FixedArray::make(13, 0)
   fill(a, 7)
   for i in 0..<a.length() {
-    assert_eq(a[i], 7)
+    assert_true(a[i] == 7)
   }
 }
 
@@ -60,7 +60,7 @@ test "sort" {
   let want = a.copy()
   want.sort()
   sort(a)
-  assert_eq(a, want)
+  assert_true(a == want)
 }
 
 ///|
@@ -72,7 +72,7 @@ test "count_nonzero" {
       want = want + 1
     }
   }
-  assert_eq(count_nonzero(a), want)
+  assert_true(count_nonzero(a) == want)
 }
 
 ///|
@@ -83,27 +83,27 @@ test "int element-wise add/sub/mul/neg/abs/saxpy" {
   let out = FixedArray::make(n, 0)
   add(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i] + b[i])
+    assert_true(out[i] == a[i] + b[i])
   }
   sub(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i] - b[i])
+    assert_true(out[i] == a[i] - b[i])
   }
   mul(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i] * b[i])
+    assert_true(out[i] == a[i] * b[i])
   }
   neg(a, out)
   for i in 0..<n {
-    assert_eq(out[i], -a[i])
+    assert_true(out[i] == -a[i])
   }
   abs(a, out)
   for i in 0..<n {
-    assert_eq(out[i], if a[i] < 0 { -a[i] } else { a[i] })
+    assert_true(out[i] == (if a[i] < 0 { -a[i] } else { a[i] }))
   }
   saxpy(3, a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], 3 * a[i] + b[i])
+    assert_true(out[i] == 3 * a[i] + b[i])
   }
 }
 
@@ -118,9 +118,9 @@ test "f64 reductions" {
     s = s + a[i]
     d = d + a[i] * b[i]
   }
-  assert_eq(sum_f64(a), s)
-  assert_eq(dot_f64(a, b), d)
-  assert_eq(mean_f64(a), s / n.to_double())
+  assert_true(sum_f64(a) == s)
+  assert_true(dot_f64(a, b) == d)
+  assert_true(mean_f64(a) == s / n.to_double())
 }
 
 ///|
@@ -131,31 +131,31 @@ test "f64 element-wise add/sub/mul/div/sqrt/min/max" {
   let out = FixedArray::make(n, 0.0)
   add_f64(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i] + b[i])
+    assert_true(out[i] == a[i] + b[i])
   }
   sub_f64(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i] - b[i])
+    assert_true(out[i] == a[i] - b[i])
   }
   mul_f64(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i] * b[i])
+    assert_true(out[i] == a[i] * b[i])
   }
   div_f64(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i] / b[i])
+    assert_true(out[i] == a[i] / b[i])
   }
   sqrt_f64(a, out)
   for i in 0..<n {
-    assert_eq(out[i], a[i].sqrt())
+    assert_true(out[i] == a[i].sqrt())
   }
   min_elem_f64(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], if a[i] < b[i] { a[i] } else { b[i] })
+    assert_true(out[i] == (if a[i] < b[i] { a[i] } else { b[i] }))
   }
   max_elem_f64(a, b, out)
   for i in 0..<n {
-    assert_eq(out[i], if a[i] > b[i] { a[i] } else { b[i] })
+    assert_true(out[i] == (if a[i] > b[i] { a[i] } else { b[i] }))
   }
 }
 
@@ -185,11 +185,11 @@ test "bytes_search / bytes_count / bytes_contains (Bytes)" {
       }
     }
   }
-  assert_eq(bytes_count(data, b'a'), want_count)
-  assert_eq(bytes_search(data, b'a'), Some(want_first))
-  assert_eq(bytes_search(data, b'_'), Some(8))
-  assert_eq(bytes_search(data, b'Q'), None)
-  assert_eq(bytes_count(data, b'Q'), 0)
+  assert_true(bytes_count(data, b'a') == want_count)
+  assert_true(bytes_search(data, b'a') == Some(want_first))
+  assert_true(bytes_search(data, b'_') == Some(8))
+  assert_true(bytes_search(data, b'Q') == None)
+  assert_true(bytes_count(data, b'Q') == 0)
   assert_true(bytes_contains(data, b'z'))
   assert_false(bytes_contains(data, b'Q'))
 }
@@ -206,17 +206,17 @@ test "bytes_is_ascii (Bytes)" {
 test "ascii case ops (FixedArray in-place)" {
   let lo : FixedArray[Byte] = [b'H', b'E', b'L', b'L', b'O', b'1']
   to_lower_ascii(lo)
-  assert_eq(lo, [b'h', b'e', b'l', b'l', b'o', b'1'])
+  assert_true(lo == [b'h', b'e', b'l', b'l', b'o', b'1'])
   let up : FixedArray[Byte] = [b'h', b'e', b'l', b'l', b'o', b'1']
   to_upper_ascii(up)
-  assert_eq(up, [b'H', b'E', b'L', b'L', b'O', b'1'])
+  assert_true(up == [b'H', b'E', b'L', b'L', b'O', b'1'])
 }
 
 ///|
 fn make_string(n : Int, f : (Int) -> Int) -> String {
   let arr = Array::new()
   for i in 0..<n {
-    arr.push(Char::from_int(f(i)))
+    arr.push(f(i).unsafe_to_char())
   }
   String::from_array(arr)
 }
@@ -237,7 +237,7 @@ test "encode_utf8 (ascii fast path == core)" {
   // lengths chosen to hit 16-aligned body, body+tail, and pure tail (< 16).
   for n in [0, 5, 16, 33, 100] {
     let s = make_string(n, fn(i) { 0x41 + i % 26 })
-    assert_eq(encode_utf8(s), @utf8.encode(s[:]))
+    assert_true(encode_utf8(s) == @utf8.encode(s[:]))
   }
 }
 
@@ -253,9 +253,9 @@ test "encode_utf8 (non-ascii delegates to core)" {
       0x42
     }
   })
-  assert_eq(encode_utf8(s), @utf8.encode(s[:]))
+  assert_true(encode_utf8(s) == @utf8.encode(s[:]))
   let astral = "hello \u{1F600} world, padded out beyond sixteen units"
-  assert_eq(encode_utf8(astral), @utf8.encode(astral[:]))
+  assert_true(encode_utf8(astral) == @utf8.encode(astral[:]))
 }
 
 ///|
@@ -263,10 +263,10 @@ test "encode_utf8_into" {
   let s = make_string(50, fn(i) { 0x61 + i % 26 })
   let out = FixedArray::make(64, b'\x00')
   let written = encode_utf8_into(s, out)
-  assert_eq(written, 50)
+  assert_true(written == 50)
   let want = @utf8.encode(s[:])
   for i in 0..<written {
-    assert_eq(out[i], want[i])
+    assert_true(out[i] == want[i])
   }
 }
 
@@ -275,8 +275,8 @@ test "decode_utf8_unsafe (ascii == core)" {
   for n in [0, 5, 16, 33, 100] {
     let s = make_string(n, fn(i) { 0x41 + i % 26 })
     let bytes = @utf8.encode(s[:])
-    assert_eq(decode_utf8_unsafe(bytes), s)
-    assert_eq(decode_utf8_unsafe_intrinsic(bytes), s)
+    assert_true(decode_utf8_unsafe(bytes) == s)
+    assert_true(decode_utf8_unsafe_intrinsic(bytes) == s)
   }
 }
 
@@ -285,10 +285,12 @@ test "decode_utf8_unsafe (non-ascii == decode_lossy)" {
   // valid multi-byte UTF-8 (é, ö, ☃, 😀) padded beyond 16 bytes.
   let s = "h\u{e9}llo w\u{f6}rld \u{2603} and \u{1F600}, padded beyond sixteen"
   let bytes = @utf8.encode(s[:])
-  assert_eq(decode_utf8_unsafe(bytes), @utf8.decode_lossy(bytes[:]))
-  assert_eq(decode_utf8_unsafe_intrinsic(bytes), @utf8.decode_lossy(bytes[:]))
+  assert_true(decode_utf8_unsafe(bytes) == @utf8.decode_lossy(bytes[:]))
+  assert_true(
+    decode_utf8_unsafe_intrinsic(bytes) == @utf8.decode_lossy(bytes[:]),
+  )
   // round-trips back to the original for well-formed input.
-  assert_eq(decode_utf8_unsafe(bytes), s)
+  assert_true(decode_utf8_unsafe(bytes) == s)
 }
 
 ///|
@@ -304,34 +306,34 @@ fn int_array(n : Int) -> Array[Int] {
 test "array bridge: to/of_fixedarray round trip" {
   let a = int_array(20)
   let fa = to_fixedarray(a)
-  assert_eq(fa.length(), 20)
+  assert_true(fa.length() == 20)
   let back = of_fixedarray(fa)
-  assert_eq(back, a)
+  assert_true(back == a)
 }
 
 ///|
 test "array reductions == idiom" {
   let a = int_array(50)
-  assert_eq(array_sum(a), a.iter().fold(init=0, fn(x, y) { x + y }))
-  assert_eq(
-    array_product(int_array(6)),
+  assert_true(array_sum(a) == a.iter().fold(init=0, fn(x, y) { x + y }))
+  assert_true(
+    array_product(int_array(6)) ==
     int_array(6).iter().fold(init=1, fn(x, y) { x * y }),
   )
-  assert_eq(array_maximum(a), a.iter().maximum())
-  assert_eq(array_minimum(a), a.iter().minimum())
+  assert_true(array_maximum(a) == a.iter().maximum())
+  assert_true(array_minimum(a) == a.iter().minimum())
   let mut nz = 0
   for i in 0..<a.length() {
     if a[i] != 0 {
       nz = nz + 1
     }
   }
-  assert_eq(array_count_nonzero(a), nz)
+  assert_true(array_count_nonzero(a) == nz)
   let b = int_array(50)
   let mut d = 0
   for i in 0..<a.length() {
     d = d + a[i] * b[i]
   }
-  assert_eq(array_dot(a, b), d)
+  assert_true(array_dot(a, b) == d)
 }
 
 ///|
@@ -340,14 +342,14 @@ test "array_sort in place == Array::sort" {
   let want = a.copy()
   want.sort()
   array_sort(a)
-  assert_eq(a, want)
+  assert_true(a == want)
   // edge cases
   let one = [42]
   array_sort(one)
-  assert_eq(one, [42])
+  assert_true(one == [42])
   let empty : Array[Int] = []
   array_sort(empty)
-  assert_eq(empty, [])
+  assert_true(empty == [])
 }
 
 ///|
@@ -360,9 +362,9 @@ test "array f64 reductions == loop" {
     s = s + a[i]
     d = d + a[i] * b[i]
   }
-  assert_eq(array_sum_f64(a), s)
-  assert_eq(array_dot_f64(a, b), d)
-  assert_eq(array_mean_f64(a), s / 8.0)
+  assert_true(array_sum_f64(a) == s)
+  assert_true(array_dot_f64(a, b) == d)
+  assert_true(array_mean_f64(a) == s / 8.0)
 }
 
 ///|
@@ -378,10 +380,10 @@ fn json_indices_ref(s : String) -> Array[Int] {
     if escape_pending {
       escape_pending = false
     } else if b == 0x22 {
-      in_string = not(in_string)
+      in_string = !in_string
     } else if b == 0x5C && in_string {
       escape_pending = true
-    } else if not(in_string) &&
+    } else if !in_string &&
       (
         b == 0x7B ||
         b == 0x7D ||
@@ -404,13 +406,13 @@ test "json_structural_indices vs reference" {
   ]
   for d in docs {
     let bytes = @utf8.encode(d[:])
-    assert_eq(json_structural_indices(bytes), json_indices_ref(d))
+    assert_true(json_structural_indices(bytes) == json_indices_ref(d))
   }
 }
 
 ///|
 test "json_structural_indices empty" {
-  assert_eq(json_structural_indices(b""), Array::new())
+  assert_true(json_structural_indices(b"") == (Array::new() : Array[Int]))
 }
 
 ///|
@@ -428,7 +430,7 @@ test "json_classify_structural bitmap" {
       b == 0x2C ||
       b == 0x3A
     let got = (out[i >> 5] & (1 << (i & 31))) != 0
-    assert_eq(got, want)
+    assert_true(got == want)
   }
 }
 
@@ -446,9 +448,9 @@ test "json_structural_indices_into reuse" {
   for i in 0..<count {
     got.push(indices[i])
   }
-  assert_eq(got, json_indices_ref(doc))
+  assert_true(got == json_indices_ref(doc))
   let count2 = json_structural_indices_into(bytes, structural, quote, indices)
-  assert_eq(count2, count)
+  assert_true(count2 == count)
 }
 
 ///|
@@ -490,7 +492,7 @@ test "bytes_index_of vs reference" {
       Some(i) => i
       None => -1
     }
-    assert_eq(got, want)
+    assert_true(got == want)
   }
   // overlap / repeated first byte (forces multiple candidate verifies):
   // every "a" matches the first needle byte, so the SIMD scan keeps finding
@@ -498,15 +500,17 @@ test "bytes_index_of vs reference" {
   let h2 = b"aaaaaaaaaaaaaaaaaaab"
   for n in [b"aab", b"aaab", b"ab", b"aaaa"] {
     let want = ref_index_of(h2, n)
-    assert_eq(bytes_index_of(h2, n), if want < 0 { None } else { Some(want) })
+    assert_true(
+      bytes_index_of(h2, n) == (if want < 0 { None } else { Some(want) }),
+    )
   }
   assert_true(bytes_contains_sub(h2, b"aab"))
   assert_false(bytes_contains_sub(h2, b"aac"))
   // needle longer than haystack
-  assert_eq(bytes_index_of(b"hi", b"hello"), None)
+  assert_true(bytes_index_of(b"hi", b"hello") == None)
   // match at the very end, crossing a 16-byte boundary
   let h3 = b"0123456789abcdefNEEDLE"
-  assert_eq(bytes_index_of(h3, b"NEEDLE"), Some(16))
+  assert_true(bytes_index_of(h3, b"NEEDLE") == Some(16))
 }
 
 ///|
@@ -521,15 +525,17 @@ test "bytes_rindex vs reference" {
         want = i
       }
     }
-    assert_eq(bytes_rindex(h, needle), if want < 0 { None } else { Some(want) })
+    assert_true(
+      bytes_rindex(h, needle) == (if want < 0 { None } else { Some(want) }),
+    )
   }
   // boundary: match only in the unaligned tail
-  assert_eq(bytes_rindex(b"0123456789abcdefZ", b'Z'), Some(16))
+  assert_true(bytes_rindex(b"0123456789abcdefZ", b'Z') == Some(16))
   // match only in the first chunk
-  assert_eq(bytes_rindex(b"Z0123456789abcdef0123456789", b'Z'), Some(0))
-  assert_eq(bytes_rindex(b"", b'a'), None)
+  assert_true(bytes_rindex(b"Z0123456789abcdef0123456789", b'Z') == Some(0))
+  assert_true(bytes_rindex(b"", b'a') == None)
   // last vs first occurrence differ
   let h2 = b"abcabcabc"
-  assert_eq(bytes_rindex(h2, b'a'), Some(6))
-  assert_eq(bytes_search(h2, b'a'), Some(0))
+  assert_true(bytes_rindex(h2, b'a') == Some(6))
+  assert_true(bytes_search(h2, b'a') == Some(0))
 }

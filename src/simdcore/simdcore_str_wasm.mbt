@@ -55,7 +55,7 @@ pub fn encode_utf8(s : String) -> Bytes {
   if utf16_is_ascii_w(s, n) != 0 {
     let out = FixedArray::make(n, b'\x00')
     utf16_narrow_ascii_w(s, out, n)
-    Bytes::from_fixedarray(out)
+    Bytes::from_array(out)
   } else {
     @utf8.encode(s[:])
   }
@@ -140,7 +140,7 @@ pub fn decode_utf8_unsafe(bytes : Bytes) -> String {
   if @simd.is_ascii_b(bytes) {
     let out = FixedArray::make(n * 2, b'\x00')
     utf8_widen_ascii_bytes_w(bytes, out, n)
-    Bytes::from_fixedarray(out).to_unchecked_string(offset=0, length=n * 2)
+    Bytes::from_array(out).to_unchecked_string(offset=0, length=n * 2)
   } else {
     @utf8.decode_lossy(bytes[:])
   }
