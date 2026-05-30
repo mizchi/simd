@@ -494,3 +494,18 @@ test "bench/bytes_rindex" (b : @bench.T) {
   })
   b.bench(name="bytes_rindex_simdcore", fn() { b.keep(bytes_rindex(hay, b'z')) })
 }
+
+///|
+// Option A: buffer-backed variants vs the scalar simdcore fallback (wasm-gc).
+// Run: `moon bench --target wasm-gc -p simdcore`. These are SLOW per call
+// (each allocates a SimdBuffer via memory.grow); the bench documents that.
+test "bench/optionA_via_buffer" (b : @bench.T) {
+  let a = bench_int_array(1024)
+  let c = bench_int_array(1024)
+  b.bench(name="scalar_sum", fn() { b.keep(sum(a)) })
+  b.bench(name="via_buffer_sum", fn() { b.keep(sum_via_buffer(a)) })
+  b.bench(name="scalar_dot", fn() { b.keep(dot(a, c)) })
+  b.bench(name="via_buffer_dot", fn() { b.keep(dot_via_buffer(a, c)) })
+  b.bench(name="scalar_sort", fn() { b.keep(sort(a)) })
+  b.bench(name="via_buffer_sort", fn() { b.keep(sort_via_buffer(a)) })
+}

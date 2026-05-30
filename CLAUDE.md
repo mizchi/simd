@@ -876,6 +876,34 @@ reversed and produced garbage only for byte values ≥ 128 — the all-ASCII
 test cases passed coincidentally because the subtraction happened to wrap
 through the same modulus.
 
+### Option A as API: `*_via_buffer` (slow, for parity)
+
+`simdcore_buffer.mbt` ships `sum_via_buffer` / `dot_via_buffer` /
+`sort_via_buffer` — drop-in for `sum` / `dot` / `sort` (same signatures) but
+routing the `FixedArray[Int]` through a linear-memory `@simd_buffer.SimdBuffer`
+so the SIMD kernel runs on **wasm-gc** (where the plain `Bytes`/`FixedArray`
+surface falls back to scalar). They exist on all four targets for API parity.
+
+**They are slow — deliberately so, and documented as such.** Matching the
+simple `FixedArray`-in / result-out signature forces a fresh `SimdBuffer`
+allocation per call (`memory.grow`, ~hundreds of µs), so on wasm-gc every one is
+a large net loss vs the scalar fallback:
+
+| op (1024, wasm-gc, moonrun) | scalar simdcore | `*_via_buffer` (per-call alloc) |
+|---|---|---|
+| `sum` | 231 ns | 611.84 µs (~2650× slower) |
+| `dot` | 262 ns | 1.21 ms (~4600× slower) |
+| `sort` | 29.4 µs | 1.27 ms (~43× slower) |
+
+The takeaway: a per-call-allocating API can never win Option A — even the
+compute-heavy `sort` loses to the double `memory.grow`. The realistic wasm-gc
+win needs the **reuse** regime, which the simple API can't express; call
+`@simd_buffer` directly with buffers pre-allocated once (or from a
+`SimdBufferRing`) — see the `optionA_*` reuse benches under the SimdBuffer
+section, where `sort` 6.4× / `popcount` 3.0× / `adler32` 2.6×. So `*_via_buffer`
+is provided for completeness, not as a recommended path.
+
+
 ## SimdBuffer: portable SIMD across all four targets
 
 `src/simd_buffer/` is the recommended portable API. The public surface —
