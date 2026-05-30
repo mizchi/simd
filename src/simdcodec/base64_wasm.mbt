@@ -1,5 +1,5 @@
 ///|
-/// SIMD encode of `chunks` × 12 input bytes → `chunks` × 16 output bytes.
+/// SIMD base64_encode of `chunks` × 12 input bytes → `chunks` × 16 output bytes.
 /// Algorithm: Wojciech Muła's 12→16 layout. Per 24-bit input group we extract
 /// four 6-bit indices, then convert each index to ASCII via range-based
 /// arithmetic offsets (no swizzle lookup table required).
@@ -19,9 +19,12 @@ fn encode_simd_chunks(
 
 ///|
 /// Encode `input` as Base64 into the caller-supplied `out` (no allocation).
-/// `out.length()` must be at least `encoded_len(input.length())`. wasm target:
+/// `out.length()` must be at least `base64_encoded_len(input.length())`. wasm target:
 /// SIMD path (12 in / 16 out) with a scalar tail.
-pub fn encode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Unit {
+pub fn base64_encode_into(
+  input : FixedArray[Byte],
+  out : FixedArray[Byte],
+) -> Unit {
   let n = input.length()
   // SIMD requires reading 16 bytes per chunk; only use it when we have
   // ≥ 16 bytes of trailing input we can safely v128.load.
@@ -40,7 +43,7 @@ pub fn encode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Unit {
   let consumed = simd_chunks * 12
   if consumed < n {
     // Build a temporary scalar input slice for the tail. The scalar encoder
-    // takes the full input but writes only `encoded_len(n) - simd_chunks*16`
+    // takes the full input but writes only `base64_encoded_len(n) - simd_chunks*16`
     // bytes of output starting at the corresponding offset, so for the tail
     // we materialise a small array.
     let tail_len = n - consumed
@@ -48,7 +51,7 @@ pub fn encode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Unit {
     for i in 0..<tail_len {
       tail[i] = input[consumed + i]
     }
-    let tail_out = FixedArray::make(encoded_len(tail_len), b'\x00')
+    let tail_out = FixedArray::make(base64_encoded_len(tail_len), b'\x00')
     scalar_encode(tail, tail_out)
     let tail_out_len = tail_out.length()
     let dst_off = simd_chunks * 16
@@ -59,7 +62,7 @@ pub fn encode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Unit {
 }
 
 ///|
-/// SIMD decode of `chunks` × 16 input ASCII bytes → `chunks` × 12 decoded bytes.
+/// SIMD base64_decode of `chunks` × 16 input ASCII bytes → `chunks` × 12 decoded bytes.
 /// Algorithm:
 ///   1. Range-based ASCII → 6-bit lookup with arithmetic offsets per range.
 ///   2. Validity mask: OR of all range masks. Returned via the result value so
@@ -85,10 +88,13 @@ fn decode_simd_chunks(
 ///|
 /// Decode a Base64 buffer into the caller-supplied `out` (no allocation),
 /// returning the number of bytes written or `None` on invalid input.
-/// `out.length()` must be at least `decoded_len(n, count_padding(input))`.
-/// wasm target: SIMD decode for the bulk, scalar for the trailing 4-char group
+/// `out.length()` must be at least `base64_decoded_len(n, base64_count_padding(input))`.
+/// wasm target: SIMD base64_decode for the bulk, scalar for the trailing 4-char group
 /// (which may contain `=` padding).
-pub fn decode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Int? {
+pub fn base64_decode_into(
+  input : FixedArray[Byte],
+  out : FixedArray[Byte],
+) -> Int? {
   let n = input.length()
   if n == 0 {
     return Some(0)
@@ -96,7 +102,7 @@ pub fn decode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Int? {
   if n % 4 != 0 {
     return None
   }
-  let pad = count_padding(input)
+  let pad = base64_count_padding(input)
   // SIMD decodes 16-input/12-output per chunk; v128.store writes 16 bytes so
   // we need 4 bytes of slack at the end of `out`. Carve out at least the last
   // 4 input characters (= 3 output bytes) for the scalar tail to guarantee
@@ -106,7 +112,7 @@ pub fn decode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Int? {
   if bulk_chunks > 0 {
     let err = decode_simd_chunks(input, out, 0, 0, bulk_chunks)
     if err != 0 {
-      // Any byte outside the alphabet — fall back to full scalar decode.
+      // Any byte outside the alphabet — fall back to full scalar base64_decode.
       match scalar_decode(input, out) {
         Some(written) => return Some(written)
         None => return None
@@ -121,7 +127,7 @@ pub fn decode_into(input : FixedArray[Byte], out : FixedArray[Byte]) -> Int? {
   for i in 0..<tail_in_len {
     tail[i] = input[consumed + i]
   }
-  let tail_out = FixedArray::make(decoded_len(tail_in_len, pad), b'\x00')
+  let tail_out = FixedArray::make(base64_decoded_len(tail_in_len, pad), b'\x00')
   match scalar_decode(tail, tail_out) {
     Some(written) => {
       let dst_off = bulk_chunks * 12

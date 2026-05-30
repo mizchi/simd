@@ -30,49 +30,52 @@ fn check(actual : FixedArray[Byte], expected : FixedArray[Byte]) -> Unit {
 
 ///|
 fn check_decode(input : FixedArray[Byte], expected : FixedArray[Byte]) -> Unit {
-  match decode(input) {
+  match base64_decode(input) {
     Some(b) => check(b, expected)
-    None => abort("decode returned None, expected Some")
+    None => abort("base64_decode returned None, expected Some")
   }
 }
 
 ///|
 fn check_decode_none(input : FixedArray[Byte]) -> Unit {
-  match decode(input) {
-    Some(_) => abort("decode returned Some, expected None")
+  match base64_decode(input) {
+    Some(_) => abort("base64_decode returned Some, expected None")
     None => ()
   }
 }
 
 ///|
 /// RFC 4648 §10 test vectors expressed as ASCII byte arrays.
-test "encode RFC 4648 vectors" {
-  check(encode(bytes([])), bytes([]))
+test "base64_encode RFC 4648 vectors" {
+  check(base64_encode(bytes([])), bytes([]))
   // "f" -> "Zg=="
-  check(encode(bytes([0x66])), bytes([0x5a, 0x67, 0x3d, 0x3d]))
+  check(base64_encode(bytes([0x66])), bytes([0x5a, 0x67, 0x3d, 0x3d]))
   // "fo" -> "Zm8="
-  check(encode(bytes([0x66, 0x6f])), bytes([0x5a, 0x6d, 0x38, 0x3d]))
+  check(base64_encode(bytes([0x66, 0x6f])), bytes([0x5a, 0x6d, 0x38, 0x3d]))
   // "foo" -> "Zm9v"
-  check(encode(bytes([0x66, 0x6f, 0x6f])), bytes([0x5a, 0x6d, 0x39, 0x76]))
+  check(
+    base64_encode(bytes([0x66, 0x6f, 0x6f])),
+    bytes([0x5a, 0x6d, 0x39, 0x76]),
+  )
   // "foob" -> "Zm9vYg=="
   check(
-    encode(bytes([0x66, 0x6f, 0x6f, 0x62])),
+    base64_encode(bytes([0x66, 0x6f, 0x6f, 0x62])),
     bytes([0x5a, 0x6d, 0x39, 0x76, 0x59, 0x67, 0x3d, 0x3d]),
   )
   // "fooba" -> "Zm9vYmE="
   check(
-    encode(bytes([0x66, 0x6f, 0x6f, 0x62, 0x61])),
+    base64_encode(bytes([0x66, 0x6f, 0x6f, 0x62, 0x61])),
     bytes([0x5a, 0x6d, 0x39, 0x76, 0x59, 0x6d, 0x45, 0x3d]),
   )
   // "foobar" -> "Zm9vYmFy"
   check(
-    encode(bytes([0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72])),
+    base64_encode(bytes([0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72])),
     bytes([0x5a, 0x6d, 0x39, 0x76, 0x59, 0x6d, 0x46, 0x79]),
   )
 }
 
 ///|
-test "decode RFC 4648 vectors" {
+test "base64_decode RFC 4648 vectors" {
   check_decode(bytes([]), bytes([]))
   check_decode(bytes([0x5a, 0x67, 0x3d, 0x3d]), bytes([0x66]))
   check_decode(bytes([0x5a, 0x6d, 0x38, 0x3d]), bytes([0x66, 0x6f]))
@@ -105,25 +108,25 @@ test "roundtrip random sizes" {
       seed = seed * 1103515245U + 12345U
       input[i] = ((seed >> 8) & 0xFFU).reinterpret_as_int().to_byte()
     }
-    let encoded = encode(input)
+    let encoded = base64_encode(input)
     check_decode(encoded, input)
   }
 }
 
 ///|
-test "decode rejects non-multiple-of-4 length" {
+test "base64_decode rejects non-multiple-of-4 length" {
   check_decode_none(bytes([0x61, 0x62, 0x63])) // "abc"
   check_decode_none(bytes([0x61])) // "a"
 }
 
 ///|
-test "decode rejects out-of-alphabet bytes" {
+test "base64_decode rejects out-of-alphabet bytes" {
   check_decode_none(bytes([0x5a, 0x6d, 0x39, 0x20])) // "Zm9 "
   check_decode_none(bytes([0x5a, 0x6d, 0x39, 0x2a])) // "Zm9*"
 }
 
 ///|
-test "decode handles full alphabet" {
+test "base64_decode handles full alphabet" {
   let alphabet = FixedArray::make(64, b'\x00')
   for i in 0..<26 {
     alphabet[i] = (i + 65).to_byte()
@@ -136,28 +139,28 @@ test "decode handles full alphabet" {
   }
   alphabet[62] = b'+'
   alphabet[63] = b'/'
-  match decode(alphabet) {
+  match base64_decode(alphabet) {
     Some(b) => {
       if b.length() != 48 {
         abort("expected 48 decoded bytes")
       }
-      check(encode(b), alphabet)
+      check(base64_encode(b), alphabet)
     }
-    None => abort("decode of full alphabet returned None")
+    None => abort("base64_decode of full alphabet returned None")
   }
 }
 
 ///|
-/// Regression test: SIMD encode of a 16-byte buffer containing bytes > 127
+/// Regression test: SIMD base64_encode of a 16-byte buffer containing bytes > 127
 /// (so the i8x16.ge_s comparisons exercise the boundary where the byte's
 /// sign bit would matter under a buggy signed interpretation).
-test "encode 16-byte non-ASCII round-trips" {
+test "base64_encode 16-byte non-ASCII round-trips" {
   let input = bytes([
     0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8, 0xf7, 0xf6, 0xf5, 0xf4, 0xf3,
     0xf2, 0xf1, 0xf0,
   ])
-  match decode(encode(input)) {
+  match base64_decode(base64_encode(input)) {
     Some(round) => check(round, input)
-    None => abort("encode/decode round-trip failed")
+    None => abort("base64_encode/base64_decode round-trip failed")
   }
 }

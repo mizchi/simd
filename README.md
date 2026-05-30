@@ -33,12 +33,12 @@ glance, which backends get real SIMD (✅) vs scalar fallback (·):
 | [`@simdimage`](src/simdimage/) — image / pixel ops | ✅ | · | · | · | [README](src/simdimage/README.md) |
 | [`@simd_buffer`](src/simd_buffer/) — portable buffer family | ✅ | ✅ | ✅ | · | [README](src/simd_buffer/README.md) |
 | [`@simdjson`](src/simdjson/) — JSON indexing | ✅ | ✅ | · | · | [README](src/simdjson/README.md) |
-| [`@base64`](src/base64/) — RFC 4648 Base64 | ✅ | · | ⚠️² | · | [README](src/base64/README.md) |
+| [`@simdcodec`](src/simdcodec/) — byte codecs (base64) | ✅ | · | ⚠️² | · | [README](src/simdcodec/README.md) |
 | `@simd` — FixedArray root API | ✅ | · | ✅ | · | this file |
 
 ¹ native `@simdcore` uses NEON / SSE2 **and** libc (`memchr` / `memmem` /
 `memrchr`) — biggest wins where a tuned libc primitive exists.
-² native `@base64` is a gcc-compiled scalar kernel (the SSSE3 `pshufb` a
+² native `@simdcodec` base64 is a gcc-compiled scalar kernel (the SSSE3 `pshufb` a
 vectorised base64 needs isn't in the baseline x86-64 ABI), still ~2× over
 the tcc MoonBit scalar.
 
@@ -60,12 +60,12 @@ import {
   "mizchi/simd/src/simdimage",
   "mizchi/simd/src/simd_buffer",
   "mizchi/simd/src/simdjson",
-  "mizchi/simd/src/base64",
+  "mizchi/simd/src/simdcodec",
 }
 ```
 
 Each import is exposed under the last path component — `@simdcore`,
-`@simdimage`, `@simd_buffer`, `@simdjson`, `@base64`. The root
+`@simdimage`, `@simd_buffer`, `@simdjson`, `@simdcodec`. The root
 `mizchi/simd/src` package exports the FixedArray-based API as `@simd`.
 
 ## Quick start (recommended)
@@ -372,10 +372,11 @@ src/
     simdimage_wasm.mbt                     # wasm inline-WAT v128
     simdimage_fallback.mbt                 # wasm-gc + native + js scalar
 
-  base64/                                  # @base64 — RFC 4648 sub-package
-    base64_common.mbt                      # tables + scalar
-    base64_wasm.mbt                        # wasm SIMD encode/decode
-    base64_scalar.mbt                      # wasm-gc + js scalar
+  simdcodec/                               # @simdcodec — byte codecs (base64)
+    base64_common.mbt                      # length helpers + encode/decode wrappers
+    base64_wasm.mbt                        # wasm SIMD encode_into/decode_into
+    base64_fallback.mbt                    # scalar tables + reference (all but native)
+    base64_scalar.mbt                      # wasm-gc + js encode_into/decode_into
     base64_native.mbt + base64.c           # native C FFI (gcc scalar, LUT decode)
 
   simdjson/                                # @simdjson — JSON byte classification
@@ -386,7 +387,7 @@ src/
     simd_buffer.mbt / _f32 / _f64 / _bytes / _sort / _ring / _copy.mbt
       # wasm + wasm-gc: linear-memory storage + inline-WAT v128
     simd_buffer_scalar.mbt
-      # native + js: FixedArray storage + @internal / @base64 delegation
+      # native + js: FixedArray storage + @internal / @simdcodec delegation
     simd_buffer_imports.mbt
       # cross-target import keep-alive
 ```

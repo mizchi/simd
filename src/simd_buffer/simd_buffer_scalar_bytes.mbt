@@ -118,14 +118,14 @@ pub fn SimdBufferBytes::adler32(self : SimdBufferBytes) -> UInt {
 pub fn SimdBufferBytes::base64_encode(
   input : SimdBufferBytes,
 ) -> SimdBufferBytes {
-  { data: @base64.encode(input.data) }
+  { data: @simdcodec.base64_encode(input.data) }
 }
 
 ///|
 pub fn SimdBufferBytes::base64_decode(
   input : SimdBufferBytes,
 ) -> SimdBufferBytes? {
-  match @base64.decode(input.data) {
+  match @simdcodec.base64_decode(input.data) {
     Some(d) => Some({ data: d })
     None => None
   }
@@ -138,7 +138,7 @@ pub fn SimdBufferBytes::base64_encode_into(
   input : SimdBufferBytes,
   out : SimdBufferBytes,
 ) -> Unit {
-  let encoded = @base64.encode(input.data)
+  let encoded = @simdcodec.base64_encode(input.data)
   let n = encoded.length()
   if out.data.length() < n {
     abort("SimdBufferBytes.base64_encode_into: out too small")
@@ -153,7 +153,7 @@ pub fn SimdBufferBytes::base64_decode_into(
   input : SimdBufferBytes,
   out : SimdBufferBytes,
 ) -> Int? {
-  match @base64.decode(input.data) {
+  match @simdcodec.base64_decode(input.data) {
     Some(d) => {
       let n = d.length()
       if out.data.length() < n {
