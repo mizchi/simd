@@ -315,6 +315,22 @@ extern "C" fn simd_count_nonzero_i32_ffi(
 ) -> Int = "simd_count_nonzero_i32_ffi"
 
 ///|
+#borrow(arr)
+extern "C" fn simd_argmin_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_argmin_i32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_argmax_i32_ffi(arr : FixedArray[Int], len : Int) -> Int = "simd_argmax_i32_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_mean_f64_ffi(arr : FixedArray[Double], len : Int) -> Double = "simd_mean_f64_ffi"
+
+///|
+#borrow(arr)
+extern "C" fn simd_var_f64_ffi(arr : FixedArray[Double], len : Int) -> Double = "simd_var_f64_ffi"
+
+///|
 #borrow(src, dst)
 extern "C" fn simd_memcpy_bytes_ffi(
   src : FixedArray[Byte],
