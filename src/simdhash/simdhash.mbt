@@ -38,6 +38,11 @@ fn rotr(x : UInt, n : Int) -> UInt {
 }
 
 ///|
+fn rotl(x : UInt, n : Int) -> UInt {
+  (x << n) | (x >> (32 - n))
+}
+
+///|
 /// Length (in bytes) of the message after SHA-256 padding: append `0x80`,
 /// zero-pad, then an 8-byte big-endian bit length, to a multiple of 64.
 fn sha256_padded_len(n : Int) -> Int {
