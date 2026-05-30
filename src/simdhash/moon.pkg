@@ -3,12 +3,14 @@ import {
 }
 
 options(
+  "native-stub": [ "simdhash.c" ],
   targets: {
     "simdhash.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "sha1.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "md5.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "simdhash_wasm.mbt": [ "wasm" ],
-    "simdhash_fallback.mbt": [ "wasm-gc", "native", "js" ],
+    "simdhash_native.mbt": [ "native" ],
+    "simdhash_fallback.mbt": [ "wasm-gc", "js" ],
     "simdhash_test.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "simdhash_bench.mbt": [ "wasm", "wasm-gc", "native", "js" ],
   },

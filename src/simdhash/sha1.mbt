@@ -88,12 +88,39 @@ pub fn sha1_hex(data : Bytes) -> String {
 }
 
 ///|
-/// Hash four messages with SHA-1, returning four 20-byte digests.
+/// Write the 20-byte SHA-1 digest of `data` into `out[off, off+20)`.
+fn sha1_into(data : Bytes, out : FixedArray[Byte], off : Int) -> Unit {
+  let d = sha1_scalar(data)
+  for i in 0..<20 {
+    out[off + i] = d[i]
+  }
+}
+
+///|
+/// Hash four messages with SHA-1, returning four 20-byte digests. On native
+/// with four equal-length inputs this runs a 4-way multi-buffer SSE2 / NEON
+/// kernel; otherwise it is four scalar digests. Always identical to four
+/// `sha1` calls.
 pub fn sha1_x4(
   m0 : Bytes,
   m1 : Bytes,
   m2 : Bytes,
   m3 : Bytes,
 ) -> (Bytes, Bytes, Bytes, Bytes) {
-  (sha1(m0), sha1(m1), sha1(m2), sha1(m3))
+  let out = FixedArray::make(80, b'\x00')
+  let n = m0.length()
+  if m1.length() == n && m2.length() == n && m3.length() == n {
+    imp_sha1_x4_eq(m0, m1, m2, m3, out)
+  } else {
+    sha1_into(m0, out, 0)
+    sha1_into(m1, out, 20)
+    sha1_into(m2, out, 40)
+    sha1_into(m3, out, 60)
+  }
+  (
+    slice_n(out, 0, 20),
+    slice_n(out, 20, 20),
+    slice_n(out, 40, 20),
+    slice_n(out, 60, 20),
+  )
 }

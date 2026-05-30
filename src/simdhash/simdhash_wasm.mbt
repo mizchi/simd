@@ -94,3 +94,18 @@ fn imp_sha256_x4_eq(
     }
   }
 }
+
+///|
+/// SHA-1 has no wasm multi-buffer kernel (yet) — four scalar digests.
+fn imp_sha1_x4_eq(
+  m0 : Bytes,
+  m1 : Bytes,
+  m2 : Bytes,
+  m3 : Bytes,
+  out : FixedArray[Byte],
+) -> Unit {
+  sha1_into(m0, out, 0)
+  sha1_into(m1, out, 20)
+  sha1_into(m2, out, 40)
+  sha1_into(m3, out, 60)
+}

@@ -203,8 +203,13 @@ fn digest_into(data : Bytes, out : FixedArray[Byte], off : Int) -> Unit {
 
 ///|
 fn slice32(out : FixedArray[Byte], off : Int) -> Bytes {
-  let a = FixedArray::make(32, b'\x00')
-  for i in 0..<32 {
+  slice_n(out, off, 32)
+}
+
+///|
+fn slice_n(out : FixedArray[Byte], off : Int, len : Int) -> Bytes {
+  let a = FixedArray::make(len, b'\x00')
+  for i in 0..<len {
     a[i] = out[off + i]
   }
   Bytes::from_array(a)

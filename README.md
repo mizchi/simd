@@ -34,7 +34,7 @@ glance, which backends get real SIMD (✅) vs scalar fallback (·):
 | [`@simd_buffer`](src/simd_buffer/) — portable buffer family | ✅ | ✅ | ✅ | · | [README](src/simd_buffer/README.md) |
 | [`@simdjson`](src/simdjson/) — JSON indexing | ✅ | ✅ | · | · | [README](src/simdjson/README.md) |
 | [`@simdcodec`](src/simdcodec/) — byte codecs (base64) | ✅ | · | ⚠️² | · | [README](src/simdcodec/README.md) |
-| [`@simdhash`](src/simdhash/) — SHA-256 / SHA-1 / MD5 | ✅³ | · | · | · | [README](src/simdhash/README.md) |
+| [`@simdhash`](src/simdhash/) — SHA-256 / SHA-1 / MD5 | ✅³ | · | ✅³ | · | [README](src/simdhash/README.md) |
 | `@simd` — FixedArray root API | ✅ | · | ✅ | · | this file |
 
 ¹ native `@simdcore` uses NEON / SSE2 **and** libc (`memchr` / `memmem` /
@@ -42,9 +42,10 @@ glance, which backends get real SIMD (✅) vs scalar fallback (·):
 ² native `@simdcodec` base64 is a gcc-compiled scalar kernel (the SSSE3 `pshufb` a
 vectorised base64 needs isn't in the baseline x86-64 ABI), still ~2× over
 the tcc MoonBit scalar.
-³ `@simdhash`: a single `sha256` stream is scalar everywhere (no SHA-NI / CLMUL
-on wasm). The SIMD path is the `sha256_x4` batch multi-buffer kernel (4 msgs
-per i32x4 lane, ~2.8× on wasm).
+³ `@simdhash`: single `sha256` / `sha1` / `md5` are scalar everywhere (a hash
+stream is serial; no SHA-NI / CLMUL on wasm). The SIMD path is the **batch
+multi-buffer** kernel: `sha256_x4` on wasm (inline-WAT, ~2.8×) and both
+`sha256_x4` / `sha1_x4` on native (SSE2 / NEON, ~3.4–3.6×).
 
 ## Install
 
@@ -387,6 +388,7 @@ src/
   simdhash/                                # @simdhash — SHA-256 / SHA-1 / MD5
     simdhash.mbt + sha1.mbt + md5.mbt      # scalar digests + public API
     simdhash_wasm.mbt                      # wasm 4-way multi-buffer sha256_x4
+    simdhash_native.mbt + simdhash.c       # native SSE2/NEON 4-way (sha256/sha1)
 
   simdjson/                                # @simdjson — JSON byte classification
     simdjson_wasm.mbt                      # wasm + wasm-gc inline-WAT
