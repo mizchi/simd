@@ -42,13 +42,19 @@ Target-specific SIMD implementations with scalar fallback.
     bits of a product are signedness-independent).
   - `popcount_bytes` via a SWAR per-byte popcount (16-bit shift + mask, since
     SSE2 has no per-byte shift) summed with `psadbw`.
+  - `count_nonzero`/`all`/`any` via `pcmpeqd` + (lane-sum / `pmovmskb`
+    early-exit); `prod` via the `mb_mullo` helper; the f64 `matmul` 4×4
+    register tile ported from NEON (`mul_pd`+`add_pd` for the missing FMA,
+    `mb_hadd_pd` for the horizontal add).
 
-  native bench vs the MoonBit scalar (1024 / 4 KiB): `popcount` **30x**,
-  `min_elem` 5.7x, `abs` 4.7x, `mul` 4.7x, `max_elem` 3.8x, `to_lower` 3.1x,
-  `saxpy` 3.1x; the `min`/`max` *reductions* are a wash (memory-bound). Every
-  kernel keeps a scalar tail so tcc-only builds (and unknown ISAs) stay
-  correct. Still scalar-on-x64: `count_nonzero`/`all`/`any`/`prod` and the
-  f64 `matmul` tile (NEON-only or no SSE path yet).
+  native bench vs the MoonBit scalar (1024 / 4 KiB / 64×64): **`matmul` 6.2x**
+  (318 µs → 51 µs), `popcount` 30x, `min_elem` 5.7x, `abs` 4.7x, `mul` 4.7x,
+  `max_elem` 3.8x, `all` 3.2x, `to_lower`/`saxpy` 3.1x, `count_nonzero` 1.3x.
+  Wash (memory-bound or scalar early-exits): `min`/`max`/`prod`, `sum`/`dot`,
+  `any`. Every kernel keeps a scalar tail so tcc-only builds (and unknown
+  ISAs) stay correct — the native FFI now uses NEON on arm64 and a portable
+  SSE2 baseline on any x86-64 (no `-march` needed) across the i32 / f64 / byte
+  op surface.
 - `native-stub` in moon.pkg.json links C source files for native target.
 - `#borrow(param)` annotation needed for FixedArray/Bytes FFI parameters.
 

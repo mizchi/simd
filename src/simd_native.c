@@ -53,6 +53,10 @@ static inline __m128i mb_mullo_epi32_sse2(__m128i a, __m128i b) {
       _mm_shuffle_epi32(t1, _MM_SHUFFLE(0, 0, 2, 0)),
       _mm_shuffle_epi32(t2, _MM_SHUFFLE(0, 0, 2, 0)));
 }
+/* Horizontal add of the two f64 lanes. SSE2 (no FMA, no haddpd). */
+static inline double mb_hadd_pd(__m128d v) {
+  return _mm_cvtsd_f64(_mm_add_pd(v, _mm_unpackhi_pd(v, v)));
+}
 #endif
 
 int32_t simd_sum_ffi(const int32_t* arr, int32_t len) {
@@ -742,6 +746,78 @@ void simd_matmul_f64_tile_ffi(
       }
     }
   }
+#elif USE_SSE2
+  /* Same 4x4 register tile as NEON; SSE2 has no FMA so each step is
+     add(mul()), and the f64x2 horizontal add uses mb_hadd_pd. */
+  for (; i + 4 <= m; i += 4) {
+    int32_t j = 0;
+    for (; j + 4 <= n; j += 4) {
+      __m128d c00 = _mm_setzero_pd(), c01 = _mm_setzero_pd(), c02 = _mm_setzero_pd(), c03 = _mm_setzero_pd();
+      __m128d c10 = _mm_setzero_pd(), c11 = _mm_setzero_pd(), c12 = _mm_setzero_pd(), c13 = _mm_setzero_pd();
+      __m128d c20 = _mm_setzero_pd(), c21 = _mm_setzero_pd(), c22 = _mm_setzero_pd(), c23 = _mm_setzero_pd();
+      __m128d c30 = _mm_setzero_pd(), c31 = _mm_setzero_pd(), c32 = _mm_setzero_pd(), c33 = _mm_setzero_pd();
+      const double* a0 = a + (i + 0) * k;
+      const double* a1 = a + (i + 1) * k;
+      const double* a2 = a + (i + 2) * k;
+      const double* a3 = a + (i + 3) * k;
+      const double* b0 = b_t + (j + 0) * k;
+      const double* b1 = b_t + (j + 1) * k;
+      const double* b2 = b_t + (j + 2) * k;
+      const double* b3 = b_t + (j + 3) * k;
+      int32_t p = 0;
+      for (; p + 2 <= k; p += 2) {
+        __m128d va0 = _mm_loadu_pd(a0 + p);
+        __m128d va1 = _mm_loadu_pd(a1 + p);
+        __m128d va2 = _mm_loadu_pd(a2 + p);
+        __m128d va3 = _mm_loadu_pd(a3 + p);
+        __m128d vb0 = _mm_loadu_pd(b0 + p);
+        __m128d vb1 = _mm_loadu_pd(b1 + p);
+        __m128d vb2 = _mm_loadu_pd(b2 + p);
+        __m128d vb3 = _mm_loadu_pd(b3 + p);
+        c00 = _mm_add_pd(c00, _mm_mul_pd(va0, vb0));
+        c01 = _mm_add_pd(c01, _mm_mul_pd(va0, vb1));
+        c02 = _mm_add_pd(c02, _mm_mul_pd(va0, vb2));
+        c03 = _mm_add_pd(c03, _mm_mul_pd(va0, vb3));
+        c10 = _mm_add_pd(c10, _mm_mul_pd(va1, vb0));
+        c11 = _mm_add_pd(c11, _mm_mul_pd(va1, vb1));
+        c12 = _mm_add_pd(c12, _mm_mul_pd(va1, vb2));
+        c13 = _mm_add_pd(c13, _mm_mul_pd(va1, vb3));
+        c20 = _mm_add_pd(c20, _mm_mul_pd(va2, vb0));
+        c21 = _mm_add_pd(c21, _mm_mul_pd(va2, vb1));
+        c22 = _mm_add_pd(c22, _mm_mul_pd(va2, vb2));
+        c23 = _mm_add_pd(c23, _mm_mul_pd(va2, vb3));
+        c30 = _mm_add_pd(c30, _mm_mul_pd(va3, vb0));
+        c31 = _mm_add_pd(c31, _mm_mul_pd(va3, vb1));
+        c32 = _mm_add_pd(c32, _mm_mul_pd(va3, vb2));
+        c33 = _mm_add_pd(c33, _mm_mul_pd(va3, vb3));
+      }
+      double s00 = mb_hadd_pd(c00), s01 = mb_hadd_pd(c01), s02 = mb_hadd_pd(c02), s03 = mb_hadd_pd(c03);
+      double s10 = mb_hadd_pd(c10), s11 = mb_hadd_pd(c11), s12 = mb_hadd_pd(c12), s13 = mb_hadd_pd(c13);
+      double s20 = mb_hadd_pd(c20), s21 = mb_hadd_pd(c21), s22 = mb_hadd_pd(c22), s23 = mb_hadd_pd(c23);
+      double s30 = mb_hadd_pd(c30), s31 = mb_hadd_pd(c31), s32 = mb_hadd_pd(c32), s33 = mb_hadd_pd(c33);
+      for (; p < k; p++) {
+        double va0 = a0[p], va1 = a1[p], va2 = a2[p], va3 = a3[p];
+        double vb0 = b0[p], vb1 = b1[p], vb2 = b2[p], vb3 = b3[p];
+        s00 += va0 * vb0; s01 += va0 * vb1; s02 += va0 * vb2; s03 += va0 * vb3;
+        s10 += va1 * vb0; s11 += va1 * vb1; s12 += va1 * vb2; s13 += va1 * vb3;
+        s20 += va2 * vb0; s21 += va2 * vb1; s22 += va2 * vb2; s23 += va2 * vb3;
+        s30 += va3 * vb0; s31 += va3 * vb1; s32 += va3 * vb2; s33 += va3 * vb3;
+      }
+      c[(i + 0) * n + j + 0] = s00; c[(i + 0) * n + j + 1] = s01; c[(i + 0) * n + j + 2] = s02; c[(i + 0) * n + j + 3] = s03;
+      c[(i + 1) * n + j + 0] = s10; c[(i + 1) * n + j + 1] = s11; c[(i + 1) * n + j + 2] = s12; c[(i + 1) * n + j + 3] = s13;
+      c[(i + 2) * n + j + 0] = s20; c[(i + 2) * n + j + 1] = s21; c[(i + 2) * n + j + 2] = s22; c[(i + 2) * n + j + 3] = s23;
+      c[(i + 3) * n + j + 0] = s30; c[(i + 3) * n + j + 1] = s31; c[(i + 3) * n + j + 2] = s32; c[(i + 3) * n + j + 3] = s33;
+    }
+    for (; j < n; j++) {
+      for (int32_t ii = 0; ii < 4; ii++) {
+        double acc = 0.0;
+        for (int32_t p = 0; p < k; p++) {
+          acc += a[(i + ii) * k + p] * b_t[j * k + p];
+        }
+        c[(i + ii) * n + j] = acc;
+      }
+    }
+  }
 #endif
   // tail rows: scalar
   for (; i < m; i++) {
@@ -872,6 +948,17 @@ int32_t simd_prod_i32_ffi(const int32_t* arr, int32_t len) {
     vst1q_s32(lanes, acc);
     result = lanes[0] * lanes[1] * lanes[2] * lanes[3];
   }
+#elif USE_SSE2
+  if (len >= 4) {
+    __m128i acc = _mm_loadu_si128((const __m128i*)arr);
+    i = 4;
+    int32_t end4 = (len / 4) * 4;
+    for (; i < end4; i += 4)
+      acc = mb_mullo_epi32_sse2(acc, _mm_loadu_si128((const __m128i*)(arr + i)));
+    int32_t lanes[4];
+    _mm_storeu_si128((__m128i*)lanes, acc);
+    result = lanes[0] * lanes[1] * lanes[2] * lanes[3];
+  }
 #endif
   for (; i < len; i++) result *= arr[i];
   return result;
@@ -887,6 +974,17 @@ int32_t simd_count_nonzero_i32_ffi(const int32_t* arr, int32_t len) {
     uint32x4_t ne = vmvnq_u32(vceqq_s32(vld1q_s32(arr + i), zero));
     count += (int32_t)vaddvq_u32(vshrq_n_u32(ne, 31));
   }
+#elif USE_SSE2
+  __m128i zero = _mm_setzero_si128();
+  __m128i acc = zero; /* per-lane count of zeros */
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i v = _mm_loadu_si128((const __m128i*)(arr + i));
+    acc = _mm_sub_epi32(acc, _mm_cmpeq_epi32(v, zero)); /* cmpeq=-1, sub -> +1 */
+  }
+  int32_t z[4];
+  _mm_storeu_si128((__m128i*)z, acc);
+  count += end4 - (z[0] + z[1] + z[2] + z[3]);
 #endif
   for (; i < len; i++) {
     if (arr[i] != 0) count++;
@@ -903,6 +1001,13 @@ int32_t simd_all_i32_ffi(const int32_t* arr, int32_t len) {
     uint32x4_t eq_zero = vceqq_s32(vld1q_s32(arr + i), zero);
     if (vmaxvq_u32(eq_zero) != 0) return 0;
   }
+#elif USE_SSE2
+  __m128i zero = _mm_setzero_si128();
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i eq = _mm_cmpeq_epi32(_mm_loadu_si128((const __m128i*)(arr + i)), zero);
+    if (_mm_movemask_epi8(eq) != 0) return 0; /* a zero lane exists */
+  }
 #endif
   for (; i < len; i++) {
     if (arr[i] == 0) return 0;
@@ -918,6 +1023,13 @@ int32_t simd_any_i32_ffi(const int32_t* arr, int32_t len) {
   for (; i < end4; i += 4) {
     uint32x4_t ne = vmvnq_u32(vceqq_s32(vld1q_s32(arr + i), zero));
     if (vmaxvq_u32(ne) != 0) return 1;
+  }
+#elif USE_SSE2
+  __m128i zero = _mm_setzero_si128();
+  int32_t end4 = (len / 4) * 4;
+  for (; i < end4; i += 4) {
+    __m128i eq = _mm_cmpeq_epi32(_mm_loadu_si128((const __m128i*)(arr + i)), zero);
+    if (_mm_movemask_epi8(eq) != 0xFFFF) return 1; /* a nonzero lane exists */
   }
 #endif
   for (; i < len; i++) {
