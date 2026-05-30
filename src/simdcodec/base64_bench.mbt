@@ -7,7 +7,7 @@ fn make_bench_byte_array(size : Int) -> FixedArray[Byte] {
   arr
 }
 
-// Local scalar reference baselines (the package's own scalar encode/decode are
+// Local scalar reference baselines (the package's own scalar base64_encode/base64_decode are
 // package-private; these self-contained copies give the SIMD-vs-scalar bench
 // its comparison point without exposing internals).
 
@@ -135,21 +135,21 @@ fn ref_decode(input : FixedArray[Byte], out : FixedArray[Byte]) -> Int? {
 }
 
 ///|
-test "bench/encode" (b : @bench.T) {
+test "bench/base64_encode" (b : @bench.T) {
   let data = make_bench_byte_array(4096)
-  let out = FixedArray::make(encoded_len(4096), b'\x00')
+  let out = FixedArray::make(base64_encoded_len(4096), b'\x00')
   b.bench(name="scalar_encode_4096", fn() { ref_encode(data, out) })
-  b.bench(name="encode_4096", fn() { b.keep(encode(data)) })
+  b.bench(name="encode_4096", fn() { b.keep(base64_encode(data)) })
 }
 
 ///|
-test "bench/decode" (b : @bench.T) {
+test "bench/base64_decode" (b : @bench.T) {
   let data = make_bench_byte_array(4095) // not divisible by 3 → exercises padding
-  let encoded = encode(data)
+  let encoded = base64_encode(data)
   let out = FixedArray::make(
-    decoded_len(encoded.length(), count_padding(encoded)),
+    base64_decoded_len(encoded.length(), base64_count_padding(encoded)),
     b'\x00',
   )
   b.bench(name="scalar_decode_5460", fn() { b.keep(ref_decode(encoded, out)) })
-  b.bench(name="decode_5460", fn() { b.keep(decode(encoded)) })
+  b.bench(name="decode_5460", fn() { b.keep(base64_decode(encoded)) })
 }

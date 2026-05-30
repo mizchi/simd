@@ -16,10 +16,10 @@ Target-specific SIMD implementations with scalar fallback.
   - `src/simd_native_ffi.mbt` - `extern "C"` FFI declarations
   - `src/simd_native.c` - C SIMD intrinsics (NEON/SSE)
 - `src/simd_scalar.mbt` - shared scalar fallback for `js` and `wasm-gc` targets (FixedArray-on-GC-heap means `v128.load` is unusable on wasm-gc)
-- `src/base64/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
+- `src/simdcodec/` - sub-package providing RFC 4648 Base64 encode / decode. wasm uses inline-WAT SIMD (12-in / 16-out encode, 16-in / 12-out decode); other targets use shared scalar in `base64_common.mbt`.
 - `src/simdjson/` - sub-package porting simdjson's `find_structural_bits` byte-classification pipeline to wasm SIMD. Operates on `@simd_buffer.SimdBufferBytes`. wasm / wasm-gc use inline-WAT (`i8x16.eq` + `i8x16.bitmask`); native / js use FixedArray scalar. See the "src/simdjson/ sub-package" section below.
 - `src/simdimage/` - sub-package for image / pixel byte ops (`rgb_to_rgba`, `rgba_to_grayscale`, `channel_extract` / `channel_merge`, `lerp`, `alpha_blend_solid`, `histogram`). Operates on **`Bytes` (input) / `FixedArray[Byte]` (output) directly** — the `@simdcore` philosophy, no `SimdBufferBytes` hop. wasm uses inline-WAT v128 (bodies ported verbatim from the old `SimdBufferBytes` `buf_*` image kernels); wasm-gc / native / js share a scalar fallback. These ops **used to live as `SimdBufferBytes` methods in `src/simd_buffer/`** and were moved here so the buffer type stays about general numeric / byte storage. See the "src/simdimage/ sub-package" section below.
-- `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@base64` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
+- `src/simd_buffer/` - sub-package providing `SimdBuffer` (i32) / `SimdBufferF32` / `SimdBufferF64` / `SimdBufferBytes` + `SimdBufferRing` arena allocator. **Same public API on all four targets** (`wasm` / `wasm-gc` / `native` / `js`); this is the recommended portable surface. wasm / wasm-gc use linear-memory `v128.load` (inline-WAT). native / js share a `FixedArray` + `@internal` / `@simdcodec` delegation impl — on native that bottoms out in C FFI (NEON / SSE) where available; **on js it's scalar only, no SIMD acceleration** (the API portability still wins, but performance does not). See the "SimdBuffer: portable SIMD across all four targets" section below.
 
 ## Key Findings
 
@@ -354,7 +354,7 @@ pure transform inside is closer to a 16x speedup.
 
 ## `src/simdjson/` sub-package — JSON structural indexer
 
-`src/simdjson/` is a separate sub-package (mirrors `src/base64/`) that
+`src/simdjson/` is a separate sub-package (mirrors `src/simdcodec/`) that
 ports the SIMD core of simdjson — `find_structural_bits` — to wasm and
 its scalar fallback to native / js. Layout:
 
@@ -682,7 +682,7 @@ Added during these passes:
 ## Base64 (RFC 4648) sub-package
 
 Demonstrator built on the same wasm SIMD inline-WAT discipline. Lives in
-`src/base64/` and exposes `encode(input) -> FixedArray[Byte]` and
+`src/simdcodec/` and exposes `encode(input) -> FixedArray[Byte]` and
 `decode(input) -> FixedArray[Byte]?`. Standard alphabet only, with `=`
 padding.
 
@@ -722,19 +722,23 @@ plain scalar C kernel instead — but it's gcc/clang-compiled (the stub isn't
 tcc), with a 256-entry decode LUT, so it still beats the tcc-run MoonBit
 scalar. native bench: **encode 9.2 µs → 4.15 µs (2.2x)**, **decode 8.3 µs →
 4.56 µs (1.8x)**. `SimdBufferBytes::base64_*` on native picks this up (it
-delegates to `@base64`).
+delegates to `@simdcodec`).
 
 ### Public API (post API-surface review)
 
-`@base64` exposes `encode` / `decode` (allocating) **plus `encode_into` /
-`decode_into`** (in-place, no alloc — `decode_into` returns the byte count as
-`Int?`), matching the `_into` convention used across the library. The scalar
-reference `scalar_encode` / `scalar_decode` are now **package-private** (they
-were leaking as public API). File layout:
+`@simdcodec` (renamed from `@base64`; functions now carry a `base64_`
+prefix so other codecs — hex, … — can share the package) exposes
+`base64_encode` / `base64_decode` (allocating) **plus `base64_encode_into` /
+`base64_decode_into`** (in-place, no alloc — `base64_decode_into` returns the
+byte count as `Int?`), matching the `_into` convention used across the
+library. The scalar reference `scalar_encode` / `scalar_decode` are now
+**package-private** (they were leaking as public API). File layout (files keep
+the `base64_` name since they implement the base64 codec):
 
-- `base64_common.mbt` (all targets): `encoded_len` / `decoded_len` /
-  `count_padding` + the allocating `encode` / `decode` wrappers (which call the
-  per-target `encode_into` / `decode_into`).
+- `base64_common.mbt` (all targets): `base64_encoded_len` /
+  `base64_decoded_len` / `base64_count_padding` + the allocating
+  `base64_encode` / `base64_decode` wrappers (which call the per-target
+  `base64_encode_into` / `base64_decode_into`).
 - `base64_wasm.mbt` (wasm): SIMD `encode_into` / `decode_into`.
 - `base64_native.mbt` (native): C-FFI `encode_into` / `decode_into`.
 - `base64_scalar.mbt` (wasm-gc / js): `encode_into` / `decode_into` =
@@ -767,7 +771,7 @@ through the same modulus.
   FixedArray-based API falls back to scalar there because GC-ref FFI
   blocks `v128.load`.
 - **`native`**: backing store is `FixedArray[T]`; ops delegate to
-  `@internal.scalar_*` / `@base64.*`, which themselves dispatch to the
+  `@internal.scalar_*` / `@simdcodec.*`, which themselves dispatch to the
   existing native C FFI fast paths (NEON / SSE) where one exists. No
   new C code; the native target re-uses the FixedArray-API stack
   underneath. Practical perf: parity with the FixedArray-based native
@@ -800,12 +804,12 @@ src/simd_buffer/
                          #   pre-grown page (cheap reset, no per-buffer memory.grow)
   simd_buffer_copy.mbt   # FixedArray ↔ SimdBuffer bridges
 
-  # native + js (FixedArray wrappers; same public API, delegates to @internal / @base64)
+  # native + js (FixedArray wrappers; same public API, delegates to @internal / @simdcodec)
   simd_buffer_scalar.mbt # All of the above types + methods, scalar / C-FFI backed.
                          # native: bottoms out in NEON / SSE / clang auto-vec.
                          # js: scalar only, no SIMD escape hatch.
 
-  # cross-target stub: keeps @base64 / @internal imports "used" on wasm targets
+  # cross-target stub: keeps @simdcodec / @internal imports "used" on wasm targets
   simd_buffer_imports.mbt
 ```
 

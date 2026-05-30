@@ -1,6 +1,6 @@
-// Scalar Base64 tables + reference encode/decode. Built on every target
+// Scalar Base64 tables + reference base64_encode/base64_decode. Built on every target
 // EXCEPT native (which uses the C FFI kernels in base64.c). wasm uses these
-// for its scalar tail; wasm-gc / js use them for the whole encode/decode.
+// for its scalar tail; wasm-gc / js use them for the whole base64_encode/base64_decode.
 
 ///|
 /// Standard Base64 alphabet (RFC 4648 §4): A-Z, a-z, 0-9, +, /.
@@ -38,7 +38,7 @@ let decode_table : FixedArray[Int] = {
 const INVALID_MARKER : Int = -1
 
 ///|
-/// Scalar Base64 encode. `out` must have at least `encoded_len(input.length())`
+/// Scalar Base64 base64_encode. `out` must have at least `base64_encoded_len(input.length())`
 /// bytes available.
 fn scalar_encode(input : FixedArray[Byte], out : FixedArray[Byte]) -> Unit {
   let n = input.length()
@@ -75,8 +75,8 @@ fn scalar_encode(input : FixedArray[Byte], out : FixedArray[Byte]) -> Unit {
 }
 
 ///|
-/// Scalar Base64 decode. Returns the number of bytes written, or `None` on
-/// invalid input. `out` must have at least `decoded_len(input.length(), pad)`
+/// Scalar Base64 base64_decode. Returns the number of bytes written, or `None` on
+/// invalid input. `out` must have at least `base64_decoded_len(input.length(), pad)`
 /// bytes; `input.length()` must be a multiple of 4.
 fn scalar_decode(input : FixedArray[Byte], out : FixedArray[Byte]) -> Int? {
   let n = input.length()

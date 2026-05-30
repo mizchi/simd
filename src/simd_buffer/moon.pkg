@@ -1,7 +1,7 @@
 import {
   "moonbitlang/core/bench",
   "mizchi/simd/src/internal",
-  "mizchi/simd/src/base64",
+  "mizchi/simd/src/simdcodec",
 }
 
 options(
