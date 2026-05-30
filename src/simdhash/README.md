@@ -2,7 +2,8 @@
 
 Digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-512** (FIPS 180-4),
 **SHA-1** (FIPS 180-4), **MD5** (RFC 1321). Each has `*` and `*_hex` forms; the
-32-bit hashes (SHA-256 / SHA-1 / MD5) also have a 4-way `*_x4` batch.
+32-bit hashes have a 4-way `*_x4` batch and SHA-512 has a 2-way `sha512_x2`
+(it's 64-bit, so a 128-bit vector holds two lanes, not four).
 
 ```moonbit
 let digest = @simdhash.sha256(data)          // -> Bytes (32 bytes)
@@ -14,9 +15,10 @@ let (d0, d1, d2, d3) = @simdhash.sha256_x4(m0, m1, m2, m3)   // batch
 @simdhash.md5_hex(data)                       // 32 hex chars
 ```
 
-**SHA-512** is scalar on every target (64-bit / `UInt64`, 80 rounds). A
-multi-buffer SIMD path for it would be 2-way (one message per `i64x2` lane)
-rather than the 4-way of the 32-bit hashes — left for later.
+**SHA-512** (single) is scalar on every target (64-bit / `UInt64`, 80 rounds);
+its batch `sha512_x2` is **2-way** SIMD (one message per `i64x2` lane — wasm
+inline-WAT, native SSE2 / NEON), since a 128-bit vector holds only two 64-bit
+words.
 
 > **SHA-1 and MD5 are cryptographically broken** (collisions are practical).
 > They are here for legacy interop — git object ids, ETags, content addressing
@@ -25,12 +27,12 @@ rather than the 4-way of the 32-bit hashes — left for later.
 
 ## Backend comparison
 
-| backend | single (`sha256` / `sha1` / `md5`) | `*_x4` batch |
-|---|---|---|
-| **wasm** | scalar¹ | `sha256_x4` / `sha1_x4` / `md5_x4` **inline-WAT 4-way SIMD**² |
-| **wasm-gc** | scalar | scalar |
-| **native** | scalar (gcc-compiled) | `sha256_x4` / `sha1_x4` / `md5_x4` **SSE2 / NEON 4-way multi-buffer**³ |
-| **js** | scalar | scalar |
+| backend | single | `*_x4` batch (32-bit hashes) | `sha512_x2` batch |
+|---|---|---|---|
+| **wasm** | scalar¹ | `sha256_x4` / `sha1_x4` / `md5_x4` **inline-WAT 4-way**² | **inline-WAT 2-way (`i64x2`)** |
+| **wasm-gc** | scalar | scalar | scalar |
+| **native** | scalar (gcc-compiled) | `sha256_x4` / `sha1_x4` / `md5_x4` **SSE2 / NEON 4-way**³ | **SSE2 / NEON 2-way** |
+| **js** | scalar | scalar | scalar |
 
 Digests are **byte-identical on every backend** (verified against the FIPS
 180-4 / NIST / RFC 1321 known-answer vectors plus an equal-length sweep that
@@ -62,10 +64,13 @@ Merkle leaves, …).
 | **`sha1_x4`** (multi-buffer) | **246 µs (2.1×)** | **36 µs (3.4×)** |
 | `md5` × 4 (separate calls) | 231 µs | 98 µs |
 | **`md5_x4`** (multi-buffer) | **165 µs (1.4×)** | **24 µs (4.1×)** |
+| `sha512` × 2 (separate calls) | 209 µs | 53 µs |
+| **`sha512_x2`** (2-way multi-buffer) | **117 µs (1.8×)** | **27 µs (1.9×)** |
 
-Not the theoretical 4×: each lane still runs the full serial round chain and
-the padding/transpose costs a pass — but four lanes advance per instruction.
-(MD5's 4.1× edges past the SHAs — fewer rounds, so the per-call overhead and
-transpose amortise better.)
+Not the theoretical 4× (2× for `sha512_x2`): each lane still runs the full
+serial round chain and the padding/transpose costs a pass — but the lanes
+advance per instruction. (MD5's 4.1× edges past the SHAs — fewer rounds, so the
+per-call overhead and transpose amortise better; `sha512_x2` at 1.8–1.9× is
+near its 2-lane ceiling.)
 
 Run: `moon bench --target native -p simdhash` (or `--target wasm`).

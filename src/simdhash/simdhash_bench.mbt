@@ -60,3 +60,14 @@ test "bench/md5 x4 vs 4x single" (bb : @bench.T) {
   })
   bb.bench(name="md5_x4_4096", fn() { bb.keep(md5_x4(m0, m1, m2, m3)) })
 }
+
+///|
+test "bench/sha512 x2 vs 2x single" (bb : @bench.T) {
+  let m0 = bench_msg(4096, 11)
+  let m1 = bench_msg(4096, 23)
+  bb.bench(name="sha512_2x_single_4096", fn() {
+    bb.keep(sha512(m0))
+    bb.keep(sha512(m1))
+  })
+  bb.bench(name="sha512_x2_4096", fn() { bb.keep(sha512_x2(m0, m1)) })
+}

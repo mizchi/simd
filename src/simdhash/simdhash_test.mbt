@@ -248,3 +248,26 @@ test "sha512 deterministic across padding boundaries" {
     assert_true(d == sha512(m))
   }
 }
+
+///|
+test "sha512_x2 equal-length sweep (2-way multi-buffer)" {
+  fn mk(seed : Int, n : Int) -> Bytes {
+    let a = FixedArray::make(n, b'\x00')
+    for i in 0..<n {
+      a[i] = ((i * 29 + seed * 19 + 2) % 256).to_byte()
+    }
+    Bytes::from_array(a)
+  }
+
+  for n in [0, 1, 111, 112, 127, 128, 129, 200, 256] {
+    let m0 = mk(1, n)
+    let m1 = mk(2, n)
+    let (d0, d1) = sha512_x2(m0, m1)
+    assert_true(d0 == sha512(m0))
+    assert_true(d1 == sha512(m1))
+  }
+  // unequal-length path (scalar)
+  let (e0, e1) = sha512_x2(mk(5, 50), mk(6, 80))
+  assert_true(e0 == sha512(mk(5, 50)))
+  assert_true(e1 == sha512(mk(6, 80)))
+}
