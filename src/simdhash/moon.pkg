@@ -7,6 +7,7 @@ options(
   targets: {
     "simdhash.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "sha1.mbt": [ "wasm", "wasm-gc", "native", "js" ],
+    "sha512.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "md5.mbt": [ "wasm", "wasm-gc", "native", "js" ],
     "simdhash_wasm.mbt": [ "wasm" ],
     "simdhash_native.mbt": [ "native" ],

@@ -1,16 +1,22 @@
 # `@simdhash` — cryptographic digests
 
-Digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-1** (FIPS 180-4),
-**MD5** (RFC 1321). Each has `*`, `*_hex` and `*_x4` (batch) forms.
+Digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-512** (FIPS 180-4),
+**SHA-1** (FIPS 180-4), **MD5** (RFC 1321). Each has `*` and `*_hex` forms; the
+32-bit hashes (SHA-256 / SHA-1 / MD5) also have a 4-way `*_x4` batch.
 
 ```moonbit
 let digest = @simdhash.sha256(data)          // -> Bytes (32 bytes)
 let hex = @simdhash.sha256_hex(data)          // -> String (64 lowercase hex)
 let (d0, d1, d2, d3) = @simdhash.sha256_x4(m0, m1, m2, m3)   // batch
 
+@simdhash.sha512_hex(data)                    // 128 hex chars
 @simdhash.sha1_hex(data)                      // 40 hex chars
 @simdhash.md5_hex(data)                       // 32 hex chars
 ```
+
+**SHA-512** is scalar on every target (64-bit / `UInt64`, 80 rounds). A
+multi-buffer SIMD path for it would be 2-way (one message per `i64x2` lane)
+rather than the 4-way of the 32-bit hashes — left for later.
 
 > **SHA-1 and MD5 are cryptographically broken** (collisions are practical).
 > They are here for legacy interop — git object ids, ETags, content addressing
