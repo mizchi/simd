@@ -44,9 +44,9 @@ vectorised base64 needs isn't in the baseline x86-64 ABI), still ~2× over
 the tcc MoonBit scalar.
 ³ `@simdhash`: single digests (`sha256` / `sha512` / `sha1` / `md5`) are scalar
 everywhere (a hash stream is serial; no SHA-NI / CLMUL on wasm). The SIMD path
-is the **batch multi-buffer** kernel: the 32-bit hashes' `*_x4` on wasm
-(inline-WAT, ~1.4–2.8×) and native (SSE2 / NEON, ~3.4–4.1×). SHA-512 is
-scalar-only (its multi-buffer would be 2-way `i64x2`).
+is the **batch multi-buffer** kernel: the 32-bit hashes' `*_x4` (4-way) on wasm
+(inline-WAT, ~1.4–2.8×) and native (SSE2 / NEON, ~3.4–4.1×), plus `sha512_x2`
+(2-way `i64x2`, ~1.8–1.9×).
 
 ## Install
 

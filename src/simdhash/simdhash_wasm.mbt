@@ -269,3 +269,81 @@ fn imp_md5_x4_eq(
     }
   }
 }
+
+///|
+let k512_i64 : FixedArray[Int64] = {
+  let t = FixedArray::make(80, 0L)
+  for i in 0..<80 {
+    t[i] = k512[i].reinterpret_as_int64()
+  }
+  t
+}
+
+///|
+let iv512_i64 : FixedArray[Int64] = {
+  let t = FixedArray::make(8, 0L)
+  for i in 0..<8 {
+    t[i] = h512_iv[i].reinterpret_as_int64()
+  }
+  t
+}
+
+///|
+/// 2-way multi-buffer SHA-512 compression (one message per `i64x2` lane).
+/// Same transpose / `wscratch` (W[0..79]) / `hout` (8 v128) shape as the
+/// SHA-256 kernel, but 64-bit lanes: `i64x2.{add,shl,shr_u,splat}`, `rotr64`
+/// = `(x >>u n) | (x << 64-n)`, `ch` via `v128.andnot` (bitwise, lane-width
+/// agnostic). K / IV are `FixedArray[Int64]` tables (`i64.load` + `i64x2.splat`).
+#borrow(win, kptr, ivptr, wscratch, hout)
+fn sha512_x2_wat(
+  win : FixedArray[Byte],
+  blocks : Int,
+  kptr : FixedArray[Int64],
+  ivptr : FixedArray[Int64],
+  wscratch : FixedArray[Byte],
+  hout : FixedArray[Byte],
+) -> Unit =
+  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) (local v128) local.get 3 i64.load i64x2.splat local.set 10 local.get 3 i32.const 8 i32.add i64.load i64x2.splat local.set 11 local.get 3 i32.const 16 i32.add i64.load i64x2.splat local.set 12 local.get 3 i32.const 24 i32.add i64.load i64x2.splat local.set 13 local.get 3 i32.const 32 i32.add i64.load i64x2.splat local.set 14 local.get 3 i32.const 40 i32.add i64.load i64x2.splat local.set 15 local.get 3 i32.const 48 i32.add i64.load i64x2.splat local.set 16 local.get 3 i32.const 56 i32.add i64.load i64x2.splat local.set 17 i32.const 0 local.set 6 block loop local.get 6 local.get 1 i32.ge_s br_if 1 local.get 6 i32.const 8 i32.shl local.set 9 i32.const 0 local.set 7 block loop local.get 7 i32.const 16 i32.ge_s br_if 1 local.get 4 local.get 7 i32.const 4 i32.shl i32.add local.get 0 local.get 9 i32.add local.get 7 i32.const 4 i32.shl i32.add v128.load v128.store local.get 7 i32.const 1 i32.add local.set 7 br 0 end end i32.const 16 local.set 7 block loop local.get 7 i32.const 80 i32.ge_s br_if 1 local.get 4 local.get 7 i32.const 4 i32.shl i32.add local.set 8 local.get 8 i32.const 240 i32.sub v128.load local.set 30 local.get 30 i32.const 1 i64x2.shr_u local.get 30 i32.const 63 i64x2.shl v128.or local.get 30 i32.const 8 i64x2.shr_u local.get 30 i32.const 56 i64x2.shl v128.or v128.xor local.get 30 i32.const 7 i64x2.shr_u v128.xor local.set 26 local.get 8 i32.const 32 i32.sub v128.load local.set 31 local.get 31 i32.const 19 i64x2.shr_u local.get 31 i32.const 45 i64x2.shl v128.or local.get 31 i32.const 61 i64x2.shr_u local.get 31 i32.const 3 i64x2.shl v128.or v128.xor local.get 31 i32.const 6 i64x2.shr_u v128.xor local.set 27 local.get 8 local.get 8 i32.const 256 i32.sub v128.load local.get 26 i64x2.add local.get 8 i32.const 112 i32.sub v128.load i64x2.add local.get 27 i64x2.add v128.store local.get 7 i32.const 1 i32.add local.set 7 br 0 end end local.get 10 local.set 18 local.get 11 local.set 19 local.get 12 local.set 20 local.get 13 local.set 21 local.get 14 local.set 22 local.get 15 local.set 23 local.get 16 local.set 24 local.get 17 local.set 25 i32.const 0 local.set 7 block loop local.get 7 i32.const 80 i32.ge_s br_if 1 local.get 22 i32.const 14 i64x2.shr_u local.get 22 i32.const 50 i64x2.shl v128.or local.get 22 i32.const 18 i64x2.shr_u local.get 22 i32.const 46 i64x2.shl v128.or v128.xor local.get 22 i32.const 41 i64x2.shr_u local.get 22 i32.const 23 i64x2.shl v128.or v128.xor local.set 26 local.get 22 local.get 23 v128.and local.get 24 local.get 22 v128.andnot v128.xor local.set 27 local.get 25 local.get 26 i64x2.add local.get 27 i64x2.add local.get 2 local.get 7 i32.const 3 i32.shl i32.add i64.load i64x2.splat i64x2.add local.get 4 local.get 7 i32.const 4 i32.shl i32.add v128.load i64x2.add local.set 28 local.get 18 i32.const 28 i64x2.shr_u local.get 18 i32.const 36 i64x2.shl v128.or local.get 18 i32.const 34 i64x2.shr_u local.get 18 i32.const 30 i64x2.shl v128.or v128.xor local.get 18 i32.const 39 i64x2.shr_u local.get 18 i32.const 25 i64x2.shl v128.or v128.xor local.set 26 local.get 18 local.get 19 v128.and local.get 18 local.get 20 v128.and v128.xor local.get 19 local.get 20 v128.and v128.xor local.set 27 local.get 26 local.get 27 i64x2.add local.set 29 local.get 24 local.set 25 local.get 23 local.set 24 local.get 22 local.set 23 local.get 21 local.get 28 i64x2.add local.set 22 local.get 20 local.set 21 local.get 19 local.set 20 local.get 18 local.set 19 local.get 28 local.get 29 i64x2.add local.set 18 local.get 7 i32.const 1 i32.add local.set 7 br 0 end end local.get 10 local.get 18 i64x2.add local.set 10 local.get 11 local.get 19 i64x2.add local.set 11 local.get 12 local.get 20 i64x2.add local.set 12 local.get 13 local.get 21 i64x2.add local.set 13 local.get 14 local.get 22 i64x2.add local.set 14 local.get 15 local.get 23 i64x2.add local.set 15 local.get 16 local.get 24 i64x2.add local.set 16 local.get 17 local.get 25 i64x2.add local.set 17 local.get 6 i32.const 1 i32.add local.set 6 br 0 end end local.get 5 local.get 10 v128.store local.get 5 i32.const 16 i32.add local.get 11 v128.store local.get 5 i32.const 32 i32.add local.get 12 v128.store local.get 5 i32.const 48 i32.add local.get 13 v128.store local.get 5 i32.const 64 i32.add local.get 14 v128.store local.get 5 i32.const 80 i32.add local.get 15 v128.store local.get 5 i32.const 96 i32.add local.get 16 v128.store local.get 5 i32.const 112 i32.add local.get 17 v128.store)
+
+///|
+/// 2-way SHA-512 (one message per i64x2 lane). 64-byte digest per message.
+fn imp_sha512_x2_eq(m0 : Bytes, m1 : Bytes, out : FixedArray[Byte]) -> Unit {
+  let p0 = sha512_pad(m0)
+  let p1 = sha512_pad(m1)
+  let ps = [p0, p1]
+  let blocks = p0.length() / 128
+  // win[(blk*16 + t)*16 + k*8 ..] = LE bytes of message k's BE 64-bit word t.
+  let win = FixedArray::make(blocks * 16 * 16, b'\x00')
+  for k in 0..<2 {
+    let pk = ps[k]
+    for blk in 0..<blocks {
+      for t in 0..<16 {
+        let word = load_be_u64(pk, blk * 128 + t * 8)
+        let off = (blk * 16 + t) * 16 + k * 8
+        for j in 0..<8 {
+          win[off + j] = ((word >> (j * 8)) & 0xFFUL).to_int().to_byte()
+        }
+      }
+    }
+  }
+  let wscratch = FixedArray::make(80 * 16, b'\x00')
+  let hout = FixedArray::make(8 * 16, b'\x00')
+  sha512_x2_wat(win, blocks, k512_i64, iv512_i64, wscratch, hout)
+  for k in 0..<2 {
+    for i in 0..<8 {
+      let base = i * 16 + k * 8
+      let word = hout[base].to_uint64() |
+        (hout[base + 1].to_uint64() << 8) |
+        (hout[base + 2].to_uint64() << 16) |
+        (hout[base + 3].to_uint64() << 24) |
+        (hout[base + 4].to_uint64() << 32) |
+        (hout[base + 5].to_uint64() << 40) |
+        (hout[base + 6].to_uint64() << 48) |
+        (hout[base + 7].to_uint64() << 56)
+      let o = k * 64 + i * 8
+      for j in 0..<8 {
+        out[o + j] = ((word >> ((7 - j) * 8)) & 0xFFUL).to_int().to_byte()
+      }
+    }
+  }
+}

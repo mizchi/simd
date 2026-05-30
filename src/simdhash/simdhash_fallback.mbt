@@ -43,3 +43,9 @@ fn imp_md5_x4_eq(
   md5_into(m2, out, 32)
   md5_into(m3, out, 48)
 }
+
+///|
+fn imp_sha512_x2_eq(m0 : Bytes, m1 : Bytes, out : FixedArray[Byte]) -> Unit {
+  sha512_into(m0, out, 0)
+  sha512_into(m1, out, 64)
+}

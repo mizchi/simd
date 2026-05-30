@@ -68,3 +68,17 @@ fn imp_md5_x4_eq(
 ) -> Unit {
   mb_md5_x4_ffi(m0, m1, m2, m3, m0.length(), out)
 }
+
+///|
+#borrow(m0, m1, out)
+extern "C" fn mb_sha512_x2_ffi(
+  m0 : Bytes,
+  m1 : Bytes,
+  n : Int,
+  out : FixedArray[Byte],
+) -> Unit = "mb_sha512_x2"
+
+///|
+fn imp_sha512_x2_eq(m0 : Bytes, m1 : Bytes, out : FixedArray[Byte]) -> Unit {
+  mb_sha512_x2_ffi(m0, m1, m0.length(), out)
+}

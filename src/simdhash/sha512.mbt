@@ -58,7 +58,8 @@ fn sha512_padded_len(n : Int) -> Int {
 }
 
 ///|
-fn sha512_scalar(data : Bytes) -> FixedArray[Byte] {
+/// Build the padded SHA-512 message buffer (length `sha512_padded_len`).
+fn sha512_pad(data : Bytes) -> FixedArray[Byte] {
   let n = data.length()
   let buf = FixedArray::make(sha512_padded_len(n), b'\x00')
   for i in 0..<n {
@@ -71,6 +72,13 @@ fn sha512_scalar(data : Bytes) -> FixedArray[Byte] {
   for i in 0..<8 {
     buf[total - 1 - i] = ((bits >> (i * 8)) & 0xFFUL).to_int().to_byte()
   }
+  buf
+}
+
+///|
+fn sha512_scalar(data : Bytes) -> FixedArray[Byte] {
+  let buf = sha512_pad(data)
+  let total = buf.length()
   let h = FixedArray::make(8, 0UL)
   for i in 0..<8 {
     h[i] = h512_iv[i]
@@ -139,4 +147,31 @@ pub fn sha512(data : Bytes) -> Bytes {
 /// SHA-512 digest as a 128-character lowercase hex string.
 pub fn sha512_hex(data : Bytes) -> String {
   to_hex(sha512_scalar(data))
+}
+
+///|
+/// Write the 64-byte SHA-512 digest of `data` into `out[off, off+64)`.
+fn sha512_into(data : Bytes, out : FixedArray[Byte], off : Int) -> Unit {
+  let d = sha512_scalar(data)
+  for i in 0..<64 {
+    out[off + i] = d[i]
+  }
+}
+
+///|
+/// Hash two messages with SHA-512, returning two 64-byte digests. On wasm and
+/// native with two equal-length inputs this runs a **2-way** multi-buffer
+/// kernel (one message per 64-bit lane — `i64x2` on wasm, SSE2 / NEON on
+/// native); otherwise it is two scalar digests. Always identical to two
+/// `sha512` calls. (SHA-512 is 2-way, not 4-way like the 32-bit hashes, since
+/// a 128-bit vector holds only two 64-bit words.)
+pub fn sha512_x2(m0 : Bytes, m1 : Bytes) -> (Bytes, Bytes) {
+  let out = FixedArray::make(128, b'\x00')
+  if m0.length() == m1.length() {
+    imp_sha512_x2_eq(m0, m1, out)
+  } else {
+    sha512_into(m0, out, 0)
+    sha512_into(m1, out, 64)
+  }
+  (slice_n(out, 0, 64), slice_n(out, 64, 64))
 }
