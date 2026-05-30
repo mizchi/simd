@@ -569,3 +569,28 @@ test "bytes_rindex vs reference" {
   assert_true(bytes_rindex(h2, b'a') == Some(6))
   assert_true(bytes_search(h2, b'a') == Some(0))
 }
+
+///|
+test "option A buffer-backed variants match scalar simdcore" {
+  let a : FixedArray[Int] = FixedArray::make(300, 0)
+  let b : FixedArray[Int] = FixedArray::make(300, 0)
+  for i in 0..<300 {
+    a[i] = (i * 48271 + 7) % 1000 - 500
+    b[i] = (i * 39916 + 3) % 1000 - 500
+  }
+  // sum / dot parity (value-returning)
+  assert_eq(sum_via_buffer(a), sum(a))
+  assert_eq(dot_via_buffer(a, b), dot(a, b))
+  // sort parity — both sort in place (Unit). Compare independent copies.
+  let want : FixedArray[Int] = FixedArray::make(300, 0)
+  let got : FixedArray[Int] = FixedArray::make(300, 0)
+  for i in 0..<300 {
+    want[i] = a[i]
+    got[i] = a[i]
+  }
+  sort(want)
+  sort_via_buffer(got)
+  for i in 0..<300 {
+    assert_eq(got[i], want[i])
+  }
+}

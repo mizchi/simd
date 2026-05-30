@@ -876,6 +876,34 @@ reversed and produced garbage only for byte values ≥ 128 — the all-ASCII
 test cases passed coincidentally because the subtraction happened to wrap
 through the same modulus.
 
+### Option A as API: `*_via_buffer` (slow, for parity)
+
+`simdcore_buffer.mbt` ships `sum_via_buffer` / `dot_via_buffer` /
+`sort_via_buffer` — drop-in for `sum` / `dot` / `sort` (same signatures) but
+routing the `FixedArray[Int]` through a linear-memory `@simd_buffer.SimdBuffer`
+so the SIMD kernel runs on **wasm-gc** (where the plain `Bytes`/`FixedArray`
+surface falls back to scalar). They exist on all four targets for API parity.
+
+**They are slow — deliberately so, and documented as such.** Matching the
+simple `FixedArray`-in / result-out signature forces a fresh `SimdBuffer`
+allocation per call (`memory.grow`, ~hundreds of µs), so on wasm-gc every one is
+a large net loss vs the scalar fallback:
+
+| op (1024, wasm-gc, moonrun) | scalar simdcore | `*_via_buffer` (per-call alloc) |
+|---|---|---|
+| `sum` | 809 ns | 649 µs (~800× slower) |
+| `dot` | 1.43 µs | 1.32 ms (~920× slower) |
+| `sort` | 5.73 µs | 1.25 ms (~220× slower) |
+
+The takeaway: a per-call-allocating API can never win Option A — even the
+compute-heavy `sort` loses to the double `memory.grow`. The realistic wasm-gc
+win needs the **reuse** regime, which the simple API can't express; call
+`@simd_buffer` directly with buffers pre-allocated once (or from a
+`SimdBufferRing`) — see the `optionA_*` reuse benches under the SimdBuffer
+section, where `sort` 6.4× / `popcount` 3.0× / `adler32` 2.6×. So `*_via_buffer`
+is provided for completeness, not as a recommended path.
+
+
 ## SimdBuffer: portable SIMD across all four targets
 
 `src/simd_buffer/` is the recommended portable API. The public surface —
@@ -1116,6 +1144,58 @@ scalar-only access, FixedArray remains faster — see the
 `from_array` / `to_array` copy helpers in `simd_buffer_copy.mbt` for the
 hybrid pattern (build / consume via FixedArray, copy into SimdBuffer for
 the SIMD phase only).
+
+### "Option A": SIMD-accelerating `simdcore`-style ops on wasm-gc via SimdBuffer
+
+`simdcore` / `simdimage` / `simdhash`'s `Bytes`- and `FixedArray`-direct
+surfaces **fall back to scalar on wasm-gc** — a GC ref can't feed `v128.load`
+(the toolchain blocker probed above). The only way a wasm-gc caller holding
+core's `FixedArray` / `Bytes` gets SIMD is to **copy the data into a
+linear-memory `SimdBuffer`, run the kernel, and copy any array output back**.
+The `optionA_*` benches in `simd_buffer_bench.mbt` measure that honest
+end-to-end cost (copy hop included) against the FixedArray scalar loop the
+Bytes-direct path falls back to.
+
+There are two cost regimes, and the gap between them is the whole story:
+
+- **Naive** (`SimdBuffer::from_array` per call): each call allocates fresh
+  pages via `memory.grow` (~hundreds of µs) — `sum_1024` measured **617 µs**
+  vs 817 ns scalar, a ~750× *loss*. Never allocate per call in a hot loop;
+  this is the same allocator trap as the `_into` / `SimdBufferRing` notes.
+- **Reuse** (buffers pre-allocated once; body does `copy_from_array` + SIMD +
+  `copy_to_array`): the real steady state. But `copy_from_array` /
+  `copy_to_array` are per-element inline-WAT FFI stores/loads, so the copy hop
+  itself is non-trivial — the win only appears when the SIMD kernel outweighs
+  it.
+
+| op | size | scalar (FixedArray loop) | Option A reuse (copy + SIMD) | x |
+|---|---|---|---|---|
+| `sum` (i32) | 1024 | 817 ns | 1.65 µs | **0.49** (loss) |
+| `dot` (i32) | 1024 | 1.42 µs | 3.28 µs | **0.43** (loss) |
+| `sort` (i32) | 1024 | 168 µs | 26.2 µs | **6.4** |
+| `popcount` (bytes) | 4096 | 16.4 µs | 5.42 µs | **3.0** |
+| `adler32` (bytes) | 4096 | 15.1 µs | 5.85 µs | **2.6** |
+
+*(Linux x86-64 / moonrun — not directly comparable to the Apple-Silicon / V8
+numbers elsewhere in this doc; the ratios are the point.)*
+
+The split is exactly "is the kernel heavy relative to the copy hop?":
+
+- **Wins**: `sort` (6.4×), `popcount` (3.0×), `adler32` (2.6×) — and by the
+  same logic the existing heavy wasm-gc kernels (`base64`, `matmul_f64`,
+  `validate_utf8`, …) where the per-call compute dwarfs an O(n) copy.
+- **Losses**: `sum` (0.49×), `dot` (0.43×) — a single cheap pass over the data
+  loses, because the per-element `copy_from_array` FFI store costs more than
+  the reduction saves. For these, keep the scalar FixedArray loop on wasm-gc.
+
+**Bottom line for the "can wasm-gc support simdcore?" question:** yes via the
+copy-into-`SimdBuffer` route, but it's a *per-op* decision, not a blanket lift.
+Reach for it when the SIMD kernel is compute-heavy (sort, hashing, codecs,
+linear algebra) and you can amortise allocation by reusing buffers (or a
+`SimdBufferRing`). For light element-wise / reduction ops the copy hop eats the
+win — the `Bytes`-direct scalar fallback is the right choice there. This is the
+same boundary the `compute_quote_mask` and `simd_any` notes draw: SIMD helps
+where the work is SIMD-shaped *and* large enough to pay back the data movement.
 
 ### When to use which
 
