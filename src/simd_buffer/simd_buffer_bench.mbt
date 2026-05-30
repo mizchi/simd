@@ -535,3 +535,39 @@ test "bench/rgba_to_grayscale" (bb : @bench.T) {
     SimdBufferBytes::rgba_to_grayscale(rgba, out)
   })
 }
+
+///|
+fn scalar_alpha_blend(
+  dst : SimdBufferBytes,
+  sr : Int,
+  sg : Int,
+  sb : Int,
+  sa : Int,
+) -> Unit {
+  let inv = 255 - sa
+  let chans = [sr, sg, sb, sa]
+  for i in 0..<(dst.length() / 4) {
+    for c in 0..<4 {
+      let d = dst.get(i * 4 + c).to_int()
+      let t = d * inv + 128
+      let r = (t + (t >> 8)) >> 8
+      let o = chans[c] + r
+      dst.set(i * 4 + c, (if o > 255 { 255 } else { o }).to_byte())
+    }
+  }
+}
+
+///|
+test "bench/alpha_blend_solid" (bb : @bench.T) {
+  let npix = 4096
+  let dst = SimdBufferBytes::make(npix * 4)
+  for i in 0..<(npix * 4) {
+    dst.set(i, (i % 256).to_byte())
+  }
+  bb.bench(name="scalar_alpha_blend_4096px", fn() {
+    scalar_alpha_blend(dst, 200, 100, 50, 128)
+  })
+  bb.bench(name="simd_alpha_blend_4096px", fn() {
+    SimdBufferBytes::alpha_blend_solid(dst, 200, 100, 50, 128)
+  })
+}

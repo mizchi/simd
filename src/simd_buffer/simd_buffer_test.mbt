@@ -1454,3 +1454,43 @@ test "rgba_to_grayscale SIMD body + tail" {
     }
   }
 }
+
+///|
+test "alpha_blend_solid SIMD body + tail vs reference" {
+  // round-div255 reference matching both the SIMD and scalar implementations.
+  fn blend(d : Int, inv : Int, sc : Int) -> Int {
+    let t = d * inv + 128
+    let r = (t + (t >> 8)) >> 8
+    let o = sc + r
+    if o > 255 {
+      255
+    } else {
+      o
+    }
+  }
+
+  for npix in [0, 1, 3, 4, 7, 8, 13, 16, 17] {
+    let dst = SimdBufferBytes::make(npix * 4)
+    for i in 0..<npix {
+      dst.set(i * 4, (i * 17 % 256).to_byte())
+      dst.set(i * 4 + 1, (i * 53 % 256).to_byte())
+      dst.set(i * 4 + 2, (i * 97 % 256).to_byte())
+      dst.set(i * 4 + 3, (i * 211 % 256).to_byte())
+    }
+    let want = SimdBufferBytes::make(npix * 4)
+    let src = [200, 100, 50, 128]
+    let inv = 255 - src[3]
+    for i in 0..<npix {
+      for c in 0..<4 {
+        want.set(
+          i * 4 + c,
+          blend(dst.get(i * 4 + c).to_int(), inv, src[c]).to_byte(),
+        )
+      }
+    }
+    SimdBufferBytes::alpha_blend_solid(dst, src[0], src[1], src[2], src[3])
+    for i in 0..<(npix * 4) {
+      assert_true(dst.get(i) == want.get(i))
+    }
+  }
+}
