@@ -1,12 +1,21 @@
 # `@simdhash` — cryptographic digests
 
-SHA-256 (FIPS 180-4) over `Bytes`.
+Digests over `Bytes`: **SHA-256** (FIPS 180-4), **SHA-1** (FIPS 180-4),
+**MD5** (RFC 1321). Each has `*`, `*_hex` and `*_x4` (batch) forms.
 
 ```moonbit
 let digest = @simdhash.sha256(data)          // -> Bytes (32 bytes)
 let hex = @simdhash.sha256_hex(data)          // -> String (64 lowercase hex)
 let (d0, d1, d2, d3) = @simdhash.sha256_x4(m0, m1, m2, m3)   // batch
+
+@simdhash.sha1_hex(data)                      // 40 hex chars
+@simdhash.md5_hex(data)                       // 32 hex chars
 ```
+
+> **SHA-1 and MD5 are cryptographically broken** (collisions are practical).
+> They are here for legacy interop — git object ids, ETags, content addressing
+> of *trusted* data — never for integrity against an adversary. Use `sha256`
+> for anything security-sensitive.
 
 ## Backend comparison
 
@@ -41,5 +50,10 @@ leaves of a Merkle tree, …).
 (Under 2× isn't possible to beat the theoretical 4× here: each lane still runs
 the same serial 64-round chain, and the transpose into lane-major layout costs
 a pass — but four lanes advance per instruction, so batch throughput ~2.8×.)
+
+**SHA-1 / MD5** are scalar on every backend (`sha1_x4` / `md5_x4` run four
+scalar digests). Their single-stream compression is just as serial as
+SHA-256's; a multi-buffer SIMD kernel for them is a natural follow-up on the
+same pattern as `sha256_x4`.
 
 Run: `moon bench --target wasm -p simdhash`.

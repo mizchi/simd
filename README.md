@@ -34,7 +34,7 @@ glance, which backends get real SIMD (✅) vs scalar fallback (·):
 | [`@simd_buffer`](src/simd_buffer/) — portable buffer family | ✅ | ✅ | ✅ | · | [README](src/simd_buffer/README.md) |
 | [`@simdjson`](src/simdjson/) — JSON indexing | ✅ | ✅ | · | · | [README](src/simdjson/README.md) |
 | [`@simdcodec`](src/simdcodec/) — byte codecs (base64) | ✅ | · | ⚠️² | · | [README](src/simdcodec/README.md) |
-| [`@simdhash`](src/simdhash/) — SHA-256 digests | ✅³ | · | · | · | [README](src/simdhash/README.md) |
+| [`@simdhash`](src/simdhash/) — SHA-256 / SHA-1 / MD5 | ✅³ | · | · | · | [README](src/simdhash/README.md) |
 | `@simd` — FixedArray root API | ✅ | · | ✅ | · | this file |
 
 ¹ native `@simdcore` uses NEON / SSE2 **and** libc (`memchr` / `memmem` /
@@ -384,8 +384,9 @@ src/
     base64_scalar.mbt                      # wasm-gc + js encode_into/decode_into
     base64_native.mbt + base64.c           # native C FFI (gcc scalar, LUT decode)
 
-  simdhash/                                # @simdhash — SHA-256 digests
-    simdhash.mbt                           # scalar SHA-256 + public API (all targets)
+  simdhash/                                # @simdhash — SHA-256 / SHA-1 / MD5
+    simdhash.mbt + sha1.mbt + md5.mbt      # scalar digests + public API
+    simdhash_wasm.mbt                      # wasm 4-way multi-buffer sha256_x4
 
   simdjson/                                # @simdjson — JSON byte classification
     simdjson_wasm.mbt                      # wasm + wasm-gc inline-WAT

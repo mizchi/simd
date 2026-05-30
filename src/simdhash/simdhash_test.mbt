@@ -105,3 +105,67 @@ test "sha256_x4 equal-length sweep (exercises the wasm 4-way SIMD path)" {
     assert_true(d3 == sha256(m3))
   }
 }
+
+///|
+test "sha1 known vectors" {
+  assert_true(
+    sha1_hex(bytes_of_str("")) == "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+  )
+  assert_true(
+    sha1_hex(bytes_of_str("abc")) == "a9993e364706816aba3e25717850c26c9cd0d89d",
+  )
+  assert_true(
+    sha1_hex(bytes_of_str("The quick brown fox jumps over the lazy dog")) ==
+    "2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+  )
+  // 56-byte two-block input
+  assert_true(
+    sha1_hex(
+      bytes_of_str("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+    ) ==
+    "84983e441c3bd26ebaae4aa1f95129e5e54670f1",
+  )
+  let d = sha1(bytes_of_str("abc"))
+  assert_true(d.length() == 20)
+}
+
+///|
+test "md5 known vectors" {
+  assert_true(md5_hex(bytes_of_str("")) == "d41d8cd98f00b204e9800998ecf8427e")
+  assert_true(
+    md5_hex(bytes_of_str("abc")) == "900150983cd24fb0d6963f7d28e17f72",
+  )
+  assert_true(
+    md5_hex(bytes_of_str("The quick brown fox jumps over the lazy dog")) ==
+    "9e107d9d372bb6826bd81d3542a419d6",
+  )
+  // RFC 1321 test: "12345678901234567890123456789012345678901234567890123456789012345678901234567890"
+  assert_true(
+    md5_hex(
+      bytes_of_str(
+        "12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+      ),
+    ) ==
+    "57edf4a22be3c955ac49da2e2107b67a",
+  )
+  let d = md5(bytes_of_str("abc"))
+  assert_true(d.length() == 16)
+}
+
+///|
+test "sha1_x4 / md5_x4 match singles" {
+  let m0 = bytes_of_str("alpha")
+  let m1 = bytes_of_str("beta")
+  let m2 = bytes_repeat(b'q', 130)
+  let m3 = bytes_of_str("")
+  let (s0, s1, s2, s3) = sha1_x4(m0, m1, m2, m3)
+  assert_true(s0 == sha1(m0))
+  assert_true(s1 == sha1(m1))
+  assert_true(s2 == sha1(m2))
+  assert_true(s3 == sha1(m3))
+  let (u0, u1, u2, u3) = md5_x4(m0, m1, m2, m3)
+  assert_true(u0 == md5(m0))
+  assert_true(u1 == md5(m1))
+  assert_true(u2 == md5(m2))
+  assert_true(u3 == md5(m3))
+}
