@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1
+
+Portability fix — no API or behaviour change.
+
+- **native: fix `bytes_rindex` build on macOS / BSD.** `simd_rfind_byte_ffi`
+  called glibc's `memrchr`, which is not declared in the macOS/BSD libc, so
+  the native C stub failed to compile there (`#define _GNU_SOURCE` only helps
+  on glibc). Now guarded by `__linux__` (covers glibc / musl / bionic) with a
+  manual reverse-scan fallback elsewhere — native builds and tests pass on all
+  platforms again (246 wasm / 246 wasm-gc / 244 native / 244 js).
+
 ## 0.4.0
 
 A large batch since 0.3.0 — three new sub-packages, a rename, and a native

@@ -1123,10 +1123,19 @@ int32_t simd_find_bytes_ffi(const uint8_t* haystack, int32_t hlen,
   return p ? (int32_t)((const uint8_t*)p - haystack) : -1;
 }
 
-/* Last occurrence of `needle` via glibc memrchr. Returns the index or -1. */
+/* Last occurrence of `needle`. glibc/musl/bionic expose memrchr (a tuned
+   reverse scan); macOS/BSD libc do not declare it, so fall back to a manual
+   reverse loop there. `__linux__` covers glibc + musl + Android bionic. */
 int32_t simd_rfind_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {
+#if defined(__linux__)
   const void* p = memrchr(data, needle, (size_t)len);
   return p ? (int32_t)((const uint8_t*)p - data) : -1;
+#else
+  for (int32_t i = len - 1; i >= 0; i--) {
+    if (data[i] == needle) return i;
+  }
+  return -1;
+#endif
 }
 
 int32_t simd_count_byte_ffi(const uint8_t* data, int32_t len, uint8_t needle) {
