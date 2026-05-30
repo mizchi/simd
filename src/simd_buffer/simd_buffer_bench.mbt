@@ -480,3 +480,58 @@ test "bench/channel_merge" (bb : @bench.T) {
     SimdBufferBytes::channel_merge(r, g, b, a, out)
   })
 }
+
+///|
+fn scalar_lerp(
+  a : SimdBufferBytes,
+  b : SimdBufferBytes,
+  t : Int,
+  out : SimdBufferBytes,
+) -> Unit {
+  let inv = 256 - t
+  for i in 0..<a.length() {
+    out.set(
+      i,
+      ((a.get(i).to_int() * inv + b.get(i).to_int() * t) >> 8).to_byte(),
+    )
+  }
+}
+
+///|
+test "bench/lerp" (bb : @bench.T) {
+  let n = 4096
+  let a = SimdBufferBytes::make(n)
+  let b = SimdBufferBytes::make(n)
+  for i in 0..<n {
+    a.set(i, (i % 256).to_byte())
+    b.set(i, ((255 - i % 256) % 256).to_byte())
+  }
+  let out = SimdBufferBytes::make(n)
+  bb.bench(name="scalar_lerp_4096", fn() { scalar_lerp(a, b, 96, out) })
+  bb.bench(name="simd_lerp_4096", fn() { SimdBufferBytes::lerp(a, b, 96, out) })
+}
+
+///|
+fn scalar_grayscale(src : SimdBufferBytes, out : SimdBufferBytes) -> Unit {
+  let n = src.length() / 4
+  for i in 0..<n {
+    let r = src.get(i * 4).to_int()
+    let g = src.get(i * 4 + 1).to_int()
+    let b = src.get(i * 4 + 2).to_int()
+    out.set(i, ((77 * r + 150 * g + 29 * b) >> 8).to_byte())
+  }
+}
+
+///|
+test "bench/rgba_to_grayscale" (bb : @bench.T) {
+  let npix = 4096
+  let rgba = SimdBufferBytes::make(npix * 4)
+  for i in 0..<(npix * 4) {
+    rgba.set(i, (i % 256).to_byte())
+  }
+  let out = SimdBufferBytes::make(npix)
+  bb.bench(name="scalar_grayscale_4096px", fn() { scalar_grayscale(rgba, out) })
+  bb.bench(name="simd_grayscale_4096px", fn() {
+    SimdBufferBytes::rgba_to_grayscale(rgba, out)
+  })
+}
