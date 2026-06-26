@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src/simdimage"
+
+// Values
+pub fn alpha_blend_solid(FixedArray[Byte], Byte, Byte, Byte, Byte) -> Unit
+
+pub fn channel_extract(Bytes, Int, FixedArray[Byte]) -> Unit
+
+pub fn channel_merge(Bytes, Bytes, Bytes, Bytes, FixedArray[Byte]) -> Unit
+
+pub fn histogram(Bytes, FixedArray[Int]) -> Unit
+
+pub fn lerp(Bytes, Bytes, Int, FixedArray[Byte]) -> Unit
+
+pub fn rgb_to_rgba(Bytes, Byte, FixedArray[Byte]) -> Unit
+
+pub fn rgba_to_grayscale(Bytes, FixedArray[Byte]) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

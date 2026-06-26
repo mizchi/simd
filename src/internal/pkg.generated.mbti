@@ -1,0 +1,176 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src/internal"
+
+// Values
+pub fn scalar_abs(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_add(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_add_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn scalar_add_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn scalar_adler32(FixedArray[Byte]) -> UInt
+
+pub fn scalar_all(FixedArray[Int]) -> Bool
+
+pub fn scalar_any(FixedArray[Int]) -> Bool
+
+pub fn scalar_argmax(FixedArray[Int]) -> Int
+
+pub fn scalar_argmin(FixedArray[Int]) -> Int
+
+pub fn scalar_bitonic_merge16_int(FixedArray[Int], Int) -> Unit
+
+pub fn scalar_bitonic_merge32_int(FixedArray[Int], Int) -> Unit
+
+pub fn scalar_bitonic_merge64_int(FixedArray[Int], Int) -> Unit
+
+pub fn scalar_bitonic_merge8_int(FixedArray[Int], Int) -> Unit
+
+pub fn scalar_count_byte(FixedArray[Byte], Byte) -> Int
+
+pub fn scalar_count_byte_b(Bytes, Byte) -> Int
+
+pub fn scalar_count_nonzero(FixedArray[Int]) -> Int
+
+pub fn scalar_cumprod(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_cumsum(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_div(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_div_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn scalar_div_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn scalar_dot_f32(FixedArray[Byte], FixedArray[Byte], Int) -> Float
+
+pub fn scalar_dot_f64(FixedArray[Double], FixedArray[Double]) -> Double
+
+pub fn scalar_dot_product(FixedArray[Int], FixedArray[Int]) -> Int
+
+pub fn scalar_eq(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_equal_bytes(FixedArray[Byte], FixedArray[Byte], Int) -> Bool
+
+pub fn scalar_equal_bytes_b(Bytes, Bytes, Int) -> Bool
+
+pub fn scalar_fill(FixedArray[Int], Int) -> Unit
+
+pub fn scalar_find(FixedArray[Int], Int) -> Int
+
+pub fn scalar_find_byte(FixedArray[Byte], Byte) -> Int
+
+pub fn scalar_find_byte_b(Bytes, Byte) -> Int
+
+pub fn scalar_find_bytes_b(Bytes, Bytes) -> Int
+
+pub fn scalar_gather(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_gemv_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double], Int, Int) -> Unit
+
+pub fn scalar_gt(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_is_ascii(FixedArray[Byte]) -> Bool
+
+pub fn scalar_is_ascii_b(Bytes) -> Bool
+
+pub fn scalar_lt(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_matmul_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double], Int, Int, Int) -> Unit
+
+pub fn scalar_max(FixedArray[Int]) -> Int
+
+pub fn scalar_max_elem(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_max_elem_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn scalar_max_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn scalar_max_reduce_f64(FixedArray[Double]) -> Double
+
+pub fn scalar_mean_f64(FixedArray[Double]) -> Double
+
+pub fn scalar_memcpy_bytes(FixedArray[Byte], Int, FixedArray[Byte], Int, Int) -> Unit
+
+pub fn scalar_memset_bytes(FixedArray[Byte], Int, Int, Byte) -> Unit
+
+pub fn scalar_merge2_int(FixedArray[Int], Int, Int, FixedArray[Int], Int, Int, FixedArray[Int], Int) -> Unit
+
+pub fn scalar_min(FixedArray[Int]) -> Int
+
+pub fn scalar_min_elem(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_min_elem_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn scalar_min_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn scalar_min_reduce_f64(FixedArray[Double]) -> Double
+
+pub fn scalar_mul(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_mul_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn scalar_mul_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn scalar_neg(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_popcount_bytes(FixedArray[Byte]) -> Int
+
+pub fn scalar_prod(FixedArray[Int]) -> Int
+
+pub fn scalar_rfind_byte_b(Bytes, Byte) -> Int
+
+pub fn scalar_saxpy(Int, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_scatter(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_sort16_int(FixedArray[Int], Int) -> Unit
+
+pub fn scalar_sort4_int(FixedArray[Int], Int) -> Unit
+
+pub fn scalar_sort_int(FixedArray[Int]) -> Unit
+
+pub fn scalar_sqrt_f32(FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn scalar_sqrt_f64(FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn scalar_sub(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scalar_sub_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn scalar_sub_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn scalar_sum(FixedArray[Int]) -> Int
+
+pub fn scalar_sum_f32(FixedArray[Byte], Int) -> Float
+
+pub fn scalar_sum_f64(FixedArray[Double]) -> Double
+
+pub fn scalar_to_lower_ascii(FixedArray[Byte]) -> Unit
+
+pub fn scalar_to_upper_ascii(FixedArray[Byte]) -> Unit
+
+pub fn scalar_transpose_f64(FixedArray[Double], FixedArray[Double], Int, Int) -> Unit
+
+pub fn scalar_validate_utf8(FixedArray[Byte]) -> Bool
+
+pub fn scalar_validate_utf8_from(FixedArray[Byte], Int) -> Bool
+
+pub fn scalar_validate_utf8_strict(FixedArray[Byte]) -> Bool
+
+pub fn scalar_validate_utf8_strict_from(FixedArray[Byte], Int) -> Bool
+
+pub fn scalar_var_f64(FixedArray[Double]) -> Double
+
+pub fn scalar_where(FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

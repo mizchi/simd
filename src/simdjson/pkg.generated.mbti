@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src/simdjson"
+
+import {
+  "mizchi/simd/src/simd_buffer",
+}
+
+// Values
+pub fn classify_backslash(@simd_buffer.SimdBufferBytes, @simd_buffer.SimdBuffer) -> Unit
+
+pub fn classify_numeric(@simd_buffer.SimdBufferBytes, @simd_buffer.SimdBuffer) -> Unit
+
+pub fn classify_quote_raw(@simd_buffer.SimdBufferBytes, @simd_buffer.SimdBuffer) -> Unit
+
+pub fn classify_structural(@simd_buffer.SimdBufferBytes, @simd_buffer.SimdBuffer) -> Unit
+
+pub fn compute_quote_mask(@simd_buffer.SimdBufferBytes, @simd_buffer.SimdBuffer) -> Unit
+
+pub fn extract_structural_indices(@simd_buffer.SimdBuffer, @simd_buffer.SimdBuffer, Int, @simd_buffer.SimdBuffer) -> Int
+
+pub fn find_structural_indices(@simd_buffer.SimdBufferBytes, @simd_buffer.SimdBuffer) -> Int
+
+pub fn find_structural_indices_with_scratch(@simd_buffer.SimdBufferBytes, @simd_buffer.SimdBuffer, @simd_buffer.SimdBuffer, @simd_buffer.SimdBuffer) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

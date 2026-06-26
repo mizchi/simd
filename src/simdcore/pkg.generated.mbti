@@ -1,0 +1,134 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src/simdcore"
+
+// Values
+pub fn abs(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn add(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn add_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn array_count_nonzero(Array[Int]) -> Int
+
+pub fn array_dot(Array[Int], Array[Int]) -> Int
+
+pub fn array_dot_f64(Array[Double], Array[Double]) -> Double
+
+pub fn array_maximum(Array[Int]) -> Int?
+
+pub fn array_mean_f64(Array[Double]) -> Double
+
+pub fn array_minimum(Array[Int]) -> Int?
+
+pub fn array_product(Array[Int]) -> Int
+
+pub fn array_sort(Array[Int]) -> Unit
+
+pub fn array_sum(Array[Int]) -> Int
+
+pub fn array_sum_f64(Array[Double]) -> Double
+
+pub fn bytes_contains(Bytes, Byte) -> Bool
+
+pub fn bytes_contains_sub(Bytes, Bytes) -> Bool
+
+pub fn bytes_count(Bytes, Byte) -> Int
+
+pub fn bytes_equal(Bytes, Bytes) -> Bool
+
+pub fn bytes_index_of(Bytes, Bytes) -> Int?
+
+pub fn bytes_is_ascii(Bytes) -> Bool
+
+pub fn bytes_rindex(Bytes, Byte) -> Int?
+
+pub fn bytes_search(Bytes, Byte) -> Int?
+
+pub fn contains(FixedArray[Int], Int) -> Bool
+
+pub fn count_nonzero(FixedArray[Int]) -> Int
+
+pub fn decode_utf8_unsafe(Bytes) -> String
+
+pub fn decode_utf8_unsafe_intrinsic(Bytes) -> String
+
+pub fn div_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn dot(FixedArray[Int], FixedArray[Int]) -> Int
+
+pub fn dot_f64(FixedArray[Double], FixedArray[Double]) -> Double
+
+pub fn encode_utf8(String) -> Bytes
+
+pub fn encode_utf8_into(String, FixedArray[Byte]) -> Int
+
+pub fn fill(FixedArray[Int], Int) -> Unit
+
+pub fn is_ascii_string(String) -> Bool
+
+pub fn json_classify_structural(Bytes, FixedArray[Int]) -> Unit
+
+pub fn json_structural_indices(Bytes) -> Array[Int]
+
+pub fn json_structural_indices_into(Bytes, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Int
+
+pub fn max_elem_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn maximum(FixedArray[Int]) -> Int?
+
+pub fn maximum_f64(FixedArray[Double]) -> Double?
+
+pub fn mean_f64(FixedArray[Double]) -> Double
+
+pub fn min_elem_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn minimum(FixedArray[Int]) -> Int?
+
+pub fn minimum_f64(FixedArray[Double]) -> Double?
+
+pub fn mul(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn mul_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn neg(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn of_fixedarray(FixedArray[Int]) -> Array[Int]
+
+pub fn of_fixedarray_f64(FixedArray[Double]) -> Array[Double]
+
+pub fn product(FixedArray[Int]) -> Int
+
+pub fn saxpy(Int, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn search(FixedArray[Int], Int) -> Int?
+
+pub fn sort(FixedArray[Int]) -> Unit
+
+pub fn sqrt_f64(FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn sub(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn sub_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn sum(FixedArray[Int]) -> Int
+
+pub fn sum_f64(FixedArray[Double]) -> Double
+
+pub fn to_fixedarray(Array[Int]) -> FixedArray[Int]
+
+pub fn to_fixedarray_f64(Array[Double]) -> FixedArray[Double]
+
+pub fn to_lower_ascii(FixedArray[Byte]) -> Unit
+
+pub fn to_upper_ascii(FixedArray[Byte]) -> Unit
+
+pub fn variance_f64(FixedArray[Double]) -> Double
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

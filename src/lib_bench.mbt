@@ -132,6 +132,19 @@ test "bench/count_byte" (b : @bench.T) {
   })
 }
 
+///|
+test "bench/find_byte_b" (b : @bench.T) {
+  let arr = FixedArray::make(4096, b'\x01')
+  arr[4090] = b'\xaa'
+  let data = Bytes::from_array(arr)
+  b.bench(name="scalar_find_byte_b_4096", fn() {
+    b.keep(@internal.scalar_find_byte_b(data, b'\xaa'))
+  })
+  b.bench(name="simd_find_byte_b_4096", fn() {
+    b.keep(find_byte_b(data, b'\xaa'))
+  })
+}
+
 // --- f64 ops ---
 
 ///|
