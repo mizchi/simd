@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/examples/cosine_similarity"
+
+import {
+  "mizchi/simd/src/simd_buffer",
+}
+
+// Values
+pub fn cosine_similarity_fused_simd(@simd_buffer.SimdBufferF64, @simd_buffer.SimdBufferF64, @simd_buffer.SimdBufferF64) -> Double
+
+pub fn cosine_similarity_naive_simd(@simd_buffer.SimdBufferF64, @simd_buffer.SimdBufferF64) -> Double
+
+pub fn cosine_similarity_precomputed(@simd_buffer.SimdBufferF64, Double, @simd_buffer.SimdBufferF64, Double) -> Double
+
+pub fn cosine_similarity_scalar(FixedArray[Double], FixedArray[Double]) -> Double
+
+pub fn l2_norm(@simd_buffer.SimdBufferF64) -> Double
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+Wasm SIMD tuning with MoonBit `V128` helpers.
+
+- **wasm: speed up byte search and UTF-8 ASCII scanning.** `popcount_bytes`,
+  `find_byte`, `find_byte_b`, and the UTF-8 all-ASCII chunk skip now use small
+  typed `V128` helper boundaries while preserving the faster existing inline-WAT
+  kernels for paths where the helper style regressed.
+- **Keep the wider V128 refactor as an experiment.** The broader rewrite is
+  stored under `experiments/v128-refactor/` for reference, but is not part of
+  the production package because several hot paths were substantially slower
+  than the old WAT bodies.
+
 ## 0.4.1
 
 Portability fix — no API or behaviour change.

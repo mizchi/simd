@@ -1,0 +1,164 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src/simd_buffer"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct SimdBuffer {
+  addr : Int
+  len : Int
+}
+pub fn SimdBuffer::abs(Self, Self) -> Unit
+pub fn SimdBuffer::add(Self, Self, Self) -> Unit
+pub fn SimdBuffer::all(Self) -> Bool
+pub fn SimdBuffer::any(Self) -> Bool
+pub fn SimdBuffer::argmax(Self) -> Int
+pub fn SimdBuffer::argmin(Self) -> Int
+pub fn SimdBuffer::array_equal(Self, Self, Int) -> Bool
+pub fn SimdBuffer::bitonic_merge16(Self, Int) -> Unit
+pub fn SimdBuffer::bitonic_merge32(Self, Int) -> Unit
+pub fn SimdBuffer::bitonic_merge64(Self, Int) -> Unit
+pub fn SimdBuffer::bitonic_merge8(Self, Int) -> Unit
+pub fn SimdBuffer::clear(Self) -> Unit
+pub fn SimdBuffer::copy_from_array(Self, FixedArray[Int]) -> Unit
+pub fn SimdBuffer::copy_to_array(Self, FixedArray[Int]) -> Unit
+pub fn SimdBuffer::count_nonzero(Self) -> Int
+pub fn SimdBuffer::cumprod(Self, Self) -> Unit
+pub fn SimdBuffer::cumsum(Self, Self) -> Unit
+pub fn SimdBuffer::div(Self, Self, Self) -> Unit
+pub fn SimdBuffer::dot(Self, Self) -> Int
+pub fn SimdBuffer::eq(Self, Self, Self) -> Unit
+pub fn SimdBuffer::from_array(FixedArray[Int]) -> Self
+pub fn SimdBuffer::gather(Self, Self, Self) -> Unit
+pub fn SimdBuffer::get(Self, Int) -> Int
+pub fn SimdBuffer::gt(Self, Self, Self) -> Unit
+pub fn SimdBuffer::length(Self) -> Int
+pub fn SimdBuffer::lt(Self, Self, Self) -> Unit
+pub fn SimdBuffer::make(Int) -> Self
+pub fn SimdBuffer::max(Self) -> Int
+pub fn SimdBuffer::max_elem(Self, Self, Self) -> Unit
+pub fn SimdBuffer::min(Self) -> Int
+pub fn SimdBuffer::min_elem(Self, Self, Self) -> Unit
+pub fn SimdBuffer::mul(Self, Self, Self) -> Unit
+pub fn SimdBuffer::neg(Self, Self) -> Unit
+pub fn SimdBuffer::prod(Self) -> Int
+pub fn SimdBuffer::raw_addr(Self) -> Int
+pub fn SimdBuffer::saxpy(Int, Self, Self, Self) -> Unit
+pub fn SimdBuffer::scatter(Self, Self, Self) -> Unit
+pub fn SimdBuffer::set(Self, Int, Int) -> Unit
+pub fn SimdBuffer::sort(Self, Self) -> Unit
+pub fn SimdBuffer::sort16(Self, Int) -> Unit
+pub fn SimdBuffer::sort4(Self, Int) -> Unit
+pub fn SimdBuffer::sub(Self, Self, Self) -> Unit
+pub fn SimdBuffer::sum(Self) -> Int
+pub fn SimdBuffer::to_array(Self) -> FixedArray[Int]
+pub fn SimdBuffer::where_(Self, Self, Self, Self) -> Unit
+
+pub struct SimdBufferBytes {
+  addr : Int
+  len : Int
+}
+pub fn SimdBufferBytes::adler32(Self) -> UInt
+pub fn SimdBufferBytes::base64_decode(Self) -> Self?
+pub fn SimdBufferBytes::base64_decode_into(Self, Self) -> Int?
+pub fn SimdBufferBytes::base64_encode(Self) -> Self
+pub fn SimdBufferBytes::base64_encode_into(Self, Self) -> Unit
+pub fn SimdBufferBytes::byte_add(Self, Self, Self) -> Unit
+pub fn SimdBufferBytes::byte_avg(Self, Self, Self) -> Unit
+pub fn SimdBufferBytes::byte_sub(Self, Self, Self) -> Unit
+pub fn SimdBufferBytes::byte_sub_offset(Self, Int, Self) -> Unit
+pub fn SimdBufferBytes::clamp(Self, Byte, Byte, Self) -> Unit
+pub fn SimdBufferBytes::copy_from_array(Self, FixedArray[Byte]) -> Unit
+pub fn SimdBufferBytes::copy_to_array(Self, FixedArray[Byte]) -> Unit
+pub fn SimdBufferBytes::count_byte(Self, Byte) -> Int
+pub fn SimdBufferBytes::equal(Self, Self, Int) -> Bool
+pub fn SimdBufferBytes::find_byte(Self, Byte) -> Int
+pub fn SimdBufferBytes::from_array(FixedArray[Byte]) -> Self
+pub fn SimdBufferBytes::get(Self, Int) -> Byte
+pub fn SimdBufferBytes::is_ascii(Self) -> Bool
+pub fn SimdBufferBytes::length(Self) -> Int
+pub fn SimdBufferBytes::make(Int) -> Self
+pub fn SimdBufferBytes::memcpy(Self, Int, Self, Int, Int) -> Unit
+pub fn SimdBufferBytes::memset(Self, Int, Int, Byte) -> Unit
+pub fn SimdBufferBytes::popcount(Self) -> Int
+pub fn SimdBufferBytes::raw_addr(Self) -> Int
+pub fn SimdBufferBytes::sat_add(Self, Self, Self) -> Unit
+pub fn SimdBufferBytes::sat_sub(Self, Self, Self) -> Unit
+pub fn SimdBufferBytes::set(Self, Int, Byte) -> Unit
+pub fn SimdBufferBytes::to_array(Self) -> FixedArray[Byte]
+pub fn SimdBufferBytes::to_lower_ascii(Self) -> Unit
+pub fn SimdBufferBytes::to_upper_ascii(Self) -> Unit
+pub fn SimdBufferBytes::validate_utf8(Self) -> Bool
+pub fn SimdBufferBytes::validate_utf8_strict(Self) -> Bool
+
+pub struct SimdBufferF32 {
+  addr : Int
+  len : Int
+}
+pub fn SimdBufferF32::add(Self, Self, Self) -> Unit
+pub fn SimdBufferF32::copy_from_array(Self, FixedArray[Float]) -> Unit
+pub fn SimdBufferF32::copy_to_array(Self, FixedArray[Float]) -> Unit
+pub fn SimdBufferF32::div(Self, Self, Self) -> Unit
+pub fn SimdBufferF32::dot(Self, Self) -> Float
+pub fn SimdBufferF32::from_array(FixedArray[Float]) -> Self
+pub fn SimdBufferF32::get(Self, Int) -> Float
+pub fn SimdBufferF32::length(Self) -> Int
+pub fn SimdBufferF32::make(Int) -> Self
+pub fn SimdBufferF32::max_elem(Self, Self, Self) -> Unit
+pub fn SimdBufferF32::min_elem(Self, Self, Self) -> Unit
+pub fn SimdBufferF32::mul(Self, Self, Self) -> Unit
+pub fn SimdBufferF32::set(Self, Int, Float) -> Unit
+pub fn SimdBufferF32::sqrt(Self, Self) -> Unit
+pub fn SimdBufferF32::sub(Self, Self, Self) -> Unit
+pub fn SimdBufferF32::sum(Self) -> Float
+pub fn SimdBufferF32::to_array(Self) -> FixedArray[Float]
+
+pub struct SimdBufferF64 {
+  addr : Int
+  len : Int
+}
+pub fn SimdBufferF64::add(Self, Self, Self) -> Unit
+pub fn SimdBufferF64::copy_from_array(Self, FixedArray[Double]) -> Unit
+pub fn SimdBufferF64::copy_to_array(Self, FixedArray[Double]) -> Unit
+pub fn SimdBufferF64::div(Self, Self, Self) -> Unit
+pub fn SimdBufferF64::dot(Self, Self) -> Double
+pub fn SimdBufferF64::from_array(FixedArray[Double]) -> Self
+pub fn SimdBufferF64::gemv(Self, Self, Self, Int, Int) -> Unit
+pub fn SimdBufferF64::get(Self, Int) -> Double
+pub fn SimdBufferF64::length(Self) -> Int
+pub fn SimdBufferF64::make(Int) -> Self
+pub fn SimdBufferF64::matmul(Self, Self, Self, Int, Int, Int) -> Unit
+pub fn SimdBufferF64::max_elem(Self, Self, Self) -> Unit
+pub fn SimdBufferF64::mean(Self) -> Double
+pub fn SimdBufferF64::min_elem(Self, Self, Self) -> Unit
+pub fn SimdBufferF64::mul(Self, Self, Self) -> Unit
+pub fn SimdBufferF64::raw_addr(Self) -> Int
+pub fn SimdBufferF64::set(Self, Int, Double) -> Unit
+pub fn SimdBufferF64::sqrt(Self, Self) -> Unit
+pub fn SimdBufferF64::sub(Self, Self, Self) -> Unit
+pub fn SimdBufferF64::sum(Self) -> Double
+pub fn SimdBufferF64::to_array(Self) -> FixedArray[Double]
+pub fn SimdBufferF64::transpose(Self, Self, Int, Int) -> Unit
+pub fn SimdBufferF64::variance(Self) -> Double
+
+pub struct SimdBufferRing {
+  base : Int
+  capacity : Int
+  mut next : Int
+}
+pub fn SimdBufferRing::alloc(Self, Int) -> Int
+pub fn SimdBufferRing::alloc_bytes(Self, Int) -> SimdBufferBytes
+pub fn SimdBufferRing::alloc_f32(Self, Int) -> SimdBufferF32
+pub fn SimdBufferRing::alloc_f64(Self, Int) -> SimdBufferF64
+pub fn SimdBufferRing::alloc_i32(Self, Int) -> SimdBuffer
+pub fn SimdBufferRing::capacity(Self) -> Int
+pub fn SimdBufferRing::make(Int) -> Self
+pub fn SimdBufferRing::reset(Self) -> Unit
+pub fn SimdBufferRing::used(Self) -> Int
+
+// Type aliases
+
+// Traits
+

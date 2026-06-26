@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src/simdcodec"
+
+// Values
+pub fn base64_count_padding(FixedArray[Byte]) -> Int
+
+pub fn base64_decode(FixedArray[Byte]) -> FixedArray[Byte]?
+
+pub fn base64_decode_into(FixedArray[Byte], FixedArray[Byte]) -> Int?
+
+pub fn base64_decoded_len(Int, Int) -> Int
+
+pub fn base64_encode(FixedArray[Byte]) -> FixedArray[Byte]
+
+pub fn base64_encode_into(FixedArray[Byte], FixedArray[Byte]) -> Unit
+
+pub fn base64_encoded_len(Int) -> Int
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

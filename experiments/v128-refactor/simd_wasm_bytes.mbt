@@ -49,15 +49,22 @@ pub fn popcount_bytes(data : FixedArray[Byte]) -> Int {
 }
 
 ///|
-#borrow(src, dst)
 fn memcpy_bytes_v128(
   src : FixedArray[Byte],
   si : Int,
   dst : FixedArray[Byte],
   di : Int,
   len : Int,
-) -> Unit =
-  #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) local.get 4 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 6 block loop local.get 5 local.get 6 i32.ge_s br_if 1 local.get 2 local.get 3 i32.add local.get 5 i32.add local.get 0 local.get 1 i32.add local.get 5 i32.add v128.load v128.store local.get 5 i32.const 16 i32.add local.set 5 br 0 end end block loop local.get 5 local.get 4 i32.ge_s br_if 1 local.get 2 local.get 3 i32.add local.get 5 i32.add local.get 0 local.get 1 i32.add local.get 5 i32.add i32.load8_u i32.store8 local.get 5 i32.const 1 i32.add local.set 5 br 0 end end)
+) -> Unit {
+  let vec_len = floor_i8x16_len(len)
+  for k = 0; k < vec_len; {
+    fixed_i8x16_store(dst, di + k, fixed_i8x16_load(src, si + k))
+    continue k + 16
+  }
+  for k in vec_len..<len {
+    dst[di + k] = src[si + k]
+  }
+}
 
 ///|
 /// SIMD memcpy - wasm target: 16-byte v128.load/v128.store chunks.
@@ -75,14 +82,23 @@ pub fn memcpy_bytes(
 }
 
 ///|
-#borrow(dst)
 fn memset_bytes_v128(
   dst : FixedArray[Byte],
   off : Int,
   len : Int,
   value : Int,
-) -> Unit =
-  #|(func (param i32) (param i32) (param i32) (param i32) (local i32) (local i32) (local v128) local.get 3 i8x16.splat local.set 6 local.get 2 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 5 block loop local.get 4 local.get 5 i32.ge_s br_if 1 local.get 0 local.get 1 i32.add local.get 4 i32.add local.get 6 v128.store local.get 4 i32.const 16 i32.add local.set 4 br 0 end end block loop local.get 4 local.get 2 i32.ge_s br_if 1 local.get 0 local.get 1 i32.add local.get 4 i32.add local.get 3 i32.store8 local.get 4 i32.const 1 i32.add local.set 4 br 0 end end)
+) -> Unit {
+  let vec_len = floor_i8x16_len(len)
+  let value_v = i8x16_splat(value)
+  for k = 0; k < vec_len; {
+    fixed_i8x16_store(dst, off + k, value_v)
+    continue k + 16
+  }
+  let value_b = value.to_byte()
+  for k in vec_len..<len {
+    dst[off + k] = value_b
+  }
+}
 
 ///|
 /// SIMD memset - wasm target: i8x16.splat + 16-byte v128.store chunks.
@@ -99,13 +115,29 @@ pub fn memset_bytes(
 }
 
 ///|
-#borrow(a, b)
 fn equal_bytes_v128(
   a : FixedArray[Byte],
   b : FixedArray[Byte],
   len : Int,
-) -> Int =
-  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) local.get 2 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add v128.load local.get 1 local.get 3 i32.add v128.load i8x16.eq i8x16.bitmask i32.const 65535 i32.ne i32.or local.set 5 local.get 3 i32.const 16 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 2 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add i32.load8_u local.get 1 local.get 3 i32.add i32.load8_u i32.ne i32.or local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5 i32.eqz)
+) -> Int {
+  let vec_len = floor_i8x16_len(len)
+  let mismatch = for i = 0, mismatch = false; i < vec_len; {
+    let eq = i8x16_eq(fixed_i8x16_load(a, i), fixed_i8x16_load(b, i))
+    continue i + 16, mismatch || i8x16_bitmask(eq) != 0xFFFF
+  } nobreak {
+    mismatch
+  }
+  let mismatch = for i in vec_len..<len; mismatch = mismatch {
+    continue mismatch || a[i] != b[i]
+  } nobreak {
+    mismatch
+  }
+  if mismatch {
+    0
+  } else {
+    1
+  }
+}
 
 ///|
 /// SIMD byte equality (first `len` bytes) - wasm target: i8x16.eq + bitmask
@@ -152,9 +184,22 @@ pub fn find_byte(data : FixedArray[Byte], needle : Byte) -> Int {
 }
 
 ///|
-#borrow(data)
-fn count_byte_v128(data : FixedArray[Byte], len : Int, needle : Int) -> Int =
-  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local v128) local.get 2 i8x16.splat local.set 6 local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add v128.load local.get 6 i8x16.eq i8x16.bitmask i32.popcnt i32.add local.set 5 local.get 3 i32.const 16 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 1 i32.ge_s br_if 1 local.get 5 local.get 0 local.get 3 i32.add i32.load8_u local.get 2 i32.eq i32.add local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5)
+fn count_byte_v128(data : FixedArray[Byte], len : Int, needle : Int) -> Int {
+  let vec_len = floor_i8x16_len(len)
+  let needle_v = i8x16_splat(needle)
+  let count = for i = 0, count = 0; i < vec_len; {
+    let mask = i8x16_bitmask(i8x16_eq(fixed_i8x16_load(data, i), needle_v))
+    continue i + 16, count + mask.popcnt()
+  } nobreak {
+    count
+  }
+  for i in vec_len..<len; count = count {
+    let inc = if data[i].to_int() == needle { 1 } else { 0 }
+    continue count + inc
+  } nobreak {
+    count
+  }
+}
 
 ///|
 /// SIMD count of bytes equal to `needle` - wasm target: i8x16.eq + bitmask +
@@ -172,16 +217,8 @@ pub fn count_byte(data : FixedArray[Byte], needle : Byte) -> Int {
 /// non-ASCII byte, or `(len/16)*16` if every aligned chunk is pure ASCII.
 /// Uses select-based tracking to record the first hit without early exit.
 #borrow(data)
-fn first_non_ascii_chunk_v128(data : FixedArray[Byte], len : Int) -> Int {
-  let vec_len = floor_i8x16_len(len)
-  for i = 0, found = vec_len; i < vec_len; {
-    let mask = i8x16_bitmask(fixed_i8x16_load(data, i))
-    let next = if found == vec_len && mask != 0 { i } else { found }
-    continue i + 16, next
-  } nobreak {
-    found
-  }
-}
+fn first_non_ascii_chunk_v128(data : FixedArray[Byte], len : Int) -> Int =
+  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local i32) local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 local.get 3 local.set 4 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 0 local.get 2 i32.add v128.load i8x16.bitmask local.set 5 local.get 2 local.get 4 local.get 4 local.get 3 i32.eq local.get 5 i32.mul select local.set 4 local.get 2 i32.const 16 i32.add local.set 2 br 0 end end local.get 4)
 
 ///|
 /// SIMD-accelerated UTF-8 validation. SIMD fast path skips all-ASCII chunks
@@ -209,9 +246,24 @@ pub fn validate_utf8_strict(data : FixedArray[Byte]) -> Bool {
 ///|
 /// Fold each chunk's MSB-bitmask via OR, then check it's zero (no high bit
 /// set means pure ASCII). Tail bytes use `data[i] & 0x80`.
-#borrow(data)
-fn is_ascii_v128(data : FixedArray[Byte], len : Int) -> Int =
-  #|(func (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.add v128.load i8x16.bitmask i32.or local.set 4 local.get 2 i32.const 16 i32.add local.set 2 br 0 end end block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 4 local.get 0 local.get 2 i32.add i32.load8_u i32.const 128 i32.and i32.or local.set 4 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end local.get 4 i32.eqz)
+fn is_ascii_v128(data : FixedArray[Byte], len : Int) -> Int {
+  let vec_len = floor_i8x16_len(len)
+  let high_bits = for i = 0, high_bits = 0; i < vec_len; {
+    continue i + 16, high_bits | i8x16_bitmask(fixed_i8x16_load(data, i))
+  } nobreak {
+    high_bits
+  }
+  let high_bits = for i in vec_len..<len; high_bits = high_bits {
+    continue high_bits | (data[i].to_int() & 0x80)
+  } nobreak {
+    high_bits
+  }
+  if high_bits == 0 {
+    1
+  } else {
+    0
+  }
+}
 
 ///|
 pub fn is_ascii(data : FixedArray[Byte]) -> Bool {
@@ -223,11 +275,26 @@ pub fn is_ascii(data : FixedArray[Byte]) -> Bool {
 }
 
 ///|
-/// In-place ASCII A-Z → a-z via per-byte range mask:
+/// In-place ASCII A-Z -> a-z via per-byte range mask:
 /// `delta = (v >= 'A') & (v <= 'Z') & 0x20`, then `v += delta`.
-#borrow(data)
-fn to_lower_ascii_v128(data : FixedArray[Byte], len : Int) -> Unit =
-  #|(func (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) i32.const 65 i8x16.splat local.set 4 i32.const 90 i8x16.splat local.set 5 i32.const 32 i8x16.splat local.set 6 local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 0 local.get 2 i32.add v128.load local.set 7 local.get 0 local.get 2 i32.add local.get 7 local.get 4 i8x16.ge_s local.get 7 local.get 5 i8x16.le_s v128.and local.get 6 v128.and local.get 7 i8x16.add v128.store local.get 2 i32.const 16 i32.add local.set 2 br 0 end end block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 0 local.get 2 i32.add local.get 0 local.get 2 i32.add i32.load8_u local.get 0 local.get 2 i32.add i32.load8_u i32.const 65 i32.ge_s local.get 0 local.get 2 i32.add i32.load8_u i32.const 90 i32.le_s i32.and i32.const 32 i32.mul i32.add i32.store8 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end)
+fn to_lower_ascii_v128(data : FixedArray[Byte], len : Int) -> Unit {
+  let vec_len = floor_i8x16_len(len)
+  let a = i8x16_splat(0x41)
+  let z = i8x16_splat(0x5A)
+  let delta = i8x16_splat(0x20)
+  for i = 0; i < vec_len; {
+    let v = fixed_i8x16_load(data, i)
+    let in_range = v128_and(i8x16_ge_s(v, a), i8x16_le_s(v, z))
+    fixed_i8x16_store(data, i, i8x16_add(v, v128_and(in_range, delta)))
+    continue i + 16
+  }
+  for i in vec_len..<len {
+    let c = data[i].to_int()
+    if c >= 0x41 && c <= 0x5A {
+      data[i] = (c + 0x20).to_byte()
+    }
+  }
+}
 
 ///|
 pub fn to_lower_ascii(data : FixedArray[Byte]) -> Unit {
@@ -239,10 +306,25 @@ pub fn to_lower_ascii(data : FixedArray[Byte]) -> Unit {
 }
 
 ///|
-/// In-place ASCII a-z → A-Z (symmetric: subtract 32 when in range).
-#borrow(data)
-fn to_upper_ascii_v128(data : FixedArray[Byte], len : Int) -> Unit =
-  #|(func (param i32) (param i32) (local i32) (local i32) (local v128) (local v128) (local v128) (local v128) i32.const 97 i8x16.splat local.set 4 i32.const 122 i8x16.splat local.set 5 i32.const 32 i8x16.splat local.set 6 local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 3 block loop local.get 2 local.get 3 i32.ge_s br_if 1 local.get 0 local.get 2 i32.add v128.load local.set 7 local.get 0 local.get 2 i32.add local.get 7 local.get 7 local.get 4 i8x16.ge_s local.get 7 local.get 5 i8x16.le_s v128.and local.get 6 v128.and i8x16.sub v128.store local.get 2 i32.const 16 i32.add local.set 2 br 0 end end block loop local.get 2 local.get 1 i32.ge_s br_if 1 local.get 0 local.get 2 i32.add local.get 0 local.get 2 i32.add i32.load8_u local.get 0 local.get 2 i32.add i32.load8_u i32.const 97 i32.ge_s local.get 0 local.get 2 i32.add i32.load8_u i32.const 122 i32.le_s i32.and i32.const 32 i32.mul i32.sub i32.store8 local.get 2 i32.const 1 i32.add local.set 2 br 0 end end)
+/// In-place ASCII a-z -> A-Z (symmetric: subtract 32 when in range).
+fn to_upper_ascii_v128(data : FixedArray[Byte], len : Int) -> Unit {
+  let vec_len = floor_i8x16_len(len)
+  let a = i8x16_splat(0x61)
+  let z = i8x16_splat(0x7A)
+  let delta = i8x16_splat(0x20)
+  for i = 0; i < vec_len; {
+    let v = fixed_i8x16_load(data, i)
+    let in_range = v128_and(i8x16_ge_s(v, a), i8x16_le_s(v, z))
+    fixed_i8x16_store(data, i, i8x16_sub(v, v128_and(in_range, delta)))
+    continue i + 16
+  }
+  for i in vec_len..<len {
+    let c = data[i].to_int()
+    if c >= 0x61 && c <= 0x7A {
+      data[i] = (c - 0x20).to_byte()
+    }
+  }
+}
 
 ///|
 pub fn to_upper_ascii(data : FixedArray[Byte]) -> Unit {
@@ -316,23 +398,8 @@ pub fn equal_bytes_b(a : Bytes, b : Bytes, len : Int) -> Bool {
 
 ///|
 #borrow(data)
-fn find_byte_b_v128(data : Bytes, len : Int, needle : Int) -> Int {
-  let vec_len = floor_i8x16_len(len)
-  let needle_v = i8x16_splat(needle)
-  let found = for i = 0, found = -1; i < vec_len; {
-    let mask = i8x16_bitmask(i8x16_eq(bytes_i8x16_load(data, i), needle_v))
-    let next = if found == -1 && mask != 0 { i + mask.ctz() } else { found }
-    continue i + 16, next
-  } nobreak {
-    found
-  }
-  for i in vec_len..<len; found = found {
-    let next = if found == -1 && data[i].to_int() == needle { i } else { found }
-    continue next
-  } nobreak {
-    found
-  }
-}
+fn find_byte_b_v128(data : Bytes, len : Int, needle : Int) -> Int =
+  #|(func (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) (local i32) (local v128) local.get 2 i8x16.splat local.set 7 local.get 1 i32.const 4 i32.shr_s i32.const 4 i32.shl local.set 4 i32.const -1 local.set 5 block loop local.get 3 local.get 4 i32.ge_s br_if 1 local.get 0 local.get 3 i32.add v128.load local.get 7 i8x16.eq i8x16.bitmask local.set 6 local.get 3 local.get 6 i32.ctz i32.add local.get 5 local.get 5 i32.const -1 i32.eq local.get 6 i32.mul select local.set 5 local.get 3 i32.const 16 i32.add local.set 3 br 0 end end block loop local.get 3 local.get 1 i32.ge_s br_if 1 local.get 3 local.get 5 local.get 5 i32.const -1 i32.eq local.get 0 local.get 3 i32.add i32.load8_u local.get 2 i32.eq i32.and select local.set 5 local.get 3 i32.const 1 i32.add local.set 3 br 0 end end local.get 5)
 
 ///|
 /// SIMD find first byte equal to `needle` over `Bytes` - wasm target.

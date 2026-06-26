@@ -1,0 +1,176 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src"
+
+// Values
+pub fn abs_i32(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn add_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn add_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn add_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn adler32_bytes(FixedArray[Byte]) -> UInt
+
+pub fn all_i32(FixedArray[Int]) -> Bool
+
+pub fn any_i32(FixedArray[Int]) -> Bool
+
+pub fn argmax_i32(FixedArray[Int]) -> Int
+
+pub fn argmin_i32(FixedArray[Int]) -> Int
+
+pub fn bitonic_merge16_i32(FixedArray[Int], Int) -> Unit
+
+pub fn bitonic_merge32_i32(FixedArray[Int], Int) -> Unit
+
+pub fn bitonic_merge64_i32(FixedArray[Int], Int) -> Unit
+
+pub fn bitonic_merge8_i32(FixedArray[Int], Int) -> Unit
+
+pub fn count_byte(FixedArray[Byte], Byte) -> Int
+
+pub fn count_byte_b(Bytes, Byte) -> Int
+
+pub fn count_nonzero_i32(FixedArray[Int]) -> Int
+
+pub fn cumprod_i32(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn cumsum_i32(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn div_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn div_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn div_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn dot_f32(FixedArray[Byte], FixedArray[Byte], Int) -> Float
+
+pub fn dot_f64(FixedArray[Double], FixedArray[Double]) -> Double
+
+pub fn dot_i32(FixedArray[Int], FixedArray[Int]) -> Int
+
+pub fn eq_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn equal_bytes(FixedArray[Byte], FixedArray[Byte], Int) -> Bool
+
+pub fn equal_bytes_b(Bytes, Bytes, Int) -> Bool
+
+pub fn f32_buf_alloc(Int) -> FixedArray[Byte]
+
+pub fn f32_buf_get(FixedArray[Byte], Int) -> Float
+
+pub fn f32_buf_set(FixedArray[Byte], Int, Float) -> Unit
+
+pub fn fill_i32(FixedArray[Int], Int) -> Unit
+
+pub fn find_byte(FixedArray[Byte], Byte) -> Int
+
+pub fn find_byte_b(Bytes, Byte) -> Int
+
+pub fn find_bytes_b(Bytes, Bytes) -> Int
+
+pub fn find_i32(FixedArray[Int], Int) -> Int
+
+pub fn gather_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn gemv_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double], Int, Int) -> Unit
+
+pub fn gt_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn is_ascii(FixedArray[Byte]) -> Bool
+
+pub fn is_ascii_b(Bytes) -> Bool
+
+pub fn lt_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn matmul_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double], Int, Int, Int) -> Unit
+
+pub fn max_elem_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn max_elem_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn max_elem_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn max_f64(FixedArray[Double]) -> Double
+
+pub fn max_i32(FixedArray[Int]) -> Int
+
+pub fn mean_f64(FixedArray[Double]) -> Double
+
+pub fn memcpy_bytes(FixedArray[Byte], Int, FixedArray[Byte], Int, Int) -> Unit
+
+pub fn memset_bytes(FixedArray[Byte], Int, Int, Byte) -> Unit
+
+pub fn min_elem_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn min_elem_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn min_elem_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn min_f64(FixedArray[Double]) -> Double
+
+pub fn min_i32(FixedArray[Int]) -> Int
+
+pub fn mul_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn mul_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn mul_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn neg_i32(FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn popcount_bytes(FixedArray[Byte]) -> Int
+
+pub fn prod_i32(FixedArray[Int]) -> Int
+
+pub fn rfind_byte_b(Bytes, Byte) -> Int
+
+pub fn saxpy_i32(Int, FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn scatter_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn sort16_i32(FixedArray[Int], Int) -> Unit
+
+pub fn sort4_i32(FixedArray[Int], Int) -> Unit
+
+pub fn sort_i32(FixedArray[Int]) -> Unit
+
+pub fn sqrt_f32(FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn sqrt_f64(FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn sub_f32(FixedArray[Byte], FixedArray[Byte], FixedArray[Byte], Int) -> Unit
+
+pub fn sub_f64(FixedArray[Double], FixedArray[Double], FixedArray[Double]) -> Unit
+
+pub fn sub_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+pub fn sum_f32(FixedArray[Byte], Int) -> Float
+
+pub fn sum_f64(FixedArray[Double]) -> Double
+
+pub fn sum_i32(FixedArray[Int]) -> Int
+
+pub fn to_lower_ascii(FixedArray[Byte]) -> Unit
+
+pub fn to_upper_ascii(FixedArray[Byte]) -> Unit
+
+pub fn transpose_f64(FixedArray[Double], FixedArray[Double], Int, Int) -> Unit
+
+pub fn validate_utf8(FixedArray[Byte]) -> Bool
+
+pub fn validate_utf8_strict(FixedArray[Byte]) -> Bool
+
+pub fn var_f64(FixedArray[Double]) -> Double
+
+pub fn where_i32(FixedArray[Int], FixedArray[Int], FixedArray[Int], FixedArray[Int]) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

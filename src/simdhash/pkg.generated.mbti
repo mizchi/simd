@@ -1,0 +1,36 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/simd/src/simdhash"
+
+// Values
+pub fn md5(Bytes) -> Bytes
+
+pub fn md5_hex(Bytes) -> String
+
+pub fn md5_x4(Bytes, Bytes, Bytes, Bytes) -> (Bytes, Bytes, Bytes, Bytes)
+
+pub fn sha1(Bytes) -> Bytes
+
+pub fn sha1_hex(Bytes) -> String
+
+pub fn sha1_x4(Bytes, Bytes, Bytes, Bytes) -> (Bytes, Bytes, Bytes, Bytes)
+
+pub fn sha256(Bytes) -> Bytes
+
+pub fn sha256_hex(Bytes) -> String
+
+pub fn sha256_x4(Bytes, Bytes, Bytes, Bytes) -> (Bytes, Bytes, Bytes, Bytes)
+
+pub fn sha512(Bytes) -> Bytes
+
+pub fn sha512_hex(Bytes) -> String
+
+pub fn sha512_x2(Bytes, Bytes) -> (Bytes, Bytes)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
