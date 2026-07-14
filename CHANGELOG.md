@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- Clarify that `moon add` installs the `mizchi/simd` module while consumers
+  import the top-level JSON package as `mizchi/simd/json`.
+
 ## 0.6.0
 
 - Add experimental `mizchi/simd/json`, a UTF-8 JSON parser combining v128

@@ -51,12 +51,10 @@ is the **batch multi-buffer** kernel: the 32-bit hashes' `*_x4` (4-way) on wasm
 
 ## Install
 
-Add to your `moon.mod.json`:
+Add the module dependency:
 
-```json
-"deps": {
-  "mizchi/simd": "0.4.0"
-}
+```bash
+moon add mizchi/simd
 ```
 
 Then in the consuming package's `moon.pkg`, import the sub-packages you need:
@@ -72,6 +70,11 @@ import {
   "mizchi/simd/src/simdhash",
 }
 ```
+
+MoonBit derives a package's full import path from the directory containing its
+`moon.pkg`. Therefore the top-level `json/moon.pkg` is imported as
+`mizchi/simd/json`; moving it under `src/json` would change the public path to
+`mizchi/simd/src/json`.
 
 The experimental parser is explicitly aliased as `@simd_json` to avoid a
 collision with `moonbitlang/core/json`. Other imports use their last path

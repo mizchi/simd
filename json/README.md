@@ -5,6 +5,12 @@ accepts UTF-8 `Bytes`, builds a token-position tape with context carving, then
 parses from that tape without rescanning whitespace, string boundaries, or
 atom bodies.
 
+Add the containing module first:
+
+```bash
+moon add mizchi/simd
+```
+
 ```moonbit
 let input = @utf8.encode("{\"name\":\"moon\",\"items\":[1,2,3]}"[:])
 let value = try! @simd_json.parse(input)
@@ -18,6 +24,11 @@ import {
   "moonbitlang/core/encoding/utf8",
 }
 ```
+
+`moon add` operates on the module (`mizchi/simd`), while `moon.pkg` imports
+this package by its full path (`mizchi/simd/json`). The package intentionally
+lives at top-level `json/`; placing it at `src/json/` would expose
+`mizchi/simd/src/json` instead.
 
 `parse_string(StringView)` is also available. It adaptively delegates small or
 string-dominated documents to core/json, and only pays for UTF-8 encoding when
