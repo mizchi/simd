@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Add experimental `mizchi/simd/json`, a UTF-8 JSON parser combining v128
+  context carving with an indexed stage-2 parser. It returns the standard
+  MoonBit `Json` type and keeps scalar fallbacks for wasm-gc and JS.
+- Add 7.6–12.3 MB native/Wasm comparison benches against
+  `moonbitlang/core/json`, including mixed, plain-string, escaped-string, and
+  number-heavy datasets.
+
 ## 0.5.0
 
 Wasm SIMD tuning with MoonBit `V128` helpers.

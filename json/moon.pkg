@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/double",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json" @core_json,
+  "moonbitlang/core/v128",
+}
+
+import {
+  "moonbitlang/core/bench",
+} for "test"
+
+warnings = "-0014"

@@ -32,6 +32,7 @@ glance, which backends get real SIMD (✅) vs scalar fallback (·):
 | [`@simdcore`](src/simdcore/) — faster core idioms | ✅ | · | ✅¹ | · | [README](src/simdcore/README.md) |
 | [`@simdimage`](src/simdimage/) — image / pixel ops | ✅ | · | · | · | [README](src/simdimage/README.md) |
 | [`@simd_buffer`](src/simd_buffer/) — portable buffer family | ✅ | ✅ | ✅ | · | [README](src/simd_buffer/README.md) |
+| [`mizchi/simd/json`](json/) — UTF-8 JSON parser | ✅ | · | ✅ | · | [README](json/README.md) |
 | [`@simdjson`](src/simdjson/) — JSON indexing | ✅ | ✅ | · | · | [README](src/simdjson/README.md) |
 | [`@simdcodec`](src/simdcodec/) — byte codecs (base64) | ✅ | · | ⚠️² | · | [README](src/simdcodec/README.md) |
 | [`@simdhash`](src/simdhash/) — SHA-256 / SHA-512 / SHA-1 / MD5 | ✅³ | · | ✅³ | · | [README](src/simdhash/README.md) |
@@ -62,6 +63,7 @@ Then in the consuming package's `moon.pkg`, import the sub-packages you need:
 
 ```
 import {
+  "mizchi/simd/json" @simd_json,
   "mizchi/simd/src/simdcore",
   "mizchi/simd/src/simdimage",
   "mizchi/simd/src/simd_buffer",
@@ -71,9 +73,11 @@ import {
 }
 ```
 
-Each import is exposed under the last path component — `@simdcore`,
-`@simdimage`, `@simd_buffer`, `@simdjson`, `@simdcodec`, `@simdhash`. The root
-`mizchi/simd/src` package exports the FixedArray-based API as `@simd`.
+The experimental parser is explicitly aliased as `@simd_json` to avoid a
+collision with `moonbitlang/core/json`. Other imports use their last path
+component — `@simdcore`, `@simdimage`, `@simd_buffer`, `@simdjson`,
+`@simdcodec`, `@simdhash`. The root `mizchi/simd/src` package exports the
+FixedArray-based API as `@simd`.
 
 ## Quick start (recommended)
 
@@ -242,6 +246,23 @@ all four.
 
 Run: `moon bench --target wasm -p simdimage`.
 
+## `mizchi/simd/json` — indexed UTF-8 JSON parser
+
+Experimental end-to-end parser returning MoonBit's standard `Json` value.
+Native and Wasm classify 16 UTF-8 bytes at a time, carve string context from
+quote/backslash masks, and feed a compact token-position tape to stage 2.
+
+```moonbit
+let bytes = @utf8.encode("{\"name\":\"moon\",\"items\":[1,2,3]}"[:])
+let value = try! @simd_json.parse(bytes)
+```
+
+On the included 9.9 MB mixed benchmark, `parse(Bytes)` measured 50.32 ms vs
+55.20 ms for core/json on native, and 119.69 ms vs 149.23 ms on Wasm. The
+7.6 MB number-heavy input measured 14.56 ms vs 22.36 ms on native. See the
+[package README](json/README.md) for all results, the pipeline, and current
+diagnostic/escape-heavy limitations.
+
 ## `@simdjson` — JSON byte classification
 
 Sub-package porting simdjson's `find_structural_bits` core to wasm SIMD.
@@ -361,6 +382,10 @@ lifecycle on wasm.
 ## File structure
 
 ```
+json/                                     # mizchi/simd/json — UTF-8 Json parser
+  lexer.mbt                               # v128 context carving + scalar fallback
+  parser.mbt                              # indexed stage-2 parser
+
 src/
   # FixedArray-API root package — imported as @simd
   simd_wasm_{i32,f64,f32,bytes,sort}.mbt   # wasm inline-WAT v128

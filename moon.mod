@@ -1,6 +1,6 @@
 name = "mizchi/simd"
 
-version = "0.5.0"
+version = "0.6.0"
 
 readme = "README.md"
 
@@ -18,7 +18,7 @@ keywords = [
   "sha256",
 ]
 
-description = "SIMD primitives for MoonBit across wasm / wasm-gc / native / js — @simdcore (faster moonbitlang/core equivalents), @simd_buffer, @simdcodec (base64), @simdhash (SHA-256/512/1, MD5 + multi-buffer), @simdimage, @simdjson."
+description = "SIMD primitives for MoonBit across wasm / wasm-gc / native / js — @simdcore, @simd_buffer, codecs, hashes, images, JSON indexing, and the experimental mizchi/simd/json parser."
 
 options(
   exclude: [ "experiments" ],
